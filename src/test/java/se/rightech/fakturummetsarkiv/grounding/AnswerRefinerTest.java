@@ -63,8 +63,8 @@ class AnswerRefinerTest {
     void detectsRefusal() {
         AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"));
 
-        assertThat(refiner.isRefusal("Jag hittar inte den informationen i dokumenten.")).isTrue();
-        assertThat(refiner.isRefusal("Control Builder används så här.")).isFalse();
+        assertThat(refiner.isRefusal("I cannot find that information in the documents.")).isTrue();
+        assertThat(refiner.isRefusal("Control Builder is used like this.")).isFalse();
         assertThat(refiner.isRefusal(null)).isFalse();
     }
 }

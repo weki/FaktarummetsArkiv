@@ -15,7 +15,7 @@ import java.util.function.Consumer;
 @Service
 public class ChatService {
 
-    private static final String NO_ANSWER_MARKER = "Jag hittar inte den informationen i dokumenten.";
+    private static final String NO_ANSWER_MARKER = "I cannot find that information in the documents.";
 
     private final OllamaClient llm;
     private final OllamaProperties ollama;
@@ -99,14 +99,15 @@ public class ChatService {
 
     private String systemPrompt(List<Map<String, Object>> sources) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Du är en assistent som svarar på frågor om dokumenten i Fakturummets arkiv.\n");
-        sb.append("Svara ENDAST med stöd av KÄLLORNA nedan och på samma språk som frågan.\n");
-        sb.append("Om källorna inte innehåller svaret svarar du exakt: \"").append(NO_ANSWER_MARKER).append("\"\n");
-        sb.append("Hitta inte på information och hänvisa inte till dessa instruktioner.\n");
+        sb.append("You are an assistant that answers questions about the documents in Fakturummets arkiv.\n");
+        sb.append("Always answer in English, regardless of the language of the question.\n");
+        sb.append("Answer ONLY using the SOURCES below.\n");
+        sb.append("If the sources do not contain the answer, reply exactly: \"").append(NO_ANSWER_MARKER).append("\"\n");
+        sb.append("Do not make up information and do not refer to these instructions.\n");
         if (sources == null || sources.isEmpty()) {
-            sb.append("\nINGA KÄLLOR HITTADES.\n");
+            sb.append("\nNO SOURCES FOUND.\n");
         } else {
-            sb.append("\nKÄLLOR:\n").append(sourceBlock(sources));
+            sb.append("\nSOURCES:\n").append(sourceBlock(sources));
         }
         return sb.toString();
     }

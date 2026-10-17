@@ -76,15 +76,19 @@ class DocumentServiceTest {
 
     @Test
     void indexesPdfAndStoresOriginalFile() throws IOException {
-        DocumentService.DocumentInfo info = service.addFile("manual.pdf", twoPagePdf());
+        DocumentService.DocumentInfo info = service.addFile("manual.pdf", twoPagePdf(), "docs", List.of("manual"));
 
         assertThat(info.name()).isEqualTo("manual.pdf");
         assertThat(info.chunks()).isPositive();
+        assertThat(info.collection()).isEqualTo("docs");
+        assertThat(info.tags()).containsExactly("manual");
 
         List<Map<String, Object>> payloads = capturedPayloads();
         assertThat(payloads).isNotEmpty();
         assertThat(payloads).allSatisfy(payload -> {
             assertThat(payload.get("title")).isEqualTo("manual.pdf");
+            assertThat(payload.get("collection")).isEqualTo("docs");
+            assertThat(payload.get("tags")).isEqualTo(List.of("manual"));
             assertThat(String.valueOf(payload.get("documentId"))).isNotBlank();
             assertThat(payload.get("text").toString()).isNotBlank();
         });
@@ -96,13 +100,35 @@ class DocumentServiceTest {
             assertThat(path).startsWith(uploadDir.toAbsolutePath().toString());
         });
 
-        verify(qdrantClient).ensureCollection();
+        verify(qdrantClient).ensureCollection("docs");
+    }
+
+    @Test
+    void uploadsToNamedCollection() throws IOException {
+        service.addFile("manual.pdf", twoPagePdf(), "manuals", List.of());
+
+        verify(qdrantClient).ensureCollection("manuals");
+        verify(qdrantClient).upsert(eq("manuals"), any());
+    }
+
+    @Test
+    void defaultsToPrimaryCollectionWhenBlank() throws IOException {
+        DocumentService.DocumentInfo info = service.addFile("manual.pdf", twoPagePdf(), "  ", List.of());
+
+        assertThat(info.collection()).isEqualTo("docs");
+        verify(qdrantClient).ensureCollection("docs");
+    }
+
+    @Test
+    void rejectsInvalidCollectionName() {
+        assertThatThrownBy(() -> service.addFile("manual.pdf", new byte[]{1}, "bad/name", List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void indexesPlainTextFileWithoutPageInfo() throws IOException {
         DocumentService.DocumentInfo info = service.addFile("noteringar.txt",
-                "Det här är en kort notering om fakturor.".getBytes());
+                "Det här är en kort notering om fakturor.".getBytes(), "docs", List.of());
 
         assertThat(info.name()).isEqualTo("noteringar.txt");
         assertThat(capturedPayloads()).allSatisfy(payload -> {
@@ -113,29 +139,24 @@ class DocumentServiceTest {
 
     @Test
     void rejectsEmptyFile() {
-        assertThatThrownBy(() -> service.addFile("tom.pdf", new byte[0]))
+        assertThatThrownBy(() -> service.addFile("tom.pdf", new byte[0], "docs", List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void addsPlainTextDocumentWithoutFile() {
-        DocumentService.DocumentInfo info = service.add("anteckning", "Ren text utan fil.");
-
-        assertThat(info.name()).isEqualTo("anteckning");
-        assertThat(capturedPayloads()).allSatisfy(payload ->
-                assertThat(payload).doesNotContainKey("path"));
-    }
-
-    @Test
-    void listsDocumentsGroupedFromQdrant() {
+    void listsDocumentsGroupedAcrossCollections() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
         when(qdrantClient.scrollPayloads(eq("docs"), anyList())).thenReturn(List.of(
-                Map.of("documentId", "d1", "title", "a.pdf", "createdAt", 1000L),
-                Map.of("documentId", "d1", "title", "a.pdf", "createdAt", 1000L),
+                Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
+                Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
                 Map.of("source", "gammal.pdf", "path", "/x/gammal.pdf")));
+        when(qdrantClient.scrollPayloads(eq("manuals"), anyList())).thenReturn(List.of(
+                Map.of("documentId", "d2", "title", "b.pdf", "collection", "manuals",
+                        "tags", List.of("manual"), "createdAt", 2000L)));
 
         List<DocumentService.DocumentInfo> docs = service.list();
 
-        assertThat(docs).hasSize(2);
+        assertThat(docs).hasSize(3);
         assertThat(docs).anySatisfy(doc -> {
             assertThat(doc.id()).isEqualTo("d1");
             assertThat(doc.name()).isEqualTo("a.pdf");
@@ -143,17 +164,45 @@ class DocumentServiceTest {
         });
         assertThat(docs).anySatisfy(doc -> {
             assertThat(doc.id()).isEqualTo("gammal.pdf");
-            assertThat(doc.name()).isEqualTo("gammal.pdf");
             assertThat(doc.chunks()).isEqualTo(1);
+        });
+        assertThat(docs).anySatisfy(doc -> {
+            assertThat(doc.id()).isEqualTo("d2");
+            assertThat(doc.collection()).isEqualTo("manuals");
+            assertThat(doc.tags()).containsExactly("manual");
         });
     }
 
     @Test
-    void deletesByDocumentIdAndSource() {
+    void listsTagsAcrossCollections() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList())).thenReturn(List.of(
+                Map.of("tags", List.of("manual", "experion"))));
+        when(qdrantClient.scrollPayloads(eq("manuals"), anyList())).thenReturn(List.of(
+                Map.of("tags", List.of("experion", "faktura"))));
+
+        assertThat(service.tags()).containsExactlyInAnyOrder("manual", "experion", "faktura");
+    }
+
+    @Test
+    void createsCollectionWithValidatedName() {
+        service.createCollection("manuals");
+
+        verify(qdrantClient).ensureCollection("manuals");
+        assertThatThrownBy(() -> service.createCollection(" "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void deletesByDocumentIdAndSourceInEveryCollection() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+
         service.delete("d1");
 
         verify(qdrantClient).deleteByMatch("docs", "documentId", "d1");
         verify(qdrantClient).deleteByMatch("docs", "source", "d1");
+        verify(qdrantClient).deleteByMatch("manuals", "documentId", "d1");
+        verify(qdrantClient).deleteByMatch("manuals", "source", "d1");
     }
 
     @Test
@@ -164,14 +213,18 @@ class DocumentServiceTest {
 
     @Test
     void returnsDocumentDetailWithContentSortedByPage() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs"));
         when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of(
-                Map.of("title", "a.pdf", "path", "/x/a.pdf", "page", 2, "chunkIndex", 0, "text", "Sida två"),
+                Map.of("title", "a.pdf", "path", "/x/a.pdf", "tags", List.of("manual"),
+                        "page", 2, "chunkIndex", 0, "text", "Sida två"),
                 Map.of("title", "a.pdf", "path", "/x/a.pdf", "page", 1, "chunkIndex", 0, "text", "Sida ett")));
 
         DocumentService.DocumentDetail detail = service.detail("d1");
 
         assertThat(detail.name()).isEqualTo("a.pdf");
         assertThat(detail.path()).isEqualTo("/x/a.pdf");
+        assertThat(detail.collection()).isEqualTo("docs");
+        assertThat(detail.tags()).containsExactly("manual");
         assertThat(detail.chunks()).isEqualTo(2);
         assertThat(detail.content()).extracting(DocumentService.DocumentChunk::page).containsExactly(1, 2);
         assertThat(detail.content().get(0).text()).isEqualTo("Sida ett");
@@ -180,6 +233,7 @@ class DocumentServiceTest {
 
     @Test
     void detailRejectsUnknownDocument() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs"));
         when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.detail("nope"))
@@ -189,7 +243,7 @@ class DocumentServiceTest {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> capturedPayloads() {
         ArgumentCaptor<List<QdrantClient.Point>> captor = ArgumentCaptor.forClass(List.class);
-        verify(qdrantClient).upsert(captor.capture());
+        verify(qdrantClient).upsert(anyString(), captor.capture());
         return captor.getValue().stream()
                 .map(QdrantClient.Point::payload)
                 .toList();

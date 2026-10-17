@@ -13,8 +13,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 @Service
@@ -23,7 +26,7 @@ public class DocumentService {
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
     private static final int EMBED_BATCH = 64;
     private static final List<String> DOC_FIELDS =
-            List.of("documentId", "source", "title", "path", "page", "createdAt");
+            List.of("documentId", "source", "title", "path", "page", "createdAt", "collection", "tags");
 
     private final OllamaClient llm;
     private final OllamaProperties ollama;
@@ -45,39 +48,29 @@ public class DocumentService {
         this.fileStore = fileStore;
     }
 
-    public record DocumentInfo(String id, String name, int chunks, int characters, String path, Instant createdAt) {
+    public record DocumentInfo(String id, String name, int chunks, int characters, String path,
+                               String collection, List<String> tags, Instant createdAt) {
     }
 
     public record DocumentChunk(Integer page, Integer chunkIndex, String text) {
     }
 
-    public record DocumentDetail(String id, String name, String path, int chunks, int characters,
-                                 List<DocumentChunk> content) {
+    public record DocumentDetail(String id, String name, String path, String collection, List<String> tags,
+                                 int chunks, int characters, List<DocumentChunk> content) {
     }
 
     private record IndexedChunk(Integer page, int index, String text) {
     }
 
-    /** Textinmatning utan fil (sparas inte som original). */
-    public DocumentInfo add(String name, String text) {
-        if (text == null || text.isBlank()) {
-            throw new IllegalArgumentException("Dokumentet är tomt");
-        }
-        String title = name == null || name.isBlank() ? "Dokument" : name.trim();
-        List<IndexedChunk> chunks = new ArrayList<>();
-        int index = 0;
-        for (Chunker.Chunk chunk : chunker.chunk(text)) {
-            chunks.add(new IndexedChunk(null, index++, chunk.text()));
-        }
-        return index(title, title, null, chunks, text.length());
-    }
-
     /** Filuppladdning: sparar originalet och indexerar innehållet (PDF eller text). */
-    public DocumentInfo addFile(String filename, byte[] bytes) throws IOException {
+    public DocumentInfo addFile(String filename, byte[] bytes, String collection, List<String> tags)
+            throws IOException {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("Filen är tom");
         }
         String title = filename == null || filename.isBlank() ? "Dokument" : filename.trim();
+        String target = resolveCollection(collection);
+        List<String> cleanTags = cleanTags(tags);
         Path stored = fileStore.store(title, bytes);
         String path = stored.toAbsolutePath().toString();
 
@@ -106,10 +99,10 @@ public class DocumentService {
         if (chunks.isEmpty()) {
             throw new IllegalArgumentException("Dokumentet innehåller ingen text (kan behöva OCR)");
         }
-        return index(title, title, path, chunks, characters);
+        return index(title, title, target, cleanTags, path, chunks, characters);
     }
 
-    private DocumentInfo index(String title, String source, String path,
+    private DocumentInfo index(String title, String source, String collection, List<String> tags, String path,
                                List<IndexedChunk> chunks, int characters) {
         String model = ollama.embeddingModel();
         if (model == null || model.isBlank()) {
@@ -130,7 +123,7 @@ public class DocumentService {
 
         String documentId = UUID.randomUUID().toString();
         long createdAt = System.currentTimeMillis();
-        qdrantClient.ensureCollection();
+        qdrantClient.ensureCollection(collection);
 
         List<QdrantClient.Point> points = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
@@ -139,7 +132,11 @@ public class DocumentService {
             payload.put("documentId", documentId);
             payload.put("title", title);
             payload.put("source", source);
+            payload.put("collection", collection);
             payload.put("createdAt", createdAt);
+            if (!tags.isEmpty()) {
+                payload.put("tags", tags);
+            }
             if (path != null) {
                 payload.put("path", path);
             }
@@ -150,43 +147,50 @@ public class DocumentService {
             payload.put("text", chunk.text());
             points.add(new QdrantClient.Point(UUID.randomUUID().toString(), vectors.get(i), payload));
         }
-        qdrantClient.upsert(points);
+        qdrantClient.upsert(collection, points);
 
-        log.info("Indexerade '{}' ({} textstycken)", title, chunks.size());
-        return new DocumentInfo(documentId, title, chunks.size(), characters, path, Instant.ofEpochMilli(createdAt));
+        log.info("Indexerade '{}' ({} textstycken) i kollektionen '{}'", title, chunks.size(), collection);
+        return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
+                Instant.ofEpochMilli(createdAt));
     }
 
     /** Listar dokumenten som faktiskt finns i vektordatabasen (grupperade per dokument). */
     public List<DocumentInfo> list() {
-        List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(qdrant.collection(), DOC_FIELDS);
         Map<String, Group> groups = new LinkedHashMap<>();
-        for (Map<String, Object> payload : payloads) {
-            String id = firstText(payload.get("documentId"));
-            if (id == null) {
-                id = firstText(payload.get("source"));
-            }
-            if (id == null) {
-                id = firstText(payload.get("path"));
-            }
-            if (id == null) {
-                id = "okänt";
-            }
-            String name = firstText(payload.get("title"));
-            if (name == null) {
-                name = firstText(payload.get("source"));
-            }
-            final String docName = name == null ? "Dokument" : name;
-            Group group = groups.computeIfAbsent(id, key -> new Group(key, docName));
-            group.chunks++;
-            group.path = firstText(payload.get("path"));
-            Number created = asNumber(payload.get("createdAt"));
-            if (created != null && created.longValue() > group.createdAt) {
-                group.createdAt = created.longValue();
+        for (String collection : qdrantClient.listCollections()) {
+            for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection, DOC_FIELDS)) {
+                String id = firstText(payload.get("documentId"));
+                if (id == null) {
+                    id = firstText(payload.get("source"));
+                }
+                if (id == null) {
+                    id = firstText(payload.get("path"));
+                }
+                if (id == null) {
+                    id = "okänt";
+                }
+                String name = firstText(payload.get("title"));
+                if (name == null) {
+                    name = firstText(payload.get("source"));
+                }
+                final String docName = name == null ? "Dokument" : name;
+                Group group = groups.computeIfAbsent(id, key -> new Group(key, docName, collection));
+                group.chunks++;
+                String path = firstText(payload.get("path"));
+                if (path != null) {
+                    group.path = path;
+                }
+                group.tags.addAll(tagsOf(payload));
+                Number created = asNumber(payload.get("createdAt"));
+                if (created != null && created.longValue() > group.createdAt) {
+                    group.createdAt = created.longValue();
+                }
             }
         }
         return groups.values().stream()
                 .sorted(Comparator.comparingLong((Group group) -> group.createdAt).reversed())
                 .map(group -> new DocumentInfo(group.id, group.name, group.chunks, 0, group.path,
+                        group.collection, List.copyOf(group.tags),
                         group.createdAt > 0 ? Instant.ofEpochMilli(group.createdAt) : null))
                 .toList();
     }
@@ -199,13 +203,20 @@ public class DocumentService {
         Map<String, Object> filter = Map.of("should", List.of(
                 Map.of("key", "documentId", "match", Map.of("value", id)),
                 Map.of("key", "source", "match", Map.of("value", id))));
-        List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(qdrant.collection(),
-                List.of("title", "source", "path", "page", "chunkIndex", "text"), filter);
-        if (payloads.isEmpty()) {
-            throw new IllegalArgumentException("Dokumentet finns inte");
+        for (String collection : qdrantClient.listCollections()) {
+            List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(collection,
+                    List.of("title", "source", "path", "page", "chunkIndex", "text", "tags"), filter);
+            if (!payloads.isEmpty()) {
+                return buildDetail(id, collection, payloads);
+            }
         }
+        throw new IllegalArgumentException("Dokumentet finns inte");
+    }
+
+    private DocumentDetail buildDetail(String id, String collection, List<Map<String, Object>> payloads) {
         String name = null;
         String path = null;
+        Set<String> tags = new LinkedHashSet<>();
         for (Map<String, Object> payload : payloads) {
             if (name == null) {
                 name = firstText(payload.get("title"));
@@ -216,6 +227,7 @@ public class DocumentService {
             if (path == null) {
                 path = firstText(payload.get("path"));
             }
+            tags.addAll(tagsOf(payload));
         }
         List<DocumentChunk> content = payloads.stream()
                 .map(payload -> new DocumentChunk(
@@ -226,33 +238,106 @@ public class DocumentService {
                         .thenComparing(DocumentChunk::chunkIndex, Comparator.nullsLast(Integer::compareTo)))
                 .toList();
         int characters = content.stream().mapToInt(chunk -> chunk.text().length()).sum();
-        return new DocumentDetail(id, name == null ? "Dokument" : name, path, content.size(), characters, content);
+        return new DocumentDetail(id, name == null ? "Dokument" : name, path, collection,
+                List.copyOf(tags), content.size(), characters, content);
     }
 
     public List<String> collections() {
         return qdrantClient.listCollections();
     }
 
-    /** Tar bort alles vektorer för ett dokument (matchar documentId eller source). */
+    /** Alla taggar som används i någon kollektion. */
+    public List<String> tags() {
+        TreeSet<String> result = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (String collection : qdrantClient.listCollections()) {
+            for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection, List.of("tags"))) {
+                result.addAll(tagsOf(payload));
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    public void createCollection(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Kollektionsnamn saknas");
+        }
+        qdrantClient.ensureCollection(validateName(name.trim()));
+    }
+
+    /** Tar bort alla vektorer för ett dokument (matchar documentId eller source) i alla kollektioner. */
     public void delete(String id) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Inget dokument-id angivet");
         }
-        qdrantClient.deleteByMatch(qdrant.collection(), "documentId", id);
-        qdrantClient.deleteByMatch(qdrant.collection(), "source", id);
-        log.info("Tog bort dokument {} ur kollektionen '{}'", id, qdrant.collection());
+        for (String collection : qdrantClient.listCollections()) {
+            qdrantClient.deleteByMatch(collection, "documentId", id);
+            qdrantClient.deleteByMatch(collection, "source", id);
+        }
+        log.info("Tog bort dokument {} ur vektordatabasen", id);
+    }
+
+    private String resolveCollection(String collection) {
+        if (collection == null || collection.isBlank()) {
+            return qdrant.collection();
+        }
+        return validateName(collection.trim());
+    }
+
+    private static String validateName(String name) {
+        if (!name.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw new IllegalArgumentException("Ogiltigt kollektionsnamn: " + name);
+        }
+        return name;
+    }
+
+    private static List<String> cleanTags(List<String> tags) {
+        if (tags == null) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (String tag : tags) {
+            if (tag == null) {
+                continue;
+            }
+            String trimmed = tag.trim();
+            if (!trimmed.isEmpty() && !result.contains(trimmed)) {
+                result.add(trimmed);
+            }
+        }
+        return result;
+    }
+
+    private static List<String> tagsOf(Map<String, Object> payload) {
+        Object value = payload.get("tags");
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> tags = new ArrayList<>();
+        for (Object tag : list) {
+            if (tag == null) {
+                continue;
+            }
+            String trimmed = String.valueOf(tag).trim();
+            if (!trimmed.isEmpty()) {
+                tags.add(trimmed);
+            }
+        }
+        return tags;
     }
 
     private static final class Group {
         private final String id;
         private final String name;
+        private final String collection;
         private String path;
         private int chunks;
         private long createdAt;
+        private final Set<String> tags = new LinkedHashSet<>();
 
-        private Group(String id, String name) {
+        private Group(String id, String name, String collection) {
             this.id = id;
             this.name = name;
+            this.collection = collection;
         }
     }
 

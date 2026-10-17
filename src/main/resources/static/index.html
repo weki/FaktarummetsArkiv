@@ -346,6 +346,27 @@
         .doc-viewer-title { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .doc-viewer-frame { width: 100%; height: calc(100vh - 260px); border: 1px solid #334155; border-radius: 8px; background: #ffffff; }
         .hidden { display: none; }
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+        .tag {
+            display: inline-block;
+            background: #1e3a5f;
+            color: #bae6fd;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tag-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag-suggestions button {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid #334155;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .doc-form textarea { min-height: 80px; }
 
         .badge {
             display: inline-block;
@@ -396,6 +417,12 @@
             <div id="docListView">
                 <div class="docs-toolbar">
                     <input id="docsSearch" type="search" placeholder="Sök på namn..." autocomplete="off">
+                    <select id="docsFilterCollection">
+                        <option value="">Alla kollektioner</option>
+                    </select>
+                    <select id="docsFilterTag">
+                        <option value="">Alla taggar</option>
+                    </select>
                     <select id="docsSort">
                         <option value="date-desc">Nyast först</option>
                         <option value="date-asc">Äldst först</option>
@@ -421,21 +448,34 @@
         </div>
         <div class="tab-panel" data-panel="upload">
             <form id="uploadForm" class="doc-form">
-                <div class="row">
-                    <input type="file" name="file" accept=".pdf,.txt,.md,.csv,.log,.json,.xml,.html">
-                    <button id="uploadBtn" type="submit">Ladda upp</button>
+                <label>Filer (flera tillåtna)
+                    <input type="file" name="files" multiple accept=".pdf,.txt,.md,.csv,.log,.json,.xml,.html">
+                </label>
+                <div class="settings-row">
+                    <label>Kollektion
+                        <select id="uploadCollection" name="collection"></select>
+                    </label>
+                    <label id="newCollectionField" class="hidden">Ny kollektion
+                        <input type="text" id="newCollectionName" placeholder="t.ex. experion-manualer">
+                    </label>
                 </div>
-            </form>
-            <form id="textForm" class="doc-form">
-                <input type="text" name="name" placeholder="Namn (t.ex. Experion-manual)">
-                <textarea name="text" placeholder="Klistra in dokumenttext..."></textarea>
+                <label>Taggar (kommaseparerat)
+                    <input type="text" id="uploadTags" placeholder="t.ex. manual, experion">
+                </label>
+                <div id="tagSuggestions" class="tag-suggestions"></div>
                 <div class="row">
-                    <button id="textBtn" type="submit">Lägg till text</button>
+                    <button id="uploadBtn" type="submit">Ladda upp</button>
                 </div>
             </form>
         </div>
         <div class="tab-panel" data-panel="collections">
             <p class="tab-hint">Välj vilka kollektioner i vektordatabasen som ska ingå i sökningarna.</p>
+            <div class="doc-form">
+                <div class="row">
+                    <input type="text" id="newCollectionInput" placeholder="Skapa ny kollektion...">
+                    <button id="createCollectionBtn" type="button">Skapa</button>
+                </div>
+            </div>
             <div id="collectionList" class="collection-list"></div>
             <div class="modal-actions">
                 <span id="collectionsStatus" class="status"></span>
@@ -520,14 +560,21 @@
     const documentsClose = document.getElementById('documentsClose');
     const uploadForm = document.getElementById('uploadForm');
     const uploadBtn = document.getElementById('uploadBtn');
-    const textForm = document.getElementById('textForm');
-    const textBtn = document.getElementById('textBtn');
+    const uploadCollection = document.getElementById('uploadCollection');
+    const newCollectionField = document.getElementById('newCollectionField');
+    const newCollectionName = document.getElementById('newCollectionName');
+    const uploadTags = document.getElementById('uploadTags');
+    const tagSuggestions = document.getElementById('tagSuggestions');
     const documentsStatus = document.getElementById('documentsStatus');
     const docList = document.getElementById('docList');
     const docsSearch = document.getElementById('docsSearch');
+    const docsFilterCollection = document.getElementById('docsFilterCollection');
+    const docsFilterTag = document.getElementById('docsFilterTag');
     const docsSort = document.getElementById('docsSort');
     const collectionsStatus = document.getElementById('collectionsStatus');
     const collectionsSave = document.getElementById('collectionsSave');
+    const newCollectionInput = document.getElementById('newCollectionInput');
+    const createCollectionBtn = document.getElementById('createCollectionBtn');
     const docListView = document.getElementById('docListView');
     const docViewer = document.getElementById('docViewer');
     const docViewerBack = document.getElementById('docViewerBack');
@@ -830,8 +877,8 @@
 
     let qdrantCollections = null;
 
-    async function loadCollections() {
-        if (qdrantCollections) return qdrantCollections;
+    async function loadCollections(force) {
+        if (qdrantCollections && !force) return qdrantCollections;
         try {
             const res = await fetch(DOC_API + '/collections');
             const data = await res.json().catch(() => null);
@@ -840,6 +887,19 @@
             qdrantCollections = [];
         }
         return qdrantCollections;
+    }
+
+    let knownTags = [];
+
+    async function loadTags() {
+        try {
+            const res = await fetch(DOC_API + '/tags');
+            const data = await res.json().catch(() => null);
+            knownTags = Array.isArray(data) ? data : [];
+        } catch (error) {
+            knownTags = [];
+        }
+        return knownTags;
     }
 
     function fillModelSelect(select, models, current) {
@@ -976,17 +1036,50 @@
             const data = await res.json().catch(() => []);
             if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
             allDocuments = Array.isArray(data) ? data : [];
+            refreshDocFilters();
             renderDocuments();
         } catch (error) {
             setDocumentsStatus('Kunde inte hämta: ' + error.message, 'err');
         }
     }
 
+    function refreshDocFilters() {
+        const collections = new Set();
+        const tags = new Set();
+        for (const doc of allDocuments) {
+            if (doc.collection) collections.add(doc.collection);
+            for (const tag of (doc.tags || [])) tags.add(tag);
+        }
+        fillFilterSelect(docsFilterCollection, 'Alla kollektioner', collections);
+        fillFilterSelect(docsFilterTag, 'Alla taggar', tags);
+    }
+
+    function fillFilterSelect(select, allLabel, values) {
+        const current = select.value;
+        select.innerHTML = '';
+        const all = document.createElement('option');
+        all.value = '';
+        all.textContent = allLabel;
+        select.appendChild(all);
+        for (const value of Array.from(values).sort((a, b) => a.localeCompare(b, 'sv'))) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+        }
+        select.value = current && values.has(current) ? current : '';
+    }
+
     function visibleDocuments() {
         const term = docsSearch.value.trim().toLowerCase();
-        const documents = term
-            ? allDocuments.filter(doc => (doc.name || '').toLowerCase().includes(term))
-            : allDocuments.slice();
+        const collection = docsFilterCollection.value;
+        const tag = docsFilterTag.value;
+        const documents = allDocuments.filter(doc => {
+            if (term && !(doc.name || '').toLowerCase().includes(term)) return false;
+            if (collection && doc.collection !== collection) return false;
+            if (tag && !(doc.tags || []).includes(tag)) return false;
+            return true;
+        });
         const byDate = (doc) => (doc.createdAt ? Date.parse(doc.createdAt) : 0);
         const byName = (doc) => (doc.name || '').toLowerCase();
         switch (docsSort.value) {
@@ -1040,10 +1133,22 @@
         const metaEl = document.createElement('div');
         metaEl.className = 'meta';
         let meta = doc.chunks + ' textstycken';
+        if (doc.collection) meta += ' · ' + doc.collection;
         if (doc.createdAt) meta += ' · ' + formatDate(doc.createdAt);
         metaEl.textContent = meta;
         main.appendChild(nameEl);
         main.appendChild(metaEl);
+        if (doc.tags && doc.tags.length) {
+            const tagList = document.createElement('div');
+            tagList.className = 'tag-list';
+            for (const tag of doc.tags) {
+                const chip = document.createElement('span');
+                chip.className = 'tag';
+                chip.textContent = tag;
+                tagList.appendChild(chip);
+            }
+            main.appendChild(tagList);
+        }
 
         const actions = document.createElement('div');
         actions.className = 'doc-actions';
@@ -1127,7 +1232,10 @@
 
     function renderDocumentViewer(doc) {
         docViewerTitle.textContent = doc.name || 'Dokument';
-        docViewerMeta.textContent = (doc.chunks || 0) + ' textstycken · ' + (doc.characters || 0) + ' tecken';
+        let meta = (doc.chunks || 0) + ' textstycken · ' + (doc.characters || 0) + ' tecken';
+        if (doc.collection) meta += ' · ' + doc.collection;
+        if (doc.tags && doc.tags.length) meta += ' · ' + doc.tags.join(', ');
+        docViewerMeta.textContent = meta;
 
         docViewerActions.innerHTML = '';
         renderViewerText(doc);
@@ -1179,10 +1287,10 @@
     }
 
     function openDocuments() {
-        qdrantCollections = null;
         closeDocViewer();
         documentsPage.classList.remove('hidden');
         loadDocuments();
+        loadUploadOptions();
     }
 
     function closeDocuments() {
@@ -1198,6 +1306,56 @@
             panel.classList.toggle('active', panel.dataset.panel === name);
         });
         if (name === 'collections') loadCollectionsTab();
+        if (name === 'upload') loadUploadOptions();
+    }
+
+    async function loadUploadOptions() {
+        const [collections] = await Promise.all([loadCollections(true), loadTags()]);
+        const current = uploadCollection.value;
+        uploadCollection.innerHTML = '';
+        for (const name of collections) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            uploadCollection.appendChild(option);
+        }
+        const create = document.createElement('option');
+        create.value = '__new__';
+        create.textContent = '＋ Ny kollektion…';
+        uploadCollection.appendChild(create);
+        if (current && Array.from(uploadCollection.options).some(o => o.value === current)) {
+            uploadCollection.value = current;
+        }
+        toggleNewCollectionField();
+        renderTagSuggestions();
+    }
+
+    function toggleNewCollectionField() {
+        newCollectionField.classList.toggle('hidden', uploadCollection.value !== '__new__');
+    }
+
+    function renderTagSuggestions() {
+        tagSuggestions.innerHTML = '';
+        if (!knownTags.length) return;
+        const label = document.createElement('span');
+        label.className = 'meta';
+        label.textContent = 'Befintliga taggar:';
+        tagSuggestions.appendChild(label);
+        for (const tag of knownTags) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = tag;
+            button.addEventListener('click', () => addTag(uploadTags, tag));
+            tagSuggestions.appendChild(button);
+        }
+    }
+
+    function addTag(input, tag) {
+        const tags = input.value.split(',').map(t => t.trim()).filter(Boolean);
+        if (!tags.includes(tag)) {
+            tags.push(tag);
+        }
+        input.value = tags.join(', ');
     }
 
     async function loadCollectionsTab() {
@@ -1241,56 +1399,90 @@
     documentsBtn.addEventListener('click', openDocuments);
     documentsClose.addEventListener('click', closeDocuments);
     docsSearch.addEventListener('input', renderDocuments);
+    docsFilterCollection.addEventListener('change', renderDocuments);
+    docsFilterTag.addEventListener('change', renderDocuments);
     docsSort.addEventListener('change', renderDocuments);
     documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchDocumentsTab(btn.dataset.tab));
     });
     docViewerBack.addEventListener('click', closeDocViewer);
+    uploadCollection.addEventListener('change', () => {
+        if (uploadCollection.value !== '__new__') {
+            newCollectionName.value = '';
+        }
+        toggleNewCollectionField();
+    });
+
+    createCollectionBtn.addEventListener('click', async () => {
+        const name = newCollectionInput.value.trim();
+        if (!name) return;
+        createCollectionBtn.disabled = true;
+        setCollectionsStatus('Skapar...', '');
+        try {
+            const res = await fetch(DOC_API + '/collections', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            newCollectionInput.value = '';
+            qdrantCollections = Array.isArray(data) ? data : null;
+            setCollectionsStatus('Skapad', 'ok');
+            renderCollections(await loadCollections(true), getSelectedCollections());
+        } catch (error) {
+            setCollectionsStatus('Fel: ' + error.message, 'err');
+        } finally {
+            createCollectionBtn.disabled = false;
+        }
+    });
+
+    function getSelectedCollections() {
+        return Array.from(collectionList.querySelectorAll('input[type=checkbox]:checked')).map(cb => cb.value);
+    }
 
     uploadForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const file = uploadForm.elements.namedItem('file').files[0];
-        if (!file) return;
+        const files = Array.from(uploadForm.elements.namedItem('files').files);
+        if (!files.length) {
+            setDocumentsStatus('Välj minst en fil', 'err');
+            return;
+        }
+        let collection = uploadCollection.value;
+        if (collection === '__new__') {
+            collection = newCollectionName.value.trim();
+            if (!collection) {
+                setDocumentsStatus('Ange namn på den nya kollektionen', 'err');
+                return;
+            }
+        }
+        const tags = uploadTags.value.split(',').map(t => t.trim()).filter(Boolean);
         uploadBtn.disabled = true;
-        setDocumentsStatus('Laddar upp och indexerar...', '');
+        setDocumentsStatus('Laddar upp ' + files.length + ' fil(er)...', '');
         try {
             const formData = new FormData();
-            formData.append('file', file);
+            for (const file of files) {
+                formData.append('files', file);
+            }
+            if (collection) formData.append('collection', collection);
+            for (const tag of tags) {
+                formData.append('tags', tag);
+            }
             const res = await fetch(DOC_API, {method: 'POST', body: formData});
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
             uploadForm.reset();
-            setDocumentsStatus('Klart', 'ok');
-            await loadDocuments();
+            newCollectionName.value = '';
+            uploadTags.value = '';
+            toggleNewCollectionField();
+            const count = Array.isArray(data) ? data.length : 0;
+            setDocumentsStatus(count + ' dokument uppladdade', 'ok');
+            qdrantCollections = null;
+            await Promise.all([loadUploadOptions(), loadDocuments()]);
         } catch (error) {
             setDocumentsStatus('Fel: ' + error.message, 'err');
         } finally {
             uploadBtn.disabled = false;
-        }
-    });
-
-    textForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const name = textForm.elements.namedItem('name').value.trim();
-        const text = textForm.elements.namedItem('text').value.trim();
-        if (!text) return;
-        textBtn.disabled = true;
-        setDocumentsStatus('Indexerar...', '');
-        try {
-            const res = await fetch(DOC_API + '/text', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({name, text})
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-            textForm.reset();
-            setDocumentsStatus('Klart', 'ok');
-            await loadDocuments();
-        } catch (error) {
-            setDocumentsStatus('Fel: ' + error.message, 'err');
-        } finally {
-            textBtn.disabled = false;
         }
     });
 

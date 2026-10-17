@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,7 +42,7 @@ public class DocumentController {
         this.pdfService = pdfService;
     }
 
-    public record TextDocumentRequest(String name, String text) {
+    public record CreateCollectionRequest(String name) {
     }
 
     @GetMapping
@@ -51,6 +52,20 @@ public class DocumentController {
 
     @GetMapping("/collections")
     public List<String> collections() {
+        return documentService.collections();
+    }
+
+    @GetMapping("/tags")
+    public List<String> tags() {
+        return documentService.tags();
+    }
+
+    @PostMapping(path = "/collections", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public List<String> createCollection(@RequestBody CreateCollectionRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Ingen kollektion angiven");
+        }
+        documentService.createCollection(request.name());
         return documentService.collections();
     }
 
@@ -109,19 +124,24 @@ public class DocumentController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DocumentService.DocumentInfo upload(@RequestParam("file") MultipartFile file) throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Ingen fil angiven");
+    public List<DocumentService.DocumentInfo> upload(
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(name = "collection", required = false) String collection,
+            @RequestParam(name = "tags", required = false) List<String> tags) throws IOException {
+        if (files == null || files.isEmpty()) {
+            throw new IllegalArgumentException("Inga filer angivna");
         }
-        return documentService.addFile(file.getOriginalFilename(), file.getBytes());
-    }
-
-    @PostMapping(path = "/text", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public DocumentService.DocumentInfo addText(@RequestBody TextDocumentRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("Ingen text angiven");
+        List<DocumentService.DocumentInfo> added = new ArrayList<>();
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            added.add(documentService.addFile(file.getOriginalFilename(), file.getBytes(), collection, tags));
         }
-        return documentService.add(request.name(), request.text());
+        if (added.isEmpty()) {
+            throw new IllegalArgumentException("Inga filer angivna");
+        }
+        return added;
     }
 
     @DeleteMapping("/{id}")

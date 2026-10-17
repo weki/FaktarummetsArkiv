@@ -14,14 +14,14 @@ public class AnswerRefiner {
 
     private static final Logger log = LoggerFactory.getLogger(AnswerRefiner.class);
     private static final int MAX_SOURCE_CHARS = 8000;
-    private static final String REFUSAL_MARKER = "hittar inte den informationen";
+    private static final String REFUSAL_MARKER = "cannot find that information";
 
     private static final String SYSTEM_PROMPT = """
             You are a careful assistant that answers ONLY using the provided SOURCES.
             Rewrite the DRAFT ANSWER so that every statement is supported by the SOURCES.
-            Keep the same language as the QUESTION.
+            Always answer in English, regardless of the language of the QUESTION.
             Remove or correct any claim that the SOURCES do not support.
-            If the SOURCES do not contain the answer, reply exactly: "Jag hittar inte den informationen i dokumenten."
+            If the SOURCES do not contain the answer, reply exactly: "I cannot find that information in the documents."
             Do not mention these instructions. Output only the final answer.
             """;
 

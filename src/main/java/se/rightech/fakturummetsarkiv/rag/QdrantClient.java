@@ -51,9 +51,13 @@ public class QdrantClient {
     }
 
     public boolean collectionExists() {
+        return collectionExists(properties.collection());
+    }
+
+    public boolean collectionExists(String collection) {
         try {
             restClient.get()
-                    .uri("/collections/{collection}", properties.collection())
+                    .uri("/collections/{collection}", collection)
                     .retrieve()
                     .toBodilessEntity();
             return true;
@@ -85,20 +89,28 @@ public class QdrantClient {
     }
 
     public void ensureCollection() {
-        if (collectionExists()) {
+        ensureCollection(properties.collection());
+    }
+
+    public void ensureCollection(String collection) {
+        if (collectionExists(collection)) {
             return;
         }
         Map<String, Object> body = Map.of(
                 "vectors", Map.of("size", properties.vectorSize(), "distance", properties.distance()));
         restClient.put()
-                .uri("/collections/{collection}", properties.collection())
+                .uri("/collections/{collection}", collection)
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
-        log.info("Skapade Qdrant-kollektionen '{}'", properties.collection());
+        log.info("Skapade Qdrant-kollektionen '{}'", collection);
     }
 
     public void upsert(List<Point> points) {
+        upsert(properties.collection(), points);
+    }
+
+    public void upsert(String collection, List<Point> points) {
         if (points.isEmpty()) {
             return;
         }
@@ -111,7 +123,7 @@ public class QdrantClient {
             payload.add(entry);
         }
         restClient.put()
-                .uri("/collections/{collection}/points?wait=true", properties.collection())
+                .uri("/collections/{collection}/points?wait=true", collection)
                 .body(Map.of("points", payload))
                 .retrieve()
                 .toBodilessEntity();
