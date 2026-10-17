@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fakturummets Arkiv – Lokalt RAG</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --panel-2: #273449;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --user: #2563eb;
+            --assistant: #334155;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+        }
+
+        aside {
+            width: 320px;
+            background: var(--panel);
+            border-right: 1px solid #334155;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        aside h1 { font-size: 18px; margin: 0 0 4px; }
+        aside p { color: var(--muted); font-size: 13px; margin: 0; }
+
+        input, button, textarea {
+            font: inherit;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: var(--panel-2);
+            color: var(--text);
+            padding: 10px;
+        }
+
+        textarea { resize: vertical; min-height: 90px; }
+
+        button {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:disabled { opacity: .5; cursor: not-allowed; }
+
+        .thread-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin: 0 -6px;
+            padding: 0 6px;
+        }
+
+        .thread-row { display: flex; align-items: stretch; gap: 4px; }
+
+        .thread-item {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid transparent;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .thread-item:hover { border-color: #475569; }
+        .thread-item.active { background: #334155; border-color: var(--accent); }
+
+        .thread-delete {
+            flex: none;
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid transparent;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .thread-delete:hover { color: #f87171; border-color: #475569; }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 14px;
+            white-space: pre-wrap;
+            line-height: 1.45;
+        }
+
+        .msg.user { align-self: flex-end; background: var(--user); }
+        .msg.assistant { align-self: flex-start; background: var(--assistant); }
+        .msg.error { align-self: center; background: #7f1d1d; font-size: 14px; }
+
+        .sources { margin-top: 10px; font-size: 12px; color: var(--muted); }
+        .sources summary { cursor: pointer; }
+        .source-item { margin-top: 6px; background: rgba(0,0,0,.2); border-radius: 8px; }
+        .source-item > summary { cursor: pointer; padding: 8px; color: var(--text); }
+        .source-text {
+            max-height: 220px;
+            overflow: auto;
+            padding: 0 8px 8px;
+            font-size: 12px;
+            color: var(--muted);
+            white-space: pre-wrap;
+        }
+        .refined-note { margin-top: 8px; font-size: 12px; color: #fbbf24; }
+        .validation-reason { margin-top: 4px; font-size: 12px; color: #f87171; }
+        .source-actions { display: flex; gap: 14px; padding: 0 8px 8px; }
+        .source-actions a { color: var(--accent); font-size: 12px; text-decoration: none; }
+        .source-actions a:hover { text-decoration: underline; }
+        .original-answer { margin-top: 10px; font-size: 13px; color: var(--muted); }
+        .original-answer > summary { cursor: pointer; }
+        .original-answer .answer { margin-top: 6px; color: var(--muted); }
+
+        form.chat {
+            display: flex;
+            gap: 10px;
+            padding: 16px 24px 24px;
+            border-top: 1px solid #334155;
+        }
+
+        form.chat input { flex: 1; }
+
+        .settings-btn {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid #334155;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 50;
+        }
+
+        .overlay.hidden { display: none; }
+
+        .modal {
+            background: var(--panel);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal.wide { max-width: 720px; }
+
+        .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .modal-head h2 { margin: 0; font-size: 18px; }
+
+        .icon-btn {
+            background: transparent;
+            color: var(--muted);
+            border: none;
+            font-size: 22px;
+            line-height: 1;
+            padding: 0 8px;
+            cursor: pointer;
+        }
+
+        .settings-form { display: flex; flex-direction: column; gap: 12px; }
+        .settings-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+        .settings-form input, .settings-form select { width: 100%; }
+        .settings-form select { background: var(--panel-2); color: var(--text); border: 1px solid #334155; border-radius: 8px; padding: 8px; }
+        .settings-check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+        .settings-check input { width: auto; }
+        .settings-row { display: flex; gap: 12px; }
+        .settings-row label { flex: 1; }
+
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid #334155; margin-bottom: 16px; }
+        .tab-btn {
+            background: transparent;
+            color: var(--muted);
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .tab-hint { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+        .collection-list { display: flex; flex-direction: column; gap: 6px; }
+        .collection-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--panel-2);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .collection-item input { width: auto; }
+        .collection-item .name { flex: 1; }
+
+        .modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+        .status { font-size: 13px; color: var(--muted); }
+        .status.ok { color: #4ade80; }
+        .status.err { color: #f87171; }
+
+        .doc-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+        .doc-form .row { display: flex; gap: 10px; align-items: center; }
+        .doc-form input[type="text"] { flex: 1; }
+        .doc-form input[type="file"] { flex: 1; padding: 8px; }
+
+        .doc-list { display: flex; flex-direction: column; gap: 6px; }
+        .doc-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: var(--panel-2);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+        .doc-item .meta { color: var(--muted); font-size: 12px; }
+        .doc-item button { background: transparent; color: #f87171; border: none; font-size: 18px; padding: 0 6px; }
+
+        .page {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 60;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .page.hidden { display: none; }
+        .page-inner { max-width: 1000px; margin: 0 auto; }
+        .page-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .page-head-left { display: flex; align-items: center; gap: 12px; }
+        .page-head h2 { margin: 0; font-size: 20px; }
+        .docs-toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
+        .docs-toolbar input[type="search"] { flex: 1; }
+        .docs-toolbar select {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .doc-item .doc-main { flex: 1; min-width: 0; }
+        .doc-item .doc-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .doc-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+        .doc-actions button, .doc-actions a {
+            background: var(--panel);
+            color: var(--text);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .doc-actions .danger { color: #f87171; }
+        .doc-actions .danger:hover { border-color: #f87171; }
+        .doc-detail-actions { display: flex; gap: 12px; margin: 8px 0 14px; }
+        .doc-detail-actions a, .doc-detail-actions button {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .doc-detail-text {
+            background: var(--panel-2);
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 55vh;
+            overflow: auto;
+            font-size: 13px;
+            color: var(--muted);
+            white-space: pre-wrap;
+        }
+        .doc-chunk { padding: 8px 0; border-bottom: 1px solid #334155; }
+        .doc-chunk:last-child { border-bottom: none; }
+        .doc-chunk .doc-chunk-page { color: var(--accent); font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+        .doc-viewer { display: flex; flex-direction: column; gap: 16px; }
+        .doc-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .doc-viewer-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .doc-viewer-title { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .doc-viewer-frame { width: 100%; height: calc(100vh - 260px); border: 1px solid #334155; border-radius: 8px; background: #ffffff; }
+        .hidden { display: none; }
+
+        .badge {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 999px;
+        }
+        .badge.ok { background: #14532d; color: #86efac; }
+        .badge.warn { background: #7f1d1d; color: #fecaca; }
+        .badge.unknown { background: #334155; color: #cbd5e1; }
+        .badge.info { background: #1e3a5f; color: #bae6fd; }
+    </style>
+</head>
+<body>
+<aside>
+    <h1>Fakturummets Arkiv</h1>
+    <p>Lokalt RAG via Ollama + Qdrant (utan AnythingLLM).</p>
+    <button id="newThreadBtn" type="button">+ Ny tråd</button>
+    <button id="documentsBtn" type="button" class="settings-btn">Dokument</button>
+    <button id="settingsBtn" type="button" class="settings-btn">Inställningar</button>
+    <div id="threadList" class="thread-list"></div>
+</aside>
+<main>
+    <div id="messages"></div>
+    <form id="chatForm" class="chat">
+        <input id="question" placeholder="Skriv din fråga..." autocomplete="off" autofocus>
+        <button id="sendBtn" type="submit">Skicka</button>
+    </form>
+</main>
+
+<div id="documentsPage" class="page hidden">
+    <div class="page-inner">
+        <div class="page-head">
+            <div class="page-head-left">
+                <button id="documentsClose" type="button" class="settings-btn">← Tillbaka</button>
+                <h2>Dokumenthantering</h2>
+            </div>
+            <span id="documentsStatus" class="status"></span>
+        </div>
+        <div class="tabs">
+            <button type="button" class="tab-btn active" data-tab="documents">Dokument</button>
+            <button type="button" class="tab-btn" data-tab="upload">Ladda upp</button>
+            <button type="button" class="tab-btn" data-tab="collections">Kollektioner</button>
+        </div>
+        <div class="tab-panel active" data-panel="documents">
+            <div id="docListView">
+                <div class="docs-toolbar">
+                    <input id="docsSearch" type="search" placeholder="Sök på namn..." autocomplete="off">
+                    <select id="docsSort">
+                        <option value="date-desc">Nyast först</option>
+                        <option value="date-asc">Äldst först</option>
+                        <option value="name-asc">Namn A–Ö</option>
+                        <option value="name-desc">Namn Ö–A</option>
+                        <option value="chunks-desc">Flest textstycken</option>
+                    </select>
+                </div>
+                <div id="docList" class="doc-list"></div>
+            </div>
+            <div id="docViewer" class="doc-viewer hidden">
+                <div class="doc-viewer-head">
+                    <button id="docViewerBack" type="button" class="settings-btn">← Dokument</button>
+                    <div class="doc-viewer-heading">
+                        <div id="docViewerTitle" class="doc-viewer-title"></div>
+                        <div id="docViewerMeta" class="meta"></div>
+                    </div>
+                    <div id="docViewerActions" class="doc-detail-actions"></div>
+                </div>
+                <iframe id="docViewerFrame" class="doc-viewer-frame hidden" title="Dokument" referrerpolicy="no-referrer"></iframe>
+                <div id="docViewerText" class="doc-detail-text hidden"></div>
+            </div>
+        </div>
+        <div class="tab-panel" data-panel="upload">
+            <form id="uploadForm" class="doc-form">
+                <div class="row">
+                    <input type="file" name="file" accept=".pdf,.txt,.md,.csv,.log,.json,.xml,.html">
+                    <button id="uploadBtn" type="submit">Ladda upp</button>
+                </div>
+            </form>
+            <form id="textForm" class="doc-form">
+                <input type="text" name="name" placeholder="Namn (t.ex. Experion-manual)">
+                <textarea name="text" placeholder="Klistra in dokumenttext..."></textarea>
+                <div class="row">
+                    <button id="textBtn" type="submit">Lägg till text</button>
+                </div>
+            </form>
+        </div>
+        <div class="tab-panel" data-panel="collections">
+            <p class="tab-hint">Välj vilka kollektioner i vektordatabasen som ska ingå i sökningarna.</p>
+            <div id="collectionList" class="collection-list"></div>
+            <div class="modal-actions">
+                <span id="collectionsStatus" class="status"></span>
+                <button id="collectionsSave" type="button">Spara urval</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="settingsOverlay" class="overlay hidden">
+    <div class="modal">
+        <div class="modal-head">
+            <h2>Inställningar</h2>
+            <button id="settingsClose" type="button" class="icon-btn" title="Stäng">×</button>
+        </div>
+        <form id="settingsForm" class="settings-form">
+            <div class="settings-row">
+                <label>Chattmodell (Ollama)
+                    <select name="chatModel"></select>
+                </label>
+                <label>Valideringsmodell (Ollama)
+                    <select name="validatorModel"></select>
+                </label>
+            </div>
+            <label class="settings-check">
+                <input type="checkbox" name="validateGrounding">
+                Validera svar mot källorna med domarmodellen
+            </label>
+            <label class="settings-check">
+                <input type="checkbox" name="translateQuery">
+                Översätt svenska frågor till engelska före sökning (QueryTranslator)
+            </label>
+            <div class="settings-row">
+                <label>Chattläge
+                    <select name="chatMode">
+                        <option value="chat">chat – med historik</option>
+                        <option value="query">query – utan historik</option>
+                    </select>
+                </label>
+                <label>Temperatur (0–2)
+                    <input name="temperature" type="number" min="0" max="2" step="0.1">
+                </label>
+            </div>
+            <div class="settings-row">
+                <label>Antal källor (topN)
+                    <input name="topN" type="number" min="1" max="50" step="1">
+                </label>
+                <label>Min. likhet (0–1)
+                    <input name="similarityThreshold" type="number" min="0" max="1" step="0.05">
+                </label>
+            </div>
+            <label>Historik (antal meddelanden)
+                <input name="historySize" type="number" min="0" max="100" step="1">
+            </label>
+            <div class="modal-actions">
+                <span id="settingsStatus" class="status"></span>
+                <button id="settingsSave" type="submit">Spara</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const API = '/api/chat';
+    const DOC_API = '/api/documents';
+
+    const messages = document.getElementById('messages');
+    const chatForm = document.getElementById('chatForm');
+    const questionInput = document.getElementById('question');
+    const sendBtn = document.getElementById('sendBtn');
+    const newThreadBtn = document.getElementById('newThreadBtn');
+    const threadList = document.getElementById('threadList');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const settingsClose = document.getElementById('settingsClose');
+    const settingsForm = document.getElementById('settingsForm');
+    const settingsStatus = document.getElementById('settingsStatus');
+    const settingsSave = document.getElementById('settingsSave');
+    const collectionList = document.getElementById('collectionList');
+    const documentsBtn = document.getElementById('documentsBtn');
+    const documentsPage = document.getElementById('documentsPage');
+    const documentsClose = document.getElementById('documentsClose');
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const textForm = document.getElementById('textForm');
+    const textBtn = document.getElementById('textBtn');
+    const documentsStatus = document.getElementById('documentsStatus');
+    const docList = document.getElementById('docList');
+    const docsSearch = document.getElementById('docsSearch');
+    const docsSort = document.getElementById('docsSort');
+    const collectionsStatus = document.getElementById('collectionsStatus');
+    const collectionsSave = document.getElementById('collectionsSave');
+    const docListView = document.getElementById('docListView');
+    const docViewer = document.getElementById('docViewer');
+    const docViewerBack = document.getElementById('docViewerBack');
+    const docViewerTitle = document.getElementById('docViewerTitle');
+    const docViewerMeta = document.getElementById('docViewerMeta');
+    const docViewerActions = document.getElementById('docViewerActions');
+    const docViewerFrame = document.getElementById('docViewerFrame');
+    const docViewerText = document.getElementById('docViewerText');
+
+    const STORAGE_KEY = 'fakturummets_arkiv_rag_threads';
+
+    let threads = loadThreads();
+    let activeId = threads.length ? threads[0].id : null;
+
+    function loadThreads() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveThreads() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
+        } catch (e) { /* ignore quota errors */ }
+    }
+
+    function activeThread() {
+        return threads.find(t => t.id === activeId) || null;
+    }
+
+    function threadTitle(thread) {
+        const firstUser = thread.messages.find(m => m.role === 'user');
+        if (!firstUser) return 'Ny tråd';
+        return firstUser.text.length > 34 ? firstUser.text.slice(0, 34) + '…' : firstUser.text;
+    }
+
+    function createThread() {
+        const thread = {id: crypto.randomUUID(), messages: []};
+        threads.unshift(thread);
+        activeId = thread.id;
+        saveThreads();
+        renderThreadList();
+        renderMessages();
+        questionInput.focus();
+        return thread;
+    }
+
+    function selectThread(id) {
+        activeId = id;
+        renderThreadList();
+        renderMessages();
+        questionInput.focus();
+    }
+
+    function deleteThread(id) {
+        const thread = threads.find(t => t.id === id);
+        if (!thread) return;
+        if (!confirm('Ta bort tråden "' + threadTitle(thread) + '"?')) return;
+
+        threads = threads.filter(t => t.id !== id);
+        if (activeId === id) {
+            activeId = threads.length ? threads[0].id : null;
+        }
+        saveThreads();
+
+        if (!threads.length) {
+            createThread();
+            return;
+        }
+        renderThreadList();
+        renderMessages();
+        questionInput.focus();
+    }
+
+    function renderThreadList() {
+        threadList.innerHTML = '';
+        for (const thread of threads) {
+            const row = document.createElement('div');
+            row.className = 'thread-row';
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'thread-item' + (thread.id === activeId ? ' active' : '');
+            btn.textContent = threadTitle(thread);
+            btn.title = threadTitle(thread);
+            btn.addEventListener('click', () => selectThread(thread.id));
+
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'thread-delete';
+            del.textContent = '×';
+            del.title = 'Ta bort tråd';
+            del.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteThread(thread.id);
+            });
+
+            row.appendChild(btn);
+            row.appendChild(del);
+            threadList.appendChild(row);
+        }
+    }
+
+    function renderMessages() {
+        messages.innerHTML = '';
+        const thread = activeThread();
+        if (!thread || !thread.messages.length) {
+            const div = document.createElement('div');
+            div.className = 'msg assistant';
+            div.textContent = 'Hej! Ställ en fråga. Svaren bygger på dokumenten i ditt lokala arkiv.';
+            messages.appendChild(div);
+            return;
+        }
+        for (const m of thread.messages) {
+            renderMessage(m);
+        }
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderMessage(m) {
+        if (m.role === 'assistant') {
+            const div = document.createElement('div');
+            div.className = 'msg assistant';
+            const answer = document.createElement('div');
+            answer.className = 'answer';
+            answer.textContent = m.text;
+            div.appendChild(answer);
+            if (m.refined) appendRefinedNote(div);
+            if (m.sources) appendSources(div, m.sources);
+            if (m.validation) appendValidation(div, m.validation);
+            if (m.originalText) appendOriginalAnswer(div, m.originalText);
+            messages.appendChild(div);
+        } else {
+            const div = document.createElement('div');
+            div.className = 'msg ' + m.role;
+            div.textContent = m.text;
+            messages.appendChild(div);
+        }
+    }
+
+    function addMessage(text, role, sources) {
+        const thread = activeThread();
+        if (thread && role !== 'error') {
+            thread.messages.push({role, text, sources});
+            saveThreads();
+            renderThreadList();
+        }
+        renderMessage({role, text, sources});
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function appendSources(container, sources) {
+        if (!sources || !sources.length) return;
+        const details = document.createElement('details');
+        details.className = 'sources';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Källor (' + sources.length + ')';
+        details.appendChild(summary);
+        for (const source of sources) {
+            const item = document.createElement('details');
+            item.className = 'source-item';
+
+            const head = document.createElement('summary');
+            const title = source.title || source.name || source.source || 'Källa';
+            let label = title;
+            if (source.collection) label += ' · ' + source.collection;
+            if (source.page !== undefined && source.page !== null) label += ' · sida ' + source.page;
+            if (typeof source.score === 'number') label += ' · ' + source.score.toFixed(2);
+            head.textContent = label;
+            item.appendChild(head);
+
+            const body = document.createElement('div');
+            body.className = 'source-text';
+            body.textContent = source.text || source.content || '';
+            item.appendChild(body);
+
+            if (isPdfPath(source.path)) {
+                const actions = document.createElement('div');
+                actions.className = 'source-actions';
+                const base = DOC_API + '/pdf?path=' + encodeURIComponent(source.path);
+                const view = document.createElement('a');
+                view.href = base;
+                view.target = '_blank';
+                view.rel = 'noopener';
+                view.textContent = 'Visa PDF';
+                const download = document.createElement('a');
+                download.href = base + '&download=true';
+                download.textContent = 'Ladda ner PDF';
+                actions.appendChild(view);
+                actions.appendChild(download);
+                item.appendChild(actions);
+            } else if (source.documentId) {
+                const actions = document.createElement('div');
+                actions.className = 'source-actions';
+                const download = document.createElement('a');
+                download.href = DOC_API + '/' + encodeURIComponent(source.documentId) + '/download';
+                download.textContent = 'Ladda ner';
+                actions.appendChild(download);
+                item.appendChild(actions);
+            }
+
+            details.appendChild(item);
+        }
+        container.appendChild(details);
+    }
+
+    function appendRefinedNote(container) {
+        const note = document.createElement('div');
+        note.className = 'refined-note';
+        note.textContent = 'Omformulerad för att grundas i källorna.';
+        container.appendChild(note);
+    }
+
+    function appendOriginalAnswer(container, text) {
+        if (!text) return;
+        const details = document.createElement('details');
+        details.className = 'original-answer';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Ursprungligt svar (innan omformulering)';
+        details.appendChild(summary);
+        const body = document.createElement('div');
+        body.className = 'answer';
+        body.textContent = text;
+        details.appendChild(body);
+        container.appendChild(details);
+    }
+
+    function appendValidation(container, validation) {
+        if (!validation) return;
+        let cls = 'unknown';
+        let label = 'Ej verifierad';
+        if (validation.refused === true) {
+            cls = 'info';
+            label = 'Inget svar i källorna';
+        } else if (validation.supported === true) {
+            cls = 'ok';
+            label = 'Verifierad mot källor';
+        } else if (validation.supported === false) {
+            cls = 'warn';
+            label = 'Ej styrkt av källor';
+        }
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + cls;
+        badge.textContent = label;
+        container.appendChild(badge);
+        if (validation.supported === false && validation.reason) {
+            const reason = document.createElement('div');
+            reason.className = 'validation-reason';
+            reason.textContent = 'Varför: ' + validation.reason;
+            container.appendChild(reason);
+        }
+    }
+
+    function parseEvent(raw) {
+        let event = 'message';
+        const dataLines = [];
+        for (const line of raw.split('\n')) {
+            if (line.startsWith('event:')) event = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+        }
+        if (!dataLines.length) return null;
+        return {event, data: dataLines.join('\n')};
+    }
+
+    function createStreamingAnswer() {
+        const div = document.createElement('div');
+        div.className = 'msg assistant';
+        const answer = document.createElement('div');
+        answer.className = 'answer';
+        div.appendChild(answer);
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+        return {div, answer};
+    }
+
+    newThreadBtn.addEventListener('click', () => createThread());
+
+    function setSettingsStatus(text, cls) {
+        settingsStatus.textContent = text;
+        settingsStatus.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    let ollamaModels = null;
+
+    async function loadOllamaModels() {
+        if (ollamaModels) return ollamaModels;
+        try {
+            const res = await fetch(API + '/models');
+            const data = await res.json().catch(() => null);
+            ollamaModels = Array.isArray(data) ? data : [];
+        } catch (error) {
+            ollamaModels = [];
+        }
+        return ollamaModels;
+    }
+
+    let qdrantCollections = null;
+
+    async function loadCollections() {
+        if (qdrantCollections) return qdrantCollections;
+        try {
+            const res = await fetch(DOC_API + '/collections');
+            const data = await res.json().catch(() => null);
+            qdrantCollections = Array.isArray(data) ? data : [];
+        } catch (error) {
+            qdrantCollections = [];
+        }
+        return qdrantCollections;
+    }
+
+    function fillModelSelect(select, models, current) {
+        if (!select) return;
+        const names = new Set(models || []);
+        if (current) names.add(current);
+        select.innerHTML = '';
+        for (const name of names) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+        }
+        if (current) select.value = current;
+    }
+
+    function renderCollections(available, selected) {
+        const chosen = new Set(Array.isArray(selected) ? selected : []);
+        const names = new Set(available || []);
+        chosen.forEach(name => names.add(name));
+        collectionList.innerHTML = '';
+        if (!names.size) {
+            const empty = document.createElement('div');
+            empty.className = 'collection-item';
+            const text = document.createElement('span');
+            text.className = 'name';
+            text.textContent = 'Inga kollektioner hittades';
+            empty.appendChild(text);
+            collectionList.appendChild(empty);
+            return;
+        }
+        for (const name of names) {
+            const label = document.createElement('label');
+            label.className = 'collection-item';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = name;
+            checkbox.checked = chosen.has(name);
+            const text = document.createElement('span');
+            text.className = 'name';
+            text.textContent = name;
+            label.appendChild(checkbox);
+            label.appendChild(text);
+            collectionList.appendChild(label);
+        }
+    }
+
+    async function openSettings() {
+        setSettingsStatus('Laddar...', '');
+        settingsOverlay.classList.remove('hidden');
+        try {
+            const [res, models] = await Promise.all([fetch(API + '/settings'), loadOllamaModels()]);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            for (const [key, value] of Object.entries(data)) {
+                const field = settingsForm.elements.namedItem(key);
+                if (!field || value === null || value === undefined) continue;
+                if (field.type === 'checkbox') field.checked = value === true;
+                else field.value = value;
+            }
+            fillModelSelect(settingsForm.elements.namedItem('chatModel'), models, data.chatModel);
+            fillModelSelect(settingsForm.elements.namedItem('validatorModel'), models, data.validatorModel);
+            if (!models.length) setSettingsStatus('Kunde inte hämta modeller från Ollama', 'err');
+            else setSettingsStatus('', '');
+        } catch (error) {
+            setSettingsStatus('Kunde inte hämta: ' + error.message, 'err');
+        }
+    }
+
+    function closeSettings() {
+        settingsOverlay.classList.add('hidden');
+    }
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsClose.addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', (event) => {
+        if (event.target === settingsOverlay) closeSettings();
+    });
+
+    settingsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        settingsSave.disabled = true;
+        setSettingsStatus('Sparar...', '');
+
+        const text = (name) => {
+            const value = settingsForm.elements.namedItem(name).value.trim();
+            return value === '' ? null : value;
+        };
+        const number = (name) => {
+            const value = settingsForm.elements.namedItem(name).value.trim();
+            return value === '' ? null : Number(value);
+        };
+        const checked = (name) => settingsForm.elements.namedItem(name).checked;
+
+        const payload = {
+            chatMode: text('chatMode'),
+            chatModel: text('chatModel'),
+            validatorModel: text('validatorModel'),
+            validateGrounding: checked('validateGrounding'),
+            translateQuery: checked('translateQuery'),
+            similarityThreshold: number('similarityThreshold'),
+            topN: number('topN'),
+            temperature: number('temperature'),
+            historySize: number('historySize')
+        };
+
+        try {
+            const res = await fetch(API + '/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            setSettingsStatus('Sparat', 'ok');
+        } catch (error) {
+            setSettingsStatus('Fel: ' + error.message, 'err');
+        } finally {
+            settingsSave.disabled = false;
+        }
+    });
+
+    function setDocumentsStatus(text, cls) {
+        documentsStatus.textContent = text;
+        documentsStatus.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    let allDocuments = [];
+
+    async function loadDocuments() {
+        setDocumentsStatus('Laddar...', '');
+        try {
+            const res = await fetch(DOC_API);
+            const data = await res.json().catch(() => []);
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            allDocuments = Array.isArray(data) ? data : [];
+            renderDocuments();
+        } catch (error) {
+            setDocumentsStatus('Kunde inte hämta: ' + error.message, 'err');
+        }
+    }
+
+    function visibleDocuments() {
+        const term = docsSearch.value.trim().toLowerCase();
+        const documents = term
+            ? allDocuments.filter(doc => (doc.name || '').toLowerCase().includes(term))
+            : allDocuments.slice();
+        const byDate = (doc) => (doc.createdAt ? Date.parse(doc.createdAt) : 0);
+        const byName = (doc) => (doc.name || '').toLowerCase();
+        switch (docsSort.value) {
+            case 'name-asc':
+                documents.sort((a, b) => byName(a).localeCompare(byName(b), 'sv'));
+                break;
+            case 'name-desc':
+                documents.sort((a, b) => byName(b).localeCompare(byName(a), 'sv'));
+                break;
+            case 'chunks-desc':
+                documents.sort((a, b) => (b.chunks || 0) - (a.chunks || 0));
+                break;
+            case 'date-asc':
+                documents.sort((a, b) => byDate(a) - byDate(b));
+                break;
+            default:
+                documents.sort((a, b) => byDate(b) - byDate(a));
+        }
+        return documents;
+    }
+
+    function renderDocuments() {
+        const documents = visibleDocuments();
+        docList.innerHTML = '';
+        if (!documents.length) {
+            const empty = document.createElement('div');
+            empty.className = 'doc-item';
+            empty.innerHTML = '<span>Inga dokument att visa.</span>';
+            docList.appendChild(empty);
+        } else {
+            for (const doc of documents) {
+                docList.appendChild(documentRow(doc));
+            }
+        }
+        const total = allDocuments.length;
+        setDocumentsStatus(documents.length === total
+            ? total + ' dokument'
+            : documents.length + ' av ' + total + ' dokument', '');
+    }
+
+    function documentRow(doc) {
+        const row = document.createElement('div');
+        row.className = 'doc-item';
+
+        const main = document.createElement('div');
+        main.className = 'doc-main';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'doc-name';
+        nameEl.textContent = doc.name;
+        nameEl.title = doc.name;
+        const metaEl = document.createElement('div');
+        metaEl.className = 'meta';
+        let meta = doc.chunks + ' textstycken';
+        if (doc.createdAt) meta += ' · ' + formatDate(doc.createdAt);
+        metaEl.textContent = meta;
+        main.appendChild(nameEl);
+        main.appendChild(metaEl);
+
+        const actions = document.createElement('div');
+        actions.className = 'doc-actions';
+
+        const view = document.createElement('button');
+        view.type = 'button';
+        view.textContent = 'Visa';
+        view.addEventListener('click', () => viewDocument(doc.id));
+
+        const download = document.createElement('a');
+        download.href = DOC_API + '/' + encodeURIComponent(doc.id) + '/download';
+        download.textContent = 'Ladda ner';
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'danger';
+        del.textContent = 'Ta bort';
+        del.addEventListener('click', () => deleteDocument(doc.id));
+
+        actions.appendChild(view);
+        actions.appendChild(download);
+        actions.appendChild(del);
+
+        row.appendChild(main);
+        row.appendChild(actions);
+        return row;
+    }
+
+    function formatDate(value) {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('sv-SE') + ' ' +
+            date.toLocaleTimeString('sv-SE', {hour: '2-digit', minute: '2-digit'});
+    }
+
+    function isPdfPath(path) {
+        return typeof path === 'string' && path.toLowerCase().endsWith('.pdf');
+    }
+
+    async function viewDocument(id) {
+        docListView.classList.add('hidden');
+        docViewer.classList.remove('hidden');
+        docViewerTitle.textContent = 'Dokument';
+        docViewerMeta.textContent = 'Laddar...';
+        docViewerActions.innerHTML = '';
+        docViewerFrame.classList.add('hidden');
+        docViewerFrame.removeAttribute('src');
+        docViewerText.classList.add('hidden');
+        docViewerText.innerHTML = '';
+        try {
+            const res = await fetch(DOC_API + '/' + encodeURIComponent(id));
+            const doc = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(doc.error || ('HTTP ' + res.status));
+            renderDocumentViewer(doc);
+        } catch (error) {
+            docViewerMeta.textContent = 'Kunde inte hämta: ' + error.message;
+        }
+    }
+
+    function renderViewerText(doc) {
+        docViewerText.innerHTML = '';
+        if (!doc.content || !doc.content.length) {
+            docViewerText.textContent = 'Inget textinnehåll.';
+            return;
+        }
+        for (const chunk of doc.content) {
+            const block = document.createElement('div');
+            block.className = 'doc-chunk';
+            if (chunk.page !== null && chunk.page !== undefined) {
+                const page = document.createElement('div');
+                page.className = 'doc-chunk-page';
+                page.textContent = 'Sida ' + chunk.page;
+                block.appendChild(page);
+            }
+            const body = document.createElement('div');
+            body.textContent = chunk.text || '';
+            block.appendChild(body);
+            docViewerText.appendChild(block);
+        }
+    }
+
+    function renderDocumentViewer(doc) {
+        docViewerTitle.textContent = doc.name || 'Dokument';
+        docViewerMeta.textContent = (doc.chunks || 0) + ' textstycken · ' + (doc.characters || 0) + ' tecken';
+
+        docViewerActions.innerHTML = '';
+        renderViewerText(doc);
+
+        const download = document.createElement('a');
+        download.href = DOC_API + '/' + encodeURIComponent(doc.id) + '/download';
+        download.textContent = 'Ladda ner';
+        docViewerActions.appendChild(download);
+
+        if (isPdfPath(doc.path)) {
+            docViewerFrame.src = DOC_API + '/pdf?path=' + encodeURIComponent(doc.path);
+            docViewerFrame.classList.remove('hidden');
+            docViewerText.classList.add('hidden');
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.textContent = 'Visa text';
+            toggle.addEventListener('click', () => {
+                const showText = docViewerText.classList.contains('hidden');
+                docViewerText.classList.toggle('hidden', !showText);
+                docViewerFrame.classList.toggle('hidden', showText);
+                toggle.textContent = showText ? 'Visa PDF' : 'Visa text';
+            });
+            docViewerActions.insertBefore(toggle, download);
+        } else {
+            docViewerFrame.classList.add('hidden');
+            docViewerText.classList.remove('hidden');
+        }
+    }
+
+    function closeDocViewer() {
+        docViewer.classList.add('hidden');
+        docListView.classList.remove('hidden');
+        docViewerFrame.removeAttribute('src');
+        docViewerFrame.classList.add('hidden');
+        docViewerText.classList.add('hidden');
+        docViewerActions.innerHTML = '';
+    }
+
+    async function deleteDocument(id) {
+        if (!confirm('Ta bort dokumentet och alla dess vektorer från arkivet?')) return;
+        try {
+            const res = await fetch(DOC_API + '/' + encodeURIComponent(id), {method: 'DELETE'});
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            await loadDocuments();
+        } catch (error) {
+            setDocumentsStatus('Fel: ' + error.message, 'err');
+        }
+    }
+
+    function openDocuments() {
+        qdrantCollections = null;
+        closeDocViewer();
+        documentsPage.classList.remove('hidden');
+        loadDocuments();
+    }
+
+    function closeDocuments() {
+        closeDocViewer();
+        documentsPage.classList.add('hidden');
+    }
+
+    function switchDocumentsTab(name) {
+        documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === name);
+        });
+        documentsPage.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.dataset.panel === name);
+        });
+        if (name === 'collections') loadCollectionsTab();
+    }
+
+    async function loadCollectionsTab() {
+        setCollectionsStatus('Laddar...', '');
+        try {
+            const [collections, settingsRes] = await Promise.all([loadCollections(), fetch(API + '/settings')]);
+            const settings = await settingsRes.json().catch(() => ({}));
+            renderCollections(collections, settings.collections);
+            setCollectionsStatus('', '');
+        } catch (error) {
+            setCollectionsStatus('Kunde inte hämta: ' + error.message, 'err');
+        }
+    }
+
+    function setCollectionsStatus(text, cls) {
+        collectionsStatus.textContent = text;
+        collectionsStatus.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    collectionsSave.addEventListener('click', async () => {
+        collectionsSave.disabled = true;
+        setCollectionsStatus('Sparar...', '');
+        const collections = Array.from(
+            collectionList.querySelectorAll('input[type=checkbox]:checked')).map(cb => cb.value);
+        try {
+            const res = await fetch(API + '/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({collections: collections})
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            setCollectionsStatus('Sparat', 'ok');
+        } catch (error) {
+            setCollectionsStatus('Fel: ' + error.message, 'err');
+        } finally {
+            collectionsSave.disabled = false;
+        }
+    });
+
+    documentsBtn.addEventListener('click', openDocuments);
+    documentsClose.addEventListener('click', closeDocuments);
+    docsSearch.addEventListener('input', renderDocuments);
+    docsSort.addEventListener('change', renderDocuments);
+    documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchDocumentsTab(btn.dataset.tab));
+    });
+    docViewerBack.addEventListener('click', closeDocViewer);
+
+    uploadForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const file = uploadForm.elements.namedItem('file').files[0];
+        if (!file) return;
+        uploadBtn.disabled = true;
+        setDocumentsStatus('Laddar upp och indexerar...', '');
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(DOC_API, {method: 'POST', body: formData});
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            uploadForm.reset();
+            setDocumentsStatus('Klart', 'ok');
+            await loadDocuments();
+        } catch (error) {
+            setDocumentsStatus('Fel: ' + error.message, 'err');
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    });
+
+    textForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const name = textForm.elements.namedItem('name').value.trim();
+        const text = textForm.elements.namedItem('text').value.trim();
+        if (!text) return;
+        textBtn.disabled = true;
+        setDocumentsStatus('Indexerar...', '');
+        try {
+            const res = await fetch(DOC_API + '/text', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, text})
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            textForm.reset();
+            setDocumentsStatus('Klart', 'ok');
+            await loadDocuments();
+        } catch (error) {
+            setDocumentsStatus('Fel: ' + error.message, 'err');
+        } finally {
+            textBtn.disabled = false;
+        }
+    });
+
+    chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const question = questionInput.value.trim();
+        if (!question) return;
+        if (!activeThread()) createThread();
+
+        const thread = activeThread();
+        thread.messages.push({role: 'user', text: question});
+        saveThreads();
+        renderThreadList();
+        renderMessage({role: 'user', text: question});
+
+        questionInput.value = '';
+        sendBtn.disabled = true;
+
+        const {div, answer} = createStreamingAnswer();
+        let contentText = '';
+        let originalText = '';
+        let sources = [];
+        let validation = null;
+        let wasRefined = false;
+
+        try {
+            const response = await fetch(API + '/stream', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
+                body: JSON.stringify({message: question, sessionId: thread.id})
+            });
+            if (!response.ok || !response.body) {
+                const error = await response.json().catch(() => ({}));
+                div.remove();
+                addMessage(error.error || ('Fel: ' + response.status), 'error');
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let done = false;
+            while (!done) {
+                const result = await reader.read();
+                if (result.done) break;
+                buffer += decoder.decode(result.value, {stream: true});
+                let sep;
+                while ((sep = buffer.indexOf('\n\n')) !== -1) {
+                    const raw = buffer.slice(0, sep);
+                    buffer = buffer.slice(sep + 2);
+                    const evt = parseEvent(raw);
+                    if (!evt) continue;
+
+                    if (evt.event === 'content') {
+                        contentText += JSON.parse(evt.data);
+                        answer.textContent = contentText;
+                        messages.scrollTop = messages.scrollHeight;
+                    } else if (evt.event === 'final') {
+                        contentText = JSON.parse(evt.data);
+                        answer.textContent = contentText;
+                        messages.scrollTop = messages.scrollHeight;
+                    } else if (evt.event === 'refined') {
+                        const refinedText = JSON.parse(evt.data);
+                        if (contentText && contentText !== refinedText) originalText = contentText;
+                        contentText = refinedText;
+                        answer.textContent = contentText;
+                        wasRefined = true;
+                        messages.scrollTop = messages.scrollHeight;
+                    } else if (evt.event === 'sources') {
+                        sources = JSON.parse(evt.data);
+                    } else if (evt.event === 'validation') {
+                        validation = JSON.parse(evt.data);
+                    } else if (evt.event === 'done') {
+                        if (!contentText) answer.textContent = '(inget svar)';
+                        if (wasRefined) appendRefinedNote(div);
+                        appendSources(div, sources);
+                        appendValidation(div, validation);
+                        if (originalText) appendOriginalAnswer(div, originalText);
+                        thread.messages.push({role: 'assistant', text: contentText || '(inget svar)', sources: sources, validation: validation, refined: wasRefined, originalText: originalText || null});
+                        saveThreads();
+                        renderThreadList();
+                        done = true;
+                    }
+                }
+            }
+        } catch (error) {
+            if (!contentText) div.remove();
+            addMessage('Nätverksfel: ' + error.message, 'error');
+        } finally {
+            sendBtn.disabled = false;
+            questionInput.focus();
+        }
+    });
+
+    if (!threads.length) {
+        createThread();
+    } else {
+        renderThreadList();
+        renderMessages();
+    }
+</script>
+</body>
+</html>
