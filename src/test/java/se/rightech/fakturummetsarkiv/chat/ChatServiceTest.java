@@ -1,7 +1,6 @@
 package se.rightech.fakturummetsarkiv.chat;
 
 import org.junit.jupiter.api.Test;
-import se.rightech.fakturummetsarkiv.grounding.QueryTranslator;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
@@ -28,16 +27,17 @@ class ChatServiceTest {
 
     private final OllamaClient llm = mock(OllamaClient.class);
     private final RetrievalService retrievalService = mock(RetrievalService.class);
-    private final QueryTranslator queryTranslator = mock(QueryTranslator.class);
+    private final SearchGate searchGate = mock(SearchGate.class);
+    private final QueryRewriter queryRewriter = mock(QueryRewriter.class);
     private final SettingsStore settingsStore = mock(SettingsStore.class);
     private final SessionMemory sessionMemory = new SessionMemory();
 
     private final OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
-            "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "");
+            "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "phi3.5:latest", "");
     private final RagProperties rag = new RagProperties(20, 1200, 200, 8000);
 
     private final ChatService service = new ChatService(llm, ollama, rag, retrievalService,
-            queryTranslator, settingsStore, sessionMemory);
+            searchGate, queryRewriter, settingsStore, sessionMemory);
 
     @SuppressWarnings("unchecked")
     private void respondWith(String... tokens) {
@@ -53,8 +53,7 @@ class ChatServiceTest {
     @Test
     void streamsSourcesContentAndFinal() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, true, List.of("docs"), null, 5, 0.0, 20));
-        when(queryTranslator.augment("hej")).thenReturn("hej");
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any()))
                 .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
         respondWith("<" + "think>fundera<" + "/think>Hej", "!");
@@ -63,11 +62,12 @@ class ChatServiceTest {
         List<String> content = new ArrayList<>();
         List<String> thoughts = new ArrayList<>();
         List<String> finals = new ArrayList<>();
+        List<Boolean> decisions = new ArrayList<>();
 
         ChatService.StreamResult result = service.streamChat("hej", "s1", content::add, thoughts::add, s -> {
             sources.clear();
             sources.addAll(s);
-        }, finals::add);
+        }, finals::add, plan -> decisions.add(plan.needed()));
 
         assertThat(sources).hasSize(1);
         assertThat(sources.get(0)).containsEntry("title", "dok");
@@ -75,35 +75,80 @@ class ChatServiceTest {
         assertThat(String.join("", content)).isEqualTo("Hej!");
         assertThat(finals).containsExactly("Hej!");
         assertThat(result.answer()).isEqualTo("Hej!");
+        assertThat(result.searched()).isTrue();
+        assertThat(decisions).containsExactly(true);
     }
 
     @Test
-    void skipsQueryTranslatorWhenDisabled() {
+    void rewritesFollowUpBeforeSearch() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, List.of("docs"), null, 5, 0.0, 20));
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
+        sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
+        when(queryRewriter.rewrite(anyString(), any(), anyString())).thenReturn("Hur aktiverar jag OPC UA på en server?");
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
         respondWith("svar");
 
-        service.streamChat("hej", "s1", token -> {
+        service.streamChat("hur aktiverar jag det på en server?", "s1", token -> {
         }, thought -> {
         }, null, token -> {
-        });
+        }, null);
 
-        verify(queryTranslator, never()).augment(anyString());
+        verify(retrievalService).retrieve("Hur aktiverar jag OPC UA på en server?", List.of("docs"), 5, null);
+    }
+
+    @Test
+    void skipsRewriteWhenDisabled() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, false, List.of("docs"), null, 5, 0.0, 20));
+        sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+        respondWith("svar");
+
+        service.streamChat("hur aktiverar jag det?", "s1", token -> {
+        }, thought -> {
+        }, null, token -> {
+        }, null);
+
+        verify(queryRewriter, never()).rewrite(anyString(), any(), anyString());
+        verify(retrievalService).retrieve("hur aktiverar jag det?", List.of("docs"), 5, null);
+    }
+
+    @Test
+    void answersDirectlyWithoutSearchWhenGateSaysSo() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20));
+        when(searchGate.needsSearch("hej")).thenReturn(false);
+        respondWith("Hej");
+
+        List<Map<String, Object>> sources = new ArrayList<>();
+        List<Boolean> decisions = new ArrayList<>();
+
+        ChatService.StreamResult result = service.streamChat("hej", "s1", token -> {
+        }, thought -> {
+        }, s -> {
+            sources.clear();
+            sources.addAll(s);
+        }, token -> {
+        }, plan -> decisions.add(plan.needed()));
+
+        assertThat(result.searched()).isFalse();
+        assertThat(result.sources()).isEmpty();
+        assertThat(sources).isEmpty();
+        assertThat(decisions).containsExactly(false);
+        verify(retrievalService, never()).retrieve(anyString(), any(), anyInt(), any());
     }
 
     @Test
     void storesHistoryForSession() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, true, List.of("docs"), null, 5, 0.0, 20));
-        when(queryTranslator.augment(anyString())).thenReturn("hej");
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
         respondWith("svar");
 
         service.streamChat("hej", "s1", token -> {
         }, thought -> {
         }, null, token -> {
-        });
+        }, null);
 
         List<Map<String, String>> history = sessionMemory.history("s1", 20);
         assertThat(history).hasSize(2);

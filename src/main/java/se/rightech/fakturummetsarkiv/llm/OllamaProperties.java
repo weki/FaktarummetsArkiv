@@ -14,5 +14,6 @@ public record OllamaProperties(
         @DefaultValue("") String validatorModel,
         @DefaultValue("false") boolean validate,
         @DefaultValue("") String refineModel,
-        @DefaultValue("") String translateModel) {
+        @DefaultValue("") String gateModel,
+        @DefaultValue("") String rewriteModel) {
 }

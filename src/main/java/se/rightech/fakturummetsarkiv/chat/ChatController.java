@@ -15,6 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import se.rightech.fakturummetsarkiv.grounding.GroundingResult;
 import se.rightech.fakturummetsarkiv.grounding.GroundingValidator;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
+import se.rightech.fakturummetsarkiv.markdown.MarkdownRenderer;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -35,16 +36,18 @@ public class ChatController {
     private final SettingsStore settingsStore;
     private final GroundingValidator groundingValidator;
     private final FollowUpGenerator followUpGenerator;
+    private final MarkdownRenderer markdownRenderer;
     private final OllamaClient ollamaClient;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
     public ChatController(ChatService chatService, SettingsStore settingsStore,
                           GroundingValidator groundingValidator, FollowUpGenerator followUpGenerator,
-                          OllamaClient ollamaClient) {
+                          MarkdownRenderer markdownRenderer, OllamaClient ollamaClient) {
         this.chatService = chatService;
         this.settingsStore = settingsStore;
         this.groundingValidator = groundingValidator;
         this.followUpGenerator = followUpGenerator;
+        this.markdownRenderer = markdownRenderer;
         this.ollamaClient = ollamaClient;
     }
 
@@ -91,14 +94,21 @@ public class ChatController {
                             collectedSources.addAll(sources);
                             sendEvent(emitter, "sources", sources, MediaType.APPLICATION_JSON);
                         },
-                        text -> sendEvent(emitter, "final", json(text), MediaType.TEXT_PLAIN));
+                        text -> sendEvent(emitter, "final", json(text), MediaType.TEXT_PLAIN),
+                        plan -> sendEvent(emitter, "search", Map.of(
+                                "needed", plan.needed(),
+                                "query", plan.query() == null ? "" : plan.query()),
+                                MediaType.APPLICATION_JSON));
 
                 WorkspaceSettings settings = settingsStore.get();
-                boolean validate = settings.validateGrounding() == null || settings.validateGrounding();
-                GroundingResult validation = groundingValidator.validate(
-                        request.message(), collectedSources, result.answer(),
-                        settings.validatorModel(), validate);
-                sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
+                sendEvent(emitter, "answerHtml", json(markdownRenderer.toHtml(result.answer())), MediaType.TEXT_PLAIN);
+                if (result.searched()) {
+                    boolean validate = settings.validateGrounding() == null || settings.validateGrounding();
+                    GroundingResult validation = groundingValidator.validate(
+                            request.message(), collectedSources, result.answer(),
+                            settings.validatorModel(), validate);
+                    sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
+                }
                 List<String> followUps = followUpGenerator.generate(
                         request.message(), result.answer(), collectedSources, settings.chatModel(), 3);
                 sendEvent(emitter, "followups", followUps, MediaType.APPLICATION_JSON);

@@ -23,7 +23,7 @@ class OllamaClientTest {
 
     private final OllamaProperties properties = new OllamaProperties(
             BASE, "gemma4:latest", "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true,
-            "gemma4:latest", "gemma4:latest");
+            "gemma4:latest", "", "");
     private final RestClient.Builder restClientBuilder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
     private final OllamaClient client = new OllamaClient(restClientBuilder.baseUrl(BASE).build());

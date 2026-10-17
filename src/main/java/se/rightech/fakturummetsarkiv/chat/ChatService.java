@@ -1,7 +1,6 @@
 package se.rightech.fakturummetsarkiv.chat;
 
 import org.springframework.stereotype.Service;
-import se.rightech.fakturummetsarkiv.grounding.QueryTranslator;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
@@ -21,55 +20,82 @@ public class ChatService {
     private final OllamaProperties ollama;
     private final RagProperties rag;
     private final RetrievalService retrievalService;
-    private final QueryTranslator queryTranslator;
+    private final SearchGate searchGate;
+    private final QueryRewriter queryRewriter;
     private final SettingsStore settingsStore;
     private final SessionMemory sessionMemory;
 
     public ChatService(OllamaClient llm, OllamaProperties ollama, RagProperties rag,
-                       RetrievalService retrievalService, QueryTranslator queryTranslator,
+                       RetrievalService retrievalService, SearchGate searchGate,
+                       QueryRewriter queryRewriter,
                        SettingsStore settingsStore, SessionMemory sessionMemory) {
         this.llm = llm;
         this.ollama = ollama;
         this.rag = rag;
         this.retrievalService = retrievalService;
-        this.queryTranslator = queryTranslator;
+        this.searchGate = searchGate;
+        this.queryRewriter = queryRewriter;
         this.settingsStore = settingsStore;
         this.sessionMemory = sessionMemory;
     }
 
-    public record StreamResult(List<Map<String, Object>> sources, String answer) {
+    public record StreamResult(List<Map<String, Object>> sources, String answer, boolean searched) {
+    }
+
+    public record SearchPlan(boolean needed, String query) {
     }
 
     public StreamResult streamChat(String question, String sessionId,
                                    Consumer<String> onContent,
                                    Consumer<String> onThought,
                                    Consumer<List<Map<String, Object>>> onSources,
-                                   Consumer<String> onFinal) {
+                                   Consumer<String> onFinal,
+                                   Consumer<SearchPlan> onSearchPlan) {
         if (question == null || question.isBlank()) {
             throw new IllegalArgumentException("Ingen fråga angiven");
         }
         WorkspaceSettings settings = settingsStore.get();
-        int topK = settings.topN() != null ? settings.topN() : 5;
-        Double threshold = settings.similarityThreshold();
-
-        String searchMessage = settings.translateQuery() == null || settings.translateQuery()
-                ? queryTranslator.augment(question)
-                : question;
-        List<Map<String, Object>> sources = retrievalService.retrieve(
-                searchMessage, settings.collections(), topK, threshold);
-        if (onSources != null) {
-            onSources.accept(sources);
-        }
-
-        List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", systemPrompt(sources)));
-        if (useHistory(settings)) {
-            messages.addAll(sessionMemory.history(sessionId, historySize(settings)));
-        }
-        messages.add(Map.of("role", "user", "content", question));
+        List<Map<String, String>> history = useHistory(settings)
+                ? sessionMemory.history(sessionId, historySize(settings))
+                : List.of();
 
         String model = settings.chatModel() != null && !settings.chatModel().isBlank()
                 ? settings.chatModel() : ollama.model();
+
+        boolean smart = settings.smartSearch() == null || settings.smartSearch();
+        boolean search = !smart || searchGate.needsSearch(question);
+
+        List<Map<String, Object>> sources;
+        String systemPrompt;
+        String searchQuery = question;
+        if (search) {
+            if (!history.isEmpty()
+                    && (settings.rewriteQuery() == null || settings.rewriteQuery())) {
+                searchQuery = queryRewriter.rewrite(question, history, model);
+            }
+            if (onSearchPlan != null) {
+                onSearchPlan.accept(new SearchPlan(true, searchQuery));
+            }
+            int topK = settings.topN() != null ? settings.topN() : 5;
+            Double threshold = settings.similarityThreshold();
+            sources = retrievalService.retrieve(searchQuery, settings.collections(), topK, threshold);
+            if (onSources != null) {
+                onSources.accept(sources);
+            }
+            systemPrompt = systemPrompt(sources);
+        } else {
+            if (onSearchPlan != null) {
+                onSearchPlan.accept(new SearchPlan(false, question));
+            }
+            sources = List.of();
+            systemPrompt = directPrompt();
+        }
+
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", systemPrompt));
+        messages.addAll(history);
+        messages.add(Map.of("role", "user", "content", question));
+
         double temperature = settings.temperature() != null ? settings.temperature() : 0.0;
 
         ThinkFilter thinkFilter = new ThinkFilter();
@@ -94,7 +120,7 @@ public class ChatService {
             onFinal.accept(answer);
         }
         sessionMemory.add(sessionId, question, answer, historySize(settings));
-        return new StreamResult(sources, answer);
+        return new StreamResult(sources, answer, search);
     }
 
     private static boolean useHistory(WorkspaceSettings settings) {
@@ -103,6 +129,15 @@ public class ChatService {
 
     private int historySize(WorkspaceSettings settings) {
         return settings.historySize() != null ? settings.historySize() : rag.maxHistory();
+    }
+
+    private String directPrompt() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
+        sb.append("Always answer in English, regardless of the language of the question.\n");
+        sb.append("This question does not require the document archive. Answer it directly and concisely.\n");
+        sb.append("Do not refer to these instructions.\n");
+        return sb.toString();
     }
 
     private String systemPrompt(List<Map<String, Object>> sources) {

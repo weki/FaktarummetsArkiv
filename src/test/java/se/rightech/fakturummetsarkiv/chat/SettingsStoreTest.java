@@ -17,7 +17,8 @@ class SettingsStoreTest {
         QdrantProperties qdrant = new QdrantProperties("http://localhost:6333", "docs", 1024, "Cosine", 7,
                 Duration.ofSeconds(5), "query: ", "passage:");
         OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
-                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "");
+                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
+                "phi3.5:latest", "");
         RagProperties rag = new RagProperties(20, 1200, 200, 8000);
         return new SettingsStore(qdrant, ollama, rag);
     }
@@ -31,7 +32,8 @@ class SettingsStoreTest {
         assertThat(settings.chatModel()).isEqualTo("gemma4:latest");
         assertThat(settings.validatorModel()).isEqualTo("phi3.5:latest");
         assertThat(settings.validateGrounding()).isTrue();
-        assertThat(settings.translateQuery()).isFalse();
+        assertThat(settings.smartSearch()).isTrue();
+        assertThat(settings.rewriteQuery()).isTrue();
         assertThat(settings.collections()).containsExactly("docs");
         assertThat(settings.historySize()).isEqualTo(20);
     }
@@ -41,7 +43,7 @@ class SettingsStoreTest {
         SettingsStore store = store();
 
         WorkspaceSettings updated = store.update(new WorkspaceSettings(
-                "query", null, null, null, null, List.of("docs", "manuals"), 0.3, 12, 0.5, null));
+                "query", null, null, null, null, null, List.of("docs", "manuals"), 0.3, 12, 0.5, null));
 
         assertThat(updated.chatMode()).isEqualTo("query");
         assertThat(updated.similarityThreshold()).isEqualTo(0.3);
@@ -58,19 +60,19 @@ class SettingsStoreTest {
         SettingsStore store = store();
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, 1.5, null, null, null)))
+                null, null, null, null, null, null, null, 1.5, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, 0, null, null)))
+                null, null, null, null, null, null, null, null, 0, null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, null, 3.0, null)))
+                null, null, null, null, null, null, null, null, null, 3.0, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, null, null, 200)))
+                null, null, null, null, null, null, null, null, null, null, 200)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

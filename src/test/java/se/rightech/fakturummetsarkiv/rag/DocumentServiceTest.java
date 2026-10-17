@@ -54,7 +54,7 @@ class DocumentServiceTest {
     void setUp() {
         OllamaProperties ollama = new OllamaProperties(
                 "http://localhost:11434", "chat", "embed-model", Duration.ofSeconds(30),
-                "validator", false, "", "");
+                "validator", false, "", "", "");
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
                 Duration.ofSeconds(10), "query: ", "passage:");

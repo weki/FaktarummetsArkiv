@@ -20,7 +20,7 @@ class FollowUpGeneratorTest {
 
     private static OllamaProperties props(String refineModel) {
         return new OllamaProperties("http://localhost:11434", "deepseek-r1:14b",
-                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "");
+                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "");
     }
 
     private static List<Map<String, Object>> sources() {
