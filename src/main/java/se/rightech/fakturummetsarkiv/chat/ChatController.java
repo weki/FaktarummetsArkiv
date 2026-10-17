@@ -34,14 +34,17 @@ public class ChatController {
     private final ChatService chatService;
     private final SettingsStore settingsStore;
     private final GroundingValidator groundingValidator;
+    private final FollowUpGenerator followUpGenerator;
     private final OllamaClient ollamaClient;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
     public ChatController(ChatService chatService, SettingsStore settingsStore,
-                          GroundingValidator groundingValidator, OllamaClient ollamaClient) {
+                          GroundingValidator groundingValidator, FollowUpGenerator followUpGenerator,
+                          OllamaClient ollamaClient) {
         this.chatService = chatService;
         this.settingsStore = settingsStore;
         this.groundingValidator = groundingValidator;
+        this.followUpGenerator = followUpGenerator;
         this.ollamaClient = ollamaClient;
     }
 
@@ -82,6 +85,7 @@ public class ChatController {
                 ChatService.StreamResult result = chatService.streamChat(
                         request.message(), request.sessionId(),
                         content -> sendEvent(emitter, "content", json(content), MediaType.TEXT_PLAIN),
+                        thought -> sendEvent(emitter, "thought", json(thought), MediaType.TEXT_PLAIN),
                         sources -> {
                             collectedSources.clear();
                             collectedSources.addAll(sources);
@@ -95,6 +99,9 @@ public class ChatController {
                         request.message(), collectedSources, result.answer(),
                         settings.validatorModel(), validate);
                 sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
+                List<String> followUps = followUpGenerator.generate(
+                        request.message(), result.answer(), collectedSources, settings.chatModel(), 3);
+                sendEvent(emitter, "followups", followUps, MediaType.APPLICATION_JSON);
                 sendEvent(emitter, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();
             } catch (Exception ex) {

@@ -61,15 +61,17 @@ class ChatServiceTest {
 
         List<Map<String, Object>> sources = new ArrayList<>();
         List<String> content = new ArrayList<>();
+        List<String> thoughts = new ArrayList<>();
         List<String> finals = new ArrayList<>();
 
-        ChatService.StreamResult result = service.streamChat("hej", "s1", content::add, s -> {
+        ChatService.StreamResult result = service.streamChat("hej", "s1", content::add, thoughts::add, s -> {
             sources.clear();
             sources.addAll(s);
         }, finals::add);
 
         assertThat(sources).hasSize(1);
         assertThat(sources.get(0)).containsEntry("title", "dok");
+        assertThat(String.join("", thoughts)).isEqualTo("fundera");
         assertThat(String.join("", content)).isEqualTo("Hej!");
         assertThat(finals).containsExactly("Hej!");
         assertThat(result.answer()).isEqualTo("Hej!");
@@ -83,6 +85,7 @@ class ChatServiceTest {
         respondWith("svar");
 
         service.streamChat("hej", "s1", token -> {
+        }, thought -> {
         }, null, token -> {
         });
 
@@ -98,6 +101,7 @@ class ChatServiceTest {
         respondWith("svar");
 
         service.streamChat("hej", "s1", token -> {
+        }, thought -> {
         }, null, token -> {
         });
 

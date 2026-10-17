@@ -156,6 +156,91 @@
         .original-answer > summary { cursor: pointer; }
         .original-answer .answer { margin-top: 6px; color: var(--muted); }
 
+        .process { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+        .process-step {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--muted);
+            padding: 3px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .process-step + .process-step::before { content: ''; width: 14px; height: 2px; background: #334155; border-radius: 2px; }
+        .process-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1px solid #334155;
+            background: var(--panel-2);
+            font-size: 11px;
+            line-height: 1;
+        }
+        .process-step.done { color: #4ade80; }
+        .process-step.done .process-icon { background: #14532d; border-color: #4ade80; color: #4ade80; }
+        .process-step.done .process-icon::before { content: '✓'; }
+        .process-step.active { color: var(--accent); font-weight: 600; }
+        .process-step.active .process-icon {
+            background: #0c4a6e;
+            border-color: var(--accent);
+            box-shadow: 0 0 8px rgba(56, 189, 248, .7);
+            animation: process-pulse 1.2s ease-in-out infinite;
+        }
+        .process-step.active .process-icon::before { content: '🧠'; }
+        .process-step.wait { opacity: .45; }
+        .process-step.wait .process-icon::before { content: '○'; }
+        @keyframes process-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+        .thoughts { margin: 6px 0; border-left: 2px solid #334155; padding-left: 10px; }
+        .thoughts > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); }
+        .thoughts.generating > summary { color: var(--accent); }
+        .thoughts.generating > summary::before {
+            content: '🧠';
+            display: inline-block;
+            margin-right: 6px;
+            filter: drop-shadow(0 0 5px var(--accent));
+            animation: brain-float 1.6s ease-in-out infinite;
+        }
+        @keyframes brain-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        .thought-stream {
+            font-size: 12px;
+            font-style: italic;
+            color: var(--muted);
+            white-space: pre-wrap;
+            max-height: 180px;
+            overflow: auto;
+            margin: 6px 0;
+        }
+        .thought-stream:empty { display: none; }
+
+        .judge-section, .final-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; }
+        .judge-section.waiting, .final-section.waiting { opacity: .45; }
+        .section-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+        .judge-section.active .section-label { color: var(--accent); }
+        .judge-section.done .section-label { color: #4ade80; }
+        .section-status { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .final-answer { margin-top: 4px; }
+
+        .followups { margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; }
+        .followups-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+        .followup-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .followup-btn {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid #334155;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+        }
+        .followup-btn:hover { border-color: var(--accent); color: var(--accent); }
+
         form.chat {
             display: flex;
             gap: 10px;
@@ -700,17 +785,23 @@
 
     function renderMessage(m) {
         if (m.role === 'assistant') {
-            const div = document.createElement('div');
-            div.className = 'msg assistant';
-            const answer = document.createElement('div');
-            answer.className = 'answer';
-            answer.textContent = m.text;
-            div.appendChild(answer);
-            if (m.refined) appendRefinedNote(div);
-            if (m.sources) appendSources(div, m.sources);
-            if (m.validation) appendValidation(div, m.validation);
-            if (m.originalText) appendOriginalAnswer(div, m.originalText);
-            messages.appendChild(div);
+            const ui = buildAssistantLayout();
+            ui.progress.finish();
+            ui.thoughtsBox.open = false;
+            if (m.thoughts) ui.thoughts.textContent = m.thoughts;
+            ui.answer.textContent = m.text || '';
+            showFinalAnswer(ui);
+            if (m.validation) {
+                completeJudge(ui, m.validation);
+            } else {
+                ui.judge.classList.remove('waiting');
+                if (ui.judgeStatus) ui.judgeStatus.textContent = 'Ingen verifiering';
+            }
+            if (m.refined) appendRefinedNote(ui.div);
+            if (m.sources) appendSources(ui.div, m.sources);
+            if (m.originalText) appendOriginalAnswer(ui.div, m.originalText);
+            if (m.followUps) appendFollowUps(ui.div, m.followUps);
+            messages.appendChild(ui.div);
         } else {
             const div = document.createElement('div');
             div.className = 'msg ' + m.role;
@@ -832,6 +923,37 @@
         }
     }
 
+    function sendQuestion(text) {
+        questionInput.value = text;
+        if (typeof chatForm.requestSubmit === 'function') {
+            chatForm.requestSubmit();
+        } else {
+            chatForm.dispatchEvent(new Event('submit', {cancelable: true}));
+        }
+    }
+
+    function appendFollowUps(container, questions) {
+        if (!questions || !questions.length) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'followups';
+        const label = document.createElement('div');
+        label.className = 'followups-label';
+        label.textContent = '💡 Relaterade frågor';
+        wrap.appendChild(label);
+        const list = document.createElement('div');
+        list.className = 'followup-list';
+        for (const q of questions) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'followup-btn';
+            btn.textContent = q;
+            btn.addEventListener('click', () => sendQuestion(q));
+            list.appendChild(btn);
+        }
+        wrap.appendChild(list);
+        container.appendChild(wrap);
+    }
+
     function parseEvent(raw) {
         let event = 'message';
         const dataLines = [];
@@ -843,15 +965,110 @@
         return {event, data: dataLines.join('\n')};
     }
 
-    function createStreamingAnswer() {
+    function createProgress(container) {
+        const labels = [
+            'Sökning i källor',
+            'Modell tänker & genererar',
+            'Domaren analyserar',
+            'Verifierat svar'
+        ];
+        const bar = document.createElement('div');
+        bar.className = 'process';
+        const steps = labels.map(label => {
+            const step = document.createElement('div');
+            step.className = 'process-step';
+            const icon = document.createElement('span');
+            icon.className = 'process-icon';
+            const text = document.createElement('span');
+            text.className = 'process-label';
+            text.textContent = label;
+            step.appendChild(icon);
+            step.appendChild(text);
+            bar.appendChild(step);
+            return step;
+        });
+        container.appendChild(bar);
+        function paint(active) {
+            steps.forEach((step, i) => {
+                step.classList.remove('done', 'active', 'wait');
+                if (active === 'all' || i < active) step.classList.add('done');
+                else if (i === active) step.classList.add('active');
+                else step.classList.add('wait');
+            });
+        }
+        paint(0);
+        return {
+            el: bar,
+            to(index) { paint(index); },
+            finish() { paint('all'); }
+        };
+    }
+
+    function buildAssistantLayout() {
         const div = document.createElement('div');
         div.className = 'msg assistant';
+
+        const progress = createProgress(div);
+
+        const thoughtsBox = document.createElement('details');
+        thoughtsBox.className = 'thoughts';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Steg 2: Modellens "Tankar" & Svar';
+        const thoughts = document.createElement('div');
+        thoughts.className = 'thought-stream';
         const answer = document.createElement('div');
-        answer.className = 'answer';
-        div.appendChild(answer);
-        messages.appendChild(div);
+        answer.className = 'answer draft';
+        thoughtsBox.appendChild(summary);
+        thoughtsBox.appendChild(thoughts);
+        thoughtsBox.appendChild(answer);
+        div.appendChild(thoughtsBox);
+
+        const judge = document.createElement('div');
+        judge.className = 'judge-section waiting';
+        const judgeLabel = document.createElement('div');
+        judgeLabel.className = 'section-label';
+        judgeLabel.textContent = 'Steg 3: Domarens analys';
+        const judgeStatus = document.createElement('div');
+        judgeStatus.className = 'section-status';
+        judgeStatus.textContent = 'Väntar på verifiering...';
+        judge.appendChild(judgeLabel);
+        judge.appendChild(judgeStatus);
+        div.appendChild(judge);
+
+        const finalSec = document.createElement('div');
+        finalSec.className = 'final-section waiting';
+        const finalLabel = document.createElement('div');
+        finalLabel.className = 'section-label';
+        finalLabel.textContent = 'Slutgiltigt svar';
+        const finalBody = document.createElement('div');
+        finalBody.className = 'final-answer';
+        finalSec.appendChild(finalLabel);
+        finalSec.appendChild(finalBody);
+        div.appendChild(finalSec);
+
+        return {div, progress, thoughtsBox, thoughts, answer, judge, judgeStatus, finalSec, finalBody};
+    }
+
+    function completeJudge(ui, validation) {
+        ui.judge.classList.remove('waiting', 'active');
+        ui.judge.classList.add('done');
+        if (ui.judgeStatus) ui.judgeStatus.remove();
+        appendValidation(ui.judge, validation);
+    }
+
+    function showFinalAnswer(ui) {
+        ui.thoughtsBox.classList.remove('generating');
+        ui.answer.classList.remove('draft');
+        ui.finalBody.appendChild(ui.answer);
+        ui.finalSec.classList.remove('waiting');
+    }
+
+    function createStreamingAnswer() {
+        const ui = buildAssistantLayout();
+        ui.thoughtsBox.open = true;
+        messages.appendChild(ui.div);
         messages.scrollTop = messages.scrollHeight;
-        return {div, answer};
+        return ui;
     }
 
     newThreadBtn.addEventListener('click', () => createThread());
@@ -1501,11 +1718,14 @@
         questionInput.value = '';
         sendBtn.disabled = true;
 
-        const {div, answer} = createStreamingAnswer();
+        const ui = createStreamingAnswer();
+        const {div, answer} = ui;
         let contentText = '';
+        let thoughtsText = '';
         let originalText = '';
         let sources = [];
         let validation = null;
+        let followUps = [];
         let wasRefined = false;
 
         try {
@@ -1540,9 +1760,18 @@
                         contentText += JSON.parse(evt.data);
                         answer.textContent = contentText;
                         messages.scrollTop = messages.scrollHeight;
+                    } else if (evt.event === 'thought') {
+                        thoughtsText += JSON.parse(evt.data);
+                        ui.thoughts.textContent = thoughtsText;
+                        messages.scrollTop = messages.scrollHeight;
                     } else if (evt.event === 'final') {
                         contentText = JSON.parse(evt.data);
                         answer.textContent = contentText;
+                        ui.progress.to(2);
+                        ui.thoughtsBox.classList.remove('generating');
+                        ui.judge.classList.remove('waiting');
+                        ui.judge.classList.add('active');
+                        ui.judgeStatus.textContent = 'Analyserar svaret mot källorna...';
                         messages.scrollTop = messages.scrollHeight;
                     } else if (evt.event === 'refined') {
                         const refinedText = JSON.parse(evt.data);
@@ -1553,15 +1782,28 @@
                         messages.scrollTop = messages.scrollHeight;
                     } else if (evt.event === 'sources') {
                         sources = JSON.parse(evt.data);
+                        ui.progress.to(1);
+                        ui.thoughtsBox.classList.add('generating');
                     } else if (evt.event === 'validation') {
                         validation = JSON.parse(evt.data);
+                        ui.progress.to(3);
+                        completeJudge(ui, validation);
+                    } else if (evt.event === 'followups') {
+                        followUps = JSON.parse(evt.data) || [];
+                        appendFollowUps(div, followUps);
                     } else if (evt.event === 'done') {
                         if (!contentText) answer.textContent = '(inget svar)';
+                        showFinalAnswer(ui);
+                        if (!ui.judge.classList.contains('done')) {
+                            ui.judge.classList.remove('waiting', 'active');
+                            ui.judge.classList.add('done');
+                            if (ui.judgeStatus) ui.judgeStatus.textContent = 'Ingen verifiering';
+                        }
+                        ui.progress.finish();
                         if (wasRefined) appendRefinedNote(div);
                         appendSources(div, sources);
-                        appendValidation(div, validation);
                         if (originalText) appendOriginalAnswer(div, originalText);
-                        thread.messages.push({role: 'assistant', text: contentText || '(inget svar)', sources: sources, validation: validation, refined: wasRefined, originalText: originalText || null});
+                        thread.messages.push({role: 'assistant', text: contentText || '(inget svar)', sources: sources, validation: validation, thoughts: thoughtsText || null, followUps: followUps.length ? followUps : null, refined: wasRefined, originalText: originalText || null});
                         saveThreads();
                         renderThreadList();
                         done = true;

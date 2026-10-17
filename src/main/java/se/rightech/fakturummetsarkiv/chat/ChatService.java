@@ -42,6 +42,7 @@ public class ChatService {
 
     public StreamResult streamChat(String question, String sessionId,
                                    Consumer<String> onContent,
+                                   Consumer<String> onThought,
                                    Consumer<List<Map<String, Object>>> onSources,
                                    Consumer<String> onFinal) {
         if (question == null || question.isBlank()) {
@@ -75,10 +76,17 @@ public class ChatService {
         StringBuilder raw = new StringBuilder();
         llm.chatStream(model, messages, temperature, token -> {
             raw.append(token);
-            String clean = thinkFilter.filter(token);
-            if (!clean.isEmpty() && onContent != null) {
-                onContent.accept(clean);
-            }
+            thinkFilter.filter(token,
+                    clean -> {
+                        if (!clean.isEmpty() && onContent != null) {
+                            onContent.accept(clean);
+                        }
+                    },
+                    thought -> {
+                        if (!thought.isEmpty() && onThought != null) {
+                            onThought.accept(thought);
+                        }
+                    });
         });
 
         String answer = stripThink(raw.toString()).trim();
@@ -101,7 +109,7 @@ public class ChatService {
         StringBuilder sb = new StringBuilder();
         sb.append("You are an assistant that answers questions about the documents in Fakturummets arkiv.\n");
         sb.append("Always answer in English, regardless of the language of the question.\n");
-        sb.append("Answer ONLY using the SOURCES below.\n");
+        sb.append("Answer ONLY and STRICTLY using the facts explicitly stated in the SOURCES below. Do not extrapolate, assume, or create step-by-step guides unless every step is directly supported by the text.\n");
         sb.append("If the sources do not contain the answer, reply exactly: \"").append(NO_ANSWER_MARKER).append("\"\n");
         sb.append("Do not make up information and do not refer to these instructions.\n");
         if (sources == null || sources.isEmpty()) {
@@ -142,15 +150,17 @@ public class ChatService {
         private static final String CLOSE = "</think";
         private boolean inThink = false;
 
-        String filter(String text) {
+        void filter(String text, Consumer<String> visible, Consumer<String> thought) {
             StringBuilder out = new StringBuilder();
             String t = text;
             while (true) {
                 if (inThink) {
                     int end = t.indexOf(CLOSE);
                     if (end < 0) {
-                        return out.toString();
+                        thought.accept(t);
+                        break;
                     }
+                    thought.accept(t.substring(0, end));
                     inThink = false;
                     t = t.substring(end + CLOSE.length());
                     if (t.startsWith(">")) {
@@ -160,7 +170,7 @@ public class ChatService {
                     int start = t.indexOf(OPEN);
                     if (start < 0) {
                         out.append(t);
-                        return out.toString();
+                        break;
                     }
                     out.append(t, 0, start);
                     inThink = true;
@@ -169,6 +179,9 @@ public class ChatService {
                         t = t.substring(1);
                     }
                 }
+            }
+            if (out.length() > 0) {
+                visible.accept(out.toString());
             }
         }
     }

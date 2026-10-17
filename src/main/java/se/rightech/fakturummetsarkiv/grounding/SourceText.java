@@ -3,12 +3,12 @@ package se.rightech.fakturummetsarkiv.grounding;
 import java.util.List;
 import java.util.Map;
 
-final class SourceText {
+public final class SourceText {
 
     private SourceText() {
     }
 
-    static String block(List<Map<String, Object>> sources, int maxChars) {
+    public static String block(List<Map<String, Object>> sources, int maxChars) {
         StringBuilder sb = new StringBuilder();
         if (sources == null) {
             return "";
