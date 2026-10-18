@@ -100,20 +100,29 @@ public class ChatService {
 
         ThinkFilter thinkFilter = new ThinkFilter();
         StringBuilder raw = new StringBuilder();
-        llm.chatStream(model, messages, temperature, token -> {
-            raw.append(token);
-            thinkFilter.filter(token,
-                    clean -> {
-                        if (!clean.isEmpty() && onContent != null) {
-                            onContent.accept(clean);
-                        }
-                    },
-                    thought -> {
-                        if (!thought.isEmpty() && onThought != null) {
+        llm.chatStream(model, messages, temperature,
+                token -> {
+                    raw.append(token);
+                    thinkFilter.filter(token,
+                            clean -> {
+                                if (!clean.isEmpty() && onContent != null) {
+                                    onContent.accept(clean);
+                                }
+                            },
+                            thought -> {
+                                if (!thought.isEmpty() && onThought != null) {
+                                    onThought.accept(thought);
+                                }
+                            });
+                },
+                thought -> {
+                    if (thought != null && !thought.isEmpty()) {
+                        raw.append(thought);
+                        if (onThought != null) {
                             onThought.accept(thought);
                         }
-                    });
-        });
+                    }
+                });
 
         String answer = stripThink(raw.toString()).trim();
         if (onFinal != null) {

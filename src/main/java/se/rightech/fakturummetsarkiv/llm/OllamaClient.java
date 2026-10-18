@@ -73,7 +73,7 @@ public class OllamaClient {
     }
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature,
-                           Consumer<String> onToken) {
+                           Consumer<String> onContent, Consumer<String> onThought) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("stream", true);
@@ -99,15 +99,15 @@ public class OllamaClient {
                                 JsonNode content = node.at("/message/content");
                                 if (!content.isMissingNode() && !content.isNull()) {
                                     String token = content.asString();
-                                    if (!token.isEmpty() && onToken != null) {
-                                        onToken.accept(token);
+                                    if (!token.isEmpty() && onContent != null) {
+                                        onContent.accept(token);
                                     }
                                 }
                                 JsonNode thinking = node.at("/message/thinking");
                                 if (!thinking.isMissingNode() && !thinking.isNull()) {
                                     String token = thinking.asString();
-                                    if (!token.isEmpty() && onToken != null) {
-                                        onToken.accept(token);
+                                    if (!token.isEmpty() && onThought != null) {
+                                        onThought.accept(token);
                                     }
                                 }
                             } catch (Exception ignored) {
@@ -117,6 +117,11 @@ public class OllamaClient {
                     }
                     return null;
                 });
+    }
+
+    public void chatStream(String model, List<Map<String, String>> messages, double temperature,
+                           Consumer<String> onToken) {
+        chatStream(model, messages, temperature, onToken, null);
     }
 
     public List<double[]> embed(String model, List<String> inputs) {

@@ -47,7 +47,7 @@ class ChatServiceTest {
                 onToken.accept(token);
             }
             return null;
-        }).when(llm).chatStream(anyString(), any(), anyDouble(), any());
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), any(), any());
     }
 
     @Test
