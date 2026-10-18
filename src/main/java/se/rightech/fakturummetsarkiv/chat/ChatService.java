@@ -116,7 +116,7 @@ public class ChatService {
         });
 
         String answer = stripThink(raw.toString()).trim();
-        if (!answer.isEmpty() && onFinal != null) {
+        if (onFinal != null) {
             onFinal.accept(answer);
         }
         sessionMemory.add(sessionId, question, answer, historySize(settings));
