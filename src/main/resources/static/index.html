@@ -1447,8 +1447,8 @@
     function showFinalAnswer(ui) {
         ui.thoughtsBox.classList.remove('generating');
         ui.answer.classList.remove('draft');
-        ui.finalBody.appendChild(ui.answer);
-        ui.finalSec.classList.remove('waiting');
+        ui.finalSec.remove();
+        ui.thoughtsBox.appendChild(ui.answer);
     }
 
     function createStreamingAnswer() {
