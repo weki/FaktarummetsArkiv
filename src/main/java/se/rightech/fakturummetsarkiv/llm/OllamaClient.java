@@ -103,6 +103,13 @@ public class OllamaClient {
                                         onToken.accept(token);
                                     }
                                 }
+                                JsonNode thinking = node.at("/message/thinking");
+                                if (!thinking.isMissingNode() && !thinking.isNull()) {
+                                    String token = thinking.asString();
+                                    if (!token.isEmpty() && onToken != null) {
+                                        onToken.accept(token);
+                                    }
+                                }
                             } catch (Exception ignored) {
                                 // skip malformed lines
                             }
