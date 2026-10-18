@@ -80,6 +80,39 @@ class ChatServiceTest {
     }
 
     @Test
+    void keepsSeparateThinkingOutOfTheAnswer() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<String> onContent = invocation.getArgument(3);
+            @SuppressWarnings("unchecked")
+            Consumer<String> onThought = invocation.getArgument(4);
+            onThought.accept("Thinking Process:\n1. Scan the sources.");
+            onContent.accept("The answer is 4.");
+            onThought.accept(" Final review done.");
+            onContent.accept(" Done.");
+            return null;
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), any(), any());
+
+        List<String> content = new ArrayList<>();
+        List<String> thoughts = new ArrayList<>();
+        List<String> finals = new ArrayList<>();
+
+        ChatService.StreamResult result = service.streamChat("vad är 2+2", "s1", content::add, thoughts::add,
+                sources -> {
+                }, finals::add, plan -> {
+        });
+
+        assertThat(result.answer()).isEqualTo("The answer is 4. Done.");
+        assertThat(finals).containsExactly("The answer is 4. Done.");
+        assertThat(String.join("", thoughts))
+                .isEqualTo("Thinking Process:\n1. Scan the sources. Final review done.");
+        assertThat(String.join("", content)).isEqualTo("The answer is 4. Done.");
+    }
+
+    @Test
     void rewritesFollowUpBeforeSearch() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));

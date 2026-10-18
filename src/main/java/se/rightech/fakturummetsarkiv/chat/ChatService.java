@@ -116,11 +116,8 @@ public class ChatService {
                             });
                 },
                 thought -> {
-                    if (thought != null && !thought.isEmpty()) {
-                        raw.append(thought);
-                        if (onThought != null) {
-                            onThought.accept(thought);
-                        }
+                    if (thought != null && !thought.isEmpty() && onThought != null) {
+                        onThought.accept(thought);
                     }
                 });
 
