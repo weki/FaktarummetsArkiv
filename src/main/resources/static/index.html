@@ -1388,7 +1388,7 @@
             el: bar,
             to(index) { paint(index); },
             finish() { paint('all'); },
-            setDirect() { makeSteps(['Modell svarar']); paint(0); }
+            setDirect() { bar.remove(); }
         };
     }
 

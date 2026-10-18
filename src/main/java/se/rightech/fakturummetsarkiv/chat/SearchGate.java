@@ -39,14 +39,14 @@ public class SearchGate {
         try {
             return !isDirect(client.chat(properties.gateModel(), SYSTEM_PROMPT, question));
         } catch (RuntimeException ex) {
-            log.warn("Kunde inte avgöra om sökning behövs, söker ändå: {}", ex.getMessage());
-            return true;
+            log.warn("Kunde inte avgöra om sökning behövs, svarar direkt: {}", ex.getMessage());
+            return false;
         }
     }
 
     static boolean isDirect(String raw) {
         if (raw == null) {
-            return false;
+            return true;
         }
         String lower = raw.toLowerCase();
         if (lower.contains("direct")) {
@@ -55,6 +55,6 @@ public class SearchGate {
         if (lower.contains("search")) {
             return false;
         }
-        return false;
+        return true;
     }
 }

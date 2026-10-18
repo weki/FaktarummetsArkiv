@@ -59,13 +59,26 @@ public class RetrievalService {
                 copy(payload, source, "path");
                 copy(payload, source, "page");
                 copy(payload, source, "chunk");
+                copy(payload, source, "chunkIndex");
                 sources.add(source);
             }
         }
 
         sources.sort(Comparator.comparingDouble((Map<String, Object> source) ->
                 ((Number) source.get("score")).doubleValue()).reversed());
-        return sources.size() > topK ? new ArrayList<>(sources.subList(0, topK)) : sources;
+
+        List<Map<String, Object>> deduped = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Map<String, Object> source : sources) {
+            String key = dedupKey(source);
+            if (seen.add(key)) {
+                deduped.add(source);
+                if (deduped.size() >= topK) {
+                    break;
+                }
+            }
+        }
+        return deduped;
     }
 
     private static void copy(Map<String, Object> payload, Map<String, Object> target, String key) {
@@ -87,5 +100,38 @@ public class RetrievalService {
             result.add(qdrant.collection());
         }
         return result;
+    }
+
+    private static String dedupKey(Map<String, Object> source) {
+        String path = strOrNull(source.get("path"));
+        String src = strOrNull(source.get("source"));
+        String page = strOrNull(source.get("page"));
+        String chunk = strOrNull(source.get("chunk"));
+        if (chunk == null) {
+            chunk = strOrNull(source.get("chunkIndex"));
+        }
+        if (path != null && page != null && chunk != null) {
+            return "p:" + path + "|pg:" + page + "|c:" + chunk;
+        }
+        if (src != null && page != null && chunk != null) {
+            return "s:" + src + "|pg:" + page + "|c:" + chunk;
+        }
+        if (path != null) {
+            return "path:" + path;
+        }
+        if (src != null) {
+            return "src:" + src;
+        }
+        Object textObj = source.get("text");
+        String text = textObj == null ? "" : String.valueOf(textObj);
+        return "txt:" + text.length() + ":" + text.hashCode();
+    }
+
+    private static String strOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String s = String.valueOf(value);
+        return s.isBlank() ? null : s;
     }
 }

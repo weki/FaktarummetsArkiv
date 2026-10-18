@@ -41,15 +41,23 @@ class SearchGateTest {
     }
 
     @Test
-    void defaultsToSearchOnUnexpectedOutput() {
+    void defaultsToDirectOnUnexpectedOutput() {
         when(client.chat(anyString(), anyString(), anyString())).thenReturn("maybe");
-        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("Hej")).isTrue();
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("Hej")).isFalse();
+    }
+
+    @Test
+    void defaultsToDirectWhenGateFails() {
+        when(client.chat(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("nere"));
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("Hej")).isFalse();
     }
 
     @Test
     void directWins() {
         assertThat(SearchGate.isDirect("DIRECT")).isTrue();
         assertThat(SearchGate.isDirect("SEARCH")).isFalse();
-        assertThat(SearchGate.isDirect("")).isFalse();
+        assertThat(SearchGate.isDirect("")).isTrue();
+        assertThat(SearchGate.isDirect(null)).isTrue();
+        assertThat(SearchGate.isDirect("this is small talk")).isTrue();
     }
 }
