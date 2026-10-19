@@ -11,13 +11,26 @@ public class SearchGate {
 
     private static final Logger log = LoggerFactory.getLogger(SearchGate.class);
 
+    public record Decision(boolean search, String query) {
+    }
+
     private static final String SYSTEM_PROMPT = """
-            You decide whether a user's question requires looking up a company's internal document archive.
-            Reply with exactly one word and nothing else:
-            - SEARCH if the question is about specific documents, invoices, manuals, internal procedures,
-              stored facts, or anything that must be looked up in the archive.
-            - DIRECT if the question is general conversation, a greeting, small talk, or a generic question
-              that can be answered without the archive.
+            You are a gatekeeper for a company's internal document archive (invoices, manuals, technical docs).
+
+            Decide if the user's message needs a document search.
+            - If NO search is needed (greeting, thanks, small talk, clearly general knowledge), reply exactly: DIRECT
+            - If search IS needed, reply with a concise English search query (3-12 keywords) optimized for
+              semantic retrieval in the archive. No quotes, no explanation, one line only.
+
+            Examples:
+            Message: hej                        -> DIRECT
+            Message: tack                       -> DIRECT
+            Message: vad är OPC UA?              -> OPC UA definition overview
+            Message: hur mår du?                -> DIRECT
+            Message: what does invoice 42 say?   -> invoice 42 content details
+            Message: hur aktiverar jag OPC UA?   -> enable OPC UA configuration steps
+
+            Reply with either DIRECT or an English search query. Nothing else.
             """;
 
     private final OllamaClient client;
@@ -32,29 +45,35 @@ public class SearchGate {
         return properties.gateModel() != null && !properties.gateModel().isBlank();
     }
 
-    public boolean needsSearch(String question) {
+    public Decision decide(String question) {
         if (!enabled() || question == null || question.isBlank()) {
-            return true;
+            return new Decision(true, question);
         }
         try {
-            return !isDirect(client.chat(properties.gateModel(), SYSTEM_PROMPT, question));
+            String raw = client.chat(properties.gateModel(), SYSTEM_PROMPT, question).trim();
+            if (raw.isEmpty()) {
+                log.warn("Sökgaten gav tomt svar, söker ändå");
+                return new Decision(true, question);
+            }
+            String first = raw.split("\\s+", 2)[0].replaceAll("[^A-Za-z]", "").toUpperCase();
+            if ("DIRECT".equals(first)) {
+                return new Decision(false, question);
+            }
+            String query = raw.replaceAll("\\s+", " ").trim();
+            if (query.length() > 200) {
+                query = query.substring(0, 200);
+            }
+            if (query.isBlank()) {
+                return new Decision(true, question);
+            }
+            return new Decision(true, query);
         } catch (RuntimeException ex) {
-            log.warn("Kunde inte avgöra om sökning behövs, svarar direkt: {}", ex.getMessage());
-            return false;
+            log.warn("Kunde inte avgöra sökning, söker ändå: {}", ex.getMessage());
+            return new Decision(true, question);
         }
     }
 
-    static boolean isDirect(String raw) {
-        if (raw == null) {
-            return true;
-        }
-        String lower = raw.toLowerCase();
-        if (lower.contains("direct")) {
-            return true;
-        }
-        if (lower.contains("search")) {
-            return false;
-        }
-        return true;
+    public boolean needsSearch(String question) {
+        return decide(question).search();
     }
 }

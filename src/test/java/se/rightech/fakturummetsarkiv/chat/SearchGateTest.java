@@ -41,23 +41,42 @@ class SearchGateTest {
     }
 
     @Test
-    void defaultsToDirectOnUnexpectedOutput() {
+    void searchesWhenModelGivesUnexpectedOutput() {
         when(client.chat(anyString(), anyString(), anyString())).thenReturn("maybe");
-        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("Hej")).isFalse();
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("vad ar OPC UA?")).isTrue();
     }
 
     @Test
-    void defaultsToDirectWhenGateFails() {
+    void searchesWhenGateFails() {
         when(client.chat(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("nere"));
-        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("Hej")).isFalse();
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("vad ar OPC UA?")).isTrue();
     }
 
     @Test
-    void directWins() {
-        assertThat(SearchGate.isDirect("DIRECT")).isTrue();
-        assertThat(SearchGate.isDirect("SEARCH")).isFalse();
-        assertThat(SearchGate.isDirect("")).isTrue();
-        assertThat(SearchGate.isDirect(null)).isTrue();
-        assertThat(SearchGate.isDirect("this is small talk")).isTrue();
+    void searchesWhenGateReturnsBlank() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("  \n ");
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("vad ar OPC UA?")).isTrue();
+    }
+
+    @Test
+    void skipsSearchOnlyForLeadingDirect() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("DIRECT");
+        assertThat(new SearchGate(client, props("phi3.5:latest")).decide("hej").search()).isFalse();
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("OPC UA overview");
+        assertThat(new SearchGate(client, props("phi3.5:latest")).decide("vad är OPC UA?").query())
+                .isEqualTo("OPC UA overview");
+    }
+
+    @Test
+    void searchesWhenFirstWordIsNotADirective() {
+        when(client.chat(anyString(), anyString(), anyString()))
+                .thenReturn("This does not require a direct lookup; SEARCH");
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("vad ar OPC UA?")).isTrue();
+    }
+
+    @Test
+    void skipsSearchWhenDirectIsTheFirstWord() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("DIRECT\n\nexplanation follows");
+        assertThat(new SearchGate(client, props("phi3.5:latest")).needsSearch("hej")).isFalse();
     }
 }

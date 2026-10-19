@@ -22,6 +22,8 @@ public class OllamaClient {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
+    private static final String KEEP_ALIVE = "1h";
+
     private final RestClient restClient;
 
     @Autowired
@@ -59,6 +61,7 @@ public class OllamaClient {
         body.put("stream", false);
         body.put("messages", messages);
         body.put("options", Map.of("temperature", temperature));
+        body.put("keep_alive", KEEP_ALIVE);
 
         JsonNode node = restClient.post()
                 .uri("/api/chat")
@@ -79,6 +82,7 @@ public class OllamaClient {
         body.put("stream", true);
         body.put("messages", messages);
         body.put("options", Map.of("temperature", temperature));
+        body.put("keep_alive", KEEP_ALIVE);
 
         restClient.post()
                 .uri("/api/chat")
@@ -128,6 +132,7 @@ public class OllamaClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("input", inputs);
+        body.put("keep_alive", KEEP_ALIVE);
 
         JsonNode node = restClient.post()
                 .uri("/api/embed")

@@ -372,8 +372,9 @@
         }
         .validation-reason { margin-top: 6px; font-size: 12px; color: var(--danger); }
         .source-actions { display: flex; gap: 14px; padding: 8px 12px 10px; border-top: 1px solid var(--border); }
-        .source-actions a { color: var(--accent); font-size: 12px; font-weight: 500; text-decoration: none; }
-        .source-actions a:hover { text-decoration: underline; }
+        .source-actions a, .source-actions button.link-btn { color: var(--accent); font-size: 12px; font-weight: 500; text-decoration: none; }
+        .source-actions button.link-btn { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+        .source-actions a:hover, .source-actions button.link-btn:hover { text-decoration: underline; }
         .original-answer { margin-top: 10px; font-size: 13px; color: var(--muted); }
         .original-answer > summary { cursor: pointer; }
         .original-answer .answer { margin-top: 6px; color: var(--muted); padding-left: 10px; border-left: 2px solid var(--border); }
@@ -456,13 +457,13 @@
         }
         .thought-stream:empty { display: none; }
 
-        .judge-section, .final-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
-        .judge-section.waiting, .final-section.waiting { opacity: .45; }
+        .judge-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+        .judge-section.waiting { opacity: .45; }
         .section-label { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
         .judge-section.active .section-label { color: var(--accent); }
         .judge-section.done .section-label { color: var(--ok); }
         .section-status { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
-        .final-answer { margin-top: 6px; }
+        .msg > .answer { margin: 10px 0 0; }
 
         /* ---------- Follow-ups ---------- */
         .followups { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -525,7 +526,7 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
-            z-index: 50;
+            z-index: 100;
             animation: fade-in .15s ease-out;
         }
 
@@ -642,6 +643,10 @@
         .doc-form input[type="file"]::file-selector-button:hover { background: var(--border-strong); }
         .doc-form textarea { min-height: 80px; }
 
+        .docs-bulk { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .bulk-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+        .doc-check { width: 16px; height: 16px; cursor: pointer; }
+        .doc-item.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
         .doc-list { display: flex; flex-direction: column; gap: 8px; }
         .doc-item {
             display: flex;
@@ -739,19 +744,41 @@
         .doc-chunk:first-child { padding-top: 0; }
         .doc-chunk:last-child { border-bottom: none; padding-bottom: 0; }
         .doc-chunk .doc-chunk-page { color: var(--accent); font-size: 12px; font-weight: 700; margin-bottom: 4px; }
-        .doc-viewer { display: flex; flex-direction: column; gap: 16px; }
-        .doc-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .doc-viewer-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-        .doc-viewer-title { font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .doc-viewer-heading .meta { color: var(--muted); font-size: 12.5px; }
-        .doc-viewer-frame {
+        .doc-modal { max-width: 900px; display: flex; flex-direction: column; gap: 14px; }
+        .doc-modal .modal-head { margin-bottom: 0; align-items: flex-start; }
+        .doc-modal-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+        .doc-modal-heading h2 { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .doc-modal-heading .meta { color: var(--muted); font-size: 12.5px; }
+        .doc-modal-frame {
             width: 100%;
-            height: calc(100vh - 260px);
+            height: min(70vh, 760px);
             border: 1px solid var(--border-strong);
             border-radius: var(--radius);
             background: #ffffff;
         }
         .hidden { display: none; }
+        .upload-progress { display: flex; flex-direction: column; gap: 6px; }
+        .upload-progress.hidden { display: none; }
+        .upload-progress-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+        .upload-progress-pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+        .upload-progress-track {
+            height: 9px;
+            background: var(--panel-3);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .upload-progress-fill {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--accent), #7dd3fc);
+            transition: width .15s ease;
+        }
+        .upload-progress.processing .upload-progress-fill { animation: progress-pulse 1.1s ease-in-out infinite; }
+        .upload-progress.err .upload-progress-fill { background: var(--danger); }
+        .upload-progress.ok .upload-progress-fill { background: var(--ok); }
+        @keyframes progress-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+        .upload-progress-detail { font-size: 12px; color: var(--muted); min-height: 15px; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
         .tag {
             display: inline-block;
@@ -875,26 +902,25 @@
                         <option value="chunks-desc">Flest textstycken</option>
                     </select>
                 </div>
-                <div id="docList" class="doc-list"></div>
-            </div>
-            <div id="docViewer" class="doc-viewer hidden">
-                <div class="doc-viewer-head">
-                    <button id="docViewerBack" type="button" class="settings-btn">← Dokument</button>
-                    <div class="doc-viewer-heading">
-                        <div id="docViewerTitle" class="doc-viewer-title"></div>
-                        <div id="docViewerMeta" class="meta"></div>
-                    </div>
-                    <div id="docViewerActions" class="doc-detail-actions"></div>
+                <div class="docs-bulk">
+                    <label class="bulk-check"><input type="checkbox" id="docsSelectAll"> Markera alla</label>
+                    <button type="button" id="docsBulkDownload" class="link-btn" disabled>Ladda ner markerade</button>
+                    <button type="button" id="docsBulkDelete" class="danger" disabled>Ta bort markerade</button>
+                    <span id="docsBulkCount" class="meta"></span>
                 </div>
-                <iframe id="docViewerFrame" class="doc-viewer-frame hidden" title="Dokument" referrerpolicy="no-referrer"></iframe>
-                <div id="docViewerText" class="doc-detail-text hidden"></div>
+                <div id="docList" class="doc-list"></div>
             </div>
         </div>
         <div class="tab-panel" data-panel="upload">
             <form id="uploadForm" class="doc-form">
                 <label>Filer (flera tillåtna)
-                    <input type="file" name="files" multiple accept=".pdf,.txt,.md,.csv,.log,.json,.xml,.html">
+                    <input type="file" name="files" multiple accept=".pdf">
                 </label>
+                <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" id="uploadFolderBtn" class="link-btn">Välj mapp (rekursivt)</button>
+                    <input type="file" id="uploadFolderInput" webkitdirectory directory multiple hidden>
+                    <span class="meta">Endast PDF-filer indexeras; andra filtyper hoppas över.</span>
+                </div>
                 <div class="settings-row">
                     <label>Kollektion
                         <select id="uploadCollection" name="collection"></select>
@@ -909,6 +935,16 @@
                 <div id="tagSuggestions" class="tag-suggestions"></div>
                 <div class="row">
                     <button id="uploadBtn" type="submit">Ladda upp</button>
+                </div>
+                <div id="uploadProgress" class="upload-progress hidden">
+                    <div class="upload-progress-head">
+                        <span id="uploadProgressLabel" class="upload-progress-label"></span>
+                        <span id="uploadProgressPct" class="upload-progress-pct"></span>
+                    </div>
+                    <div class="upload-progress-track">
+                        <div id="uploadProgressFill" class="upload-progress-fill"></div>
+                    </div>
+                    <div id="uploadProgressDetail" class="upload-progress-detail"></div>
                 </div>
             </form>
         </div>
@@ -986,6 +1022,21 @@
     </div>
 </div>
 
+<div id="docOverlay" class="overlay hidden">
+    <div class="modal doc-modal">
+        <div class="modal-head">
+            <div class="doc-modal-heading">
+                <h2 id="docModalTitle">Dokument</h2>
+                <div id="docModalMeta" class="meta"></div>
+            </div>
+            <button id="docModalClose" type="button" class="icon-btn" title="Stäng">×</button>
+        </div>
+        <div id="docModalActions" class="doc-detail-actions"></div>
+        <iframe id="docModalFrame" class="doc-modal-frame hidden" title="Dokument" referrerpolicy="no-referrer"></iframe>
+        <div id="docModalText" class="doc-detail-text hidden"></div>
+    </div>
+</div>
+
 <script>
     const API = '/api/chat';
     const DOC_API = '/api/documents';
@@ -1012,9 +1063,22 @@
     const newCollectionField = document.getElementById('newCollectionField');
     const newCollectionName = document.getElementById('newCollectionName');
     const uploadTags = document.getElementById('uploadTags');
+    const uploadFolderBtn = document.getElementById('uploadFolderBtn');
+    const uploadFolderInput = document.getElementById('uploadFolderInput');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const uploadProgressLabel = document.getElementById('uploadProgressLabel');
+    const uploadProgressPct = document.getElementById('uploadProgressPct');
+    const uploadProgressFill = document.getElementById('uploadProgressFill');
+    const uploadProgressDetail = document.getElementById('uploadProgressDetail');
     const tagSuggestions = document.getElementById('tagSuggestions');
     const documentsStatus = document.getElementById('documentsStatus');
     const docList = document.getElementById('docList');
+    const docsSelectAll = document.getElementById('docsSelectAll');
+    const docsBulkDownload = document.getElementById('docsBulkDownload');
+    const docsBulkDelete = document.getElementById('docsBulkDelete');
+    const docsBulkCount = document.getElementById('docsBulkCount');
+    const selectedDocIds = new Set(JSON.parse(localStorage.getItem('selectedDocIds') || '[]'));
+    function persistSelectedDocIds() { localStorage.setItem('selectedDocIds', JSON.stringify(Array.from(selectedDocIds))); }
     const docsSearch = document.getElementById('docsSearch');
     const docsFilterCollection = document.getElementById('docsFilterCollection');
     const docsFilterTag = document.getElementById('docsFilterTag');
@@ -1023,14 +1087,13 @@
     const collectionsSave = document.getElementById('collectionsSave');
     const newCollectionInput = document.getElementById('newCollectionInput');
     const createCollectionBtn = document.getElementById('createCollectionBtn');
-    const docListView = document.getElementById('docListView');
-    const docViewer = document.getElementById('docViewer');
-    const docViewerBack = document.getElementById('docViewerBack');
-    const docViewerTitle = document.getElementById('docViewerTitle');
-    const docViewerMeta = document.getElementById('docViewerMeta');
-    const docViewerActions = document.getElementById('docViewerActions');
-    const docViewerFrame = document.getElementById('docViewerFrame');
-    const docViewerText = document.getElementById('docViewerText');
+    const docOverlay = document.getElementById('docOverlay');
+    const docModalClose = document.getElementById('docModalClose');
+    const docModalTitle = document.getElementById('docModalTitle');
+    const docModalMeta = document.getElementById('docModalMeta');
+    const docModalActions = document.getElementById('docModalActions');
+    const docModalFrame = document.getElementById('docModalFrame');
+    const docModalText = document.getElementById('docModalText');
 
     const STORAGE_KEY = 'fakturummets_arkiv_rag_threads';
 
@@ -1217,11 +1280,11 @@
 
             const head = document.createElement('summary');
             const title = source.title || source.name || source.source || 'Källa';
-            let label = title;
-            if (source.collection) label += ' · ' + source.collection;
-            if (source.page !== undefined && source.page !== null) label += ' · sida ' + source.page;
-            if (typeof source.score === 'number') label += ' · ' + source.score.toFixed(2);
-            head.textContent = label;
+            const bits = [];
+            if (source.collection) bits.push(source.collection);
+            if (source.page !== undefined && source.page !== null) bits.push('sida ' + source.page);
+            if (typeof source.score === 'number') bits.push(source.score.toFixed(2));
+            head.textContent = title + (bits.length ? ' · ' + bits.join(' · ') : '');
             item.appendChild(head);
 
             const body = document.createElement('div');
@@ -1229,28 +1292,32 @@
             body.textContent = source.text || source.content || '';
             item.appendChild(body);
 
-            if (isPdfPath(source.path)) {
+            const ref = {
+                title: title,
+                meta: bits.join(' · '),
+                path: source.path,
+                documentId: source.documentId,
+                text: source.text || source.content || ''
+            };
+            const pdf = docPdfUrl(ref);
+            const download = docDownloadUrl(ref);
+            if (pdf || download) {
                 const actions = document.createElement('div');
                 actions.className = 'source-actions';
-                const base = DOC_API + '/pdf?path=' + encodeURIComponent(source.path);
-                const view = document.createElement('a');
-                view.href = base;
-                view.target = '_blank';
-                view.rel = 'noopener';
-                view.textContent = 'Visa PDF';
-                const download = document.createElement('a');
-                download.href = base + '&download=true';
-                download.textContent = 'Ladda ner PDF';
-                actions.appendChild(view);
-                actions.appendChild(download);
-                item.appendChild(actions);
-            } else if (source.documentId) {
-                const actions = document.createElement('div');
-                actions.className = 'source-actions';
-                const download = document.createElement('a');
-                download.href = DOC_API + '/' + encodeURIComponent(source.documentId) + '/download';
-                download.textContent = 'Ladda ner';
-                actions.appendChild(download);
+                if (pdf || ref.documentId) {
+                    const view = document.createElement('button');
+                    view.type = 'button';
+                    view.className = 'link-btn';
+                    view.textContent = 'Visa';
+                    view.addEventListener('click', () => openDocumentPopup(ref));
+                    actions.appendChild(view);
+                }
+                if (download) {
+                    const link = document.createElement('a');
+                    link.href = download;
+                    link.textContent = 'Ladda ner';
+                    actions.appendChild(link);
+                }
                 item.appendChild(actions);
             }
 
@@ -1401,26 +1468,16 @@
         const thoughtsBox = document.createElement('details');
         thoughtsBox.className = 'thoughts';
         const summary = document.createElement('summary');
-        summary.textContent = 'Steg 2: Modellens "Tankar" & Svar';
+        summary.textContent = 'Steg 2: Modellens tankar';
         const thoughts = document.createElement('div');
         thoughts.className = 'thought-stream';
-        const answer = document.createElement('div');
-        answer.className = 'answer draft';
         thoughtsBox.appendChild(summary);
         thoughtsBox.appendChild(thoughts);
-        thoughtsBox.appendChild(answer);
         div.appendChild(thoughtsBox);
 
-        const finalSec = document.createElement('div');
-        finalSec.className = 'final-section waiting';
-        const finalLabel = document.createElement('div');
-        finalLabel.className = 'section-label';
-        finalLabel.textContent = 'Slutgiltigt svar';
-        const finalBody = document.createElement('div');
-        finalBody.className = 'final-answer';
-        finalSec.appendChild(finalLabel);
-        finalSec.appendChild(finalBody);
-        div.appendChild(finalSec);
+        const answer = document.createElement('div');
+        answer.className = 'answer draft';
+        div.appendChild(answer);
 
         const judge = document.createElement('div');
         judge.className = 'judge-section waiting';
@@ -1434,7 +1491,7 @@
         judge.appendChild(judgeStatus);
         div.appendChild(judge);
 
-        return {div, progress, thoughtsBox, thoughts, answer, judge, judgeStatus, finalSec, finalBody};
+        return {div, progress, thoughtsBox, thoughts, answer, judge, judgeStatus};
     }
 
     function completeJudge(ui, validation) {
@@ -1447,8 +1504,6 @@
     function showFinalAnswer(ui) {
         ui.thoughtsBox.classList.remove('generating');
         ui.answer.classList.remove('draft');
-        ui.finalSec.remove();
-        ui.thoughtsBox.appendChild(ui.answer);
     }
 
     function createStreamingAnswer() {
@@ -1580,6 +1635,13 @@
 
     settingsBtn.addEventListener('click', openSettings);
     settingsClose.addEventListener('click', closeSettings);
+    docModalClose.addEventListener('click', closeDocumentPopup);
+    docOverlay.addEventListener('click', (event) => {
+        if (event.target === docOverlay) closeDocumentPopup();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !docOverlay.classList.contains('hidden')) closeDocumentPopup();
+    });
     settingsOverlay.addEventListener('click', (event) => {
         if (event.target === settingsOverlay) closeSettings();
     });
@@ -1647,7 +1709,16 @@
             const data = await res.json().catch(() => []);
             if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
             allDocuments = Array.isArray(data) ? data : [];
+            const valid = new Set(allDocuments.map(d=>d.id));
+            for (const id of Array.from(selectedDocIds)) if (!valid.has(id)) selectedDocIds.delete(id);
+            persistSelectedDocIds();
             refreshDocFilters();
+            const sc = localStorage.getItem('docs_filter_collection');
+            if (sc && Array.from(docsFilterCollection.options).some(o=>o.value===sc)) docsFilterCollection.value=sc;
+            const st = localStorage.getItem('docs_filter_tag');
+            if (st && Array.from(docsFilterTag.options).some(o=>o.value===st)) docsFilterTag.value=st;
+            const ss = localStorage.getItem('docs_sort');
+            if (ss && Array.from(docsSort.options).some(o=>o.value===ss)) docsSort.value=ss;
             renderDocuments();
         } catch (error) {
             setDocumentsStatus('Kunde inte hämta: ' + error.message, 'err');
@@ -1726,6 +1797,7 @@
             }
         }
         const total = allDocuments.length;
+        updateBulkBar();
         setDocumentsStatus(documents.length === total
             ? total + ' dokument'
             : documents.length + ' av ' + total + ' dokument', '');
@@ -1734,6 +1806,18 @@
     function documentRow(doc) {
         const row = document.createElement('div');
         row.className = 'doc-item';
+
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.className = 'doc-check';
+        check.checked = selectedDocIds.has(doc.id);
+        if (check.checked) row.classList.add('selected');
+        check.addEventListener('change', () => {
+            if (check.checked) selectedDocIds.add(doc.id); else selectedDocIds.delete(doc.id);
+            persistSelectedDocIds();
+            row.classList.toggle('selected', check.checked);
+            updateBulkBar();
+        });
 
         const main = document.createElement('div');
         main.className = 'doc-main';
@@ -1783,6 +1867,7 @@
         actions.appendChild(download);
         actions.appendChild(del);
 
+        row.appendChild(check);
         row.appendChild(main);
         row.appendChild(actions);
         return row;
@@ -1799,90 +1884,127 @@
         return typeof path === 'string' && path.toLowerCase().endsWith('.pdf');
     }
 
-    async function viewDocument(id) {
-        docListView.classList.add('hidden');
-        docViewer.classList.remove('hidden');
-        docViewerTitle.textContent = 'Dokument';
-        docViewerMeta.textContent = 'Laddar...';
-        docViewerActions.innerHTML = '';
-        docViewerFrame.classList.add('hidden');
-        docViewerFrame.removeAttribute('src');
-        docViewerText.classList.add('hidden');
-        docViewerText.innerHTML = '';
-        try {
-            const res = await fetch(DOC_API + '/' + encodeURIComponent(id));
-            const doc = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(doc.error || ('HTTP ' + res.status));
-            renderDocumentViewer(doc);
-        } catch (error) {
-            docViewerMeta.textContent = 'Kunde inte hämta: ' + error.message;
-        }
+    function docPdfUrl(ref) {
+        return ref.path && isPdfPath(ref.path) ? DOC_API + '/pdf?path=' + encodeURIComponent(ref.path) : null;
     }
 
-    function renderViewerText(doc) {
-        docViewerText.innerHTML = '';
-        if (!doc.content || !doc.content.length) {
-            docViewerText.textContent = 'Inget textinnehåll.';
-            return;
-        }
-        for (const chunk of doc.content) {
-            const block = document.createElement('div');
-            block.className = 'doc-chunk';
-            if (chunk.page !== null && chunk.page !== undefined) {
-                const page = document.createElement('div');
-                page.className = 'doc-chunk-page';
-                page.textContent = 'Sida ' + chunk.page;
-                block.appendChild(page);
+    function docDownloadUrl(ref) {
+        if (ref.documentId) return DOC_API + '/' + encodeURIComponent(ref.documentId) + '/download';
+        const pdf = docPdfUrl(ref);
+        return pdf ? pdf + '&download=true' : null;
+    }
+
+    function documentMeta(doc) {
+        let meta = (doc.chunks || 0) + ' textstycken \u00b7 ' + (doc.characters || 0) + ' tecken';
+        if (doc.collection) meta += ' \u00b7 ' + doc.collection;
+        if (doc.tags && doc.tags.length) meta += ' \u00b7 ' + doc.tags.join(', ');
+        return meta;
+    }
+
+    function setDocModalMeta(text) {
+        docModalMeta.textContent = text || '';
+        docModalMeta.classList.toggle('hidden', !text);
+    }
+
+    function showDocModalText(text) {
+        docModalText.innerHTML = '';
+        if (Array.isArray(text)) {
+            if (!text.length) docModalText.textContent = 'Inget textinneh\u00e5ll.';
+            for (const chunk of text) {
+                const block = document.createElement('div');
+                block.className = 'doc-chunk';
+                if (chunk.page !== null && chunk.page !== undefined) {
+                    const page = document.createElement('div');
+                    page.className = 'doc-chunk-page';
+                    page.textContent = 'Sida ' + chunk.page;
+                    block.appendChild(page);
+                }
+                const body = document.createElement('div');
+                body.textContent = chunk.text || '';
+                block.appendChild(body);
+                docModalText.appendChild(block);
             }
-            const body = document.createElement('div');
-            body.textContent = chunk.text || '';
-            block.appendChild(body);
-            docViewerText.appendChild(block);
-        }
-    }
-
-    function renderDocumentViewer(doc) {
-        docViewerTitle.textContent = doc.name || 'Dokument';
-        let meta = (doc.chunks || 0) + ' textstycken · ' + (doc.characters || 0) + ' tecken';
-        if (doc.collection) meta += ' · ' + doc.collection;
-        if (doc.tags && doc.tags.length) meta += ' · ' + doc.tags.join(', ');
-        docViewerMeta.textContent = meta;
-
-        docViewerActions.innerHTML = '';
-        renderViewerText(doc);
-
-        const download = document.createElement('a');
-        download.href = DOC_API + '/' + encodeURIComponent(doc.id) + '/download';
-        download.textContent = 'Ladda ner';
-        docViewerActions.appendChild(download);
-
-        if (isPdfPath(doc.path)) {
-            docViewerFrame.src = DOC_API + '/pdf?path=' + encodeURIComponent(doc.path);
-            docViewerFrame.classList.remove('hidden');
-            docViewerText.classList.add('hidden');
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.textContent = 'Visa text';
-            toggle.addEventListener('click', () => {
-                const showText = docViewerText.classList.contains('hidden');
-                docViewerText.classList.toggle('hidden', !showText);
-                docViewerFrame.classList.toggle('hidden', showText);
-                toggle.textContent = showText ? 'Visa PDF' : 'Visa text';
-            });
-            docViewerActions.insertBefore(toggle, download);
         } else {
-            docViewerFrame.classList.add('hidden');
-            docViewerText.classList.remove('hidden');
+            docModalText.textContent = text || 'Inget textinneh\u00e5ll.';
         }
+        docModalText.classList.remove('hidden');
+        docModalFrame.classList.add('hidden');
     }
 
-    function closeDocViewer() {
-        docViewer.classList.add('hidden');
-        docListView.classList.remove('hidden');
-        docViewerFrame.removeAttribute('src');
-        docViewerFrame.classList.add('hidden');
-        docViewerText.classList.add('hidden');
-        docViewerActions.innerHTML = '';
+    function showDocModalPdf(url, text) {
+        docModalText.classList.add('hidden');
+        docModalText.innerHTML = '';
+        docModalFrame.src = url;
+        docModalFrame.classList.remove('hidden');
+        if (!text) return;
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.textContent = 'Visa text';
+        toggle.addEventListener('click', () => {
+            const showText = docModalText.classList.contains('hidden');
+            if (showText) showDocModalText(text);
+            else {
+                docModalText.classList.add('hidden');
+                docModalFrame.classList.remove('hidden');
+            }
+            toggle.textContent = showText ? 'Visa PDF' : 'Visa text';
+        });
+        docModalActions.insertBefore(toggle, docModalActions.firstChild);
+    }
+
+    async function openDocumentPopup(ref) {
+        docOverlay.classList.remove('hidden');
+        docModalTitle.textContent = ref.title || 'Dokument';
+        setDocModalMeta(ref.meta);
+        docModalActions.innerHTML = '';
+        docModalFrame.removeAttribute('src');
+        docModalFrame.classList.add('hidden');
+        docModalText.classList.add('hidden');
+        docModalText.innerHTML = '';
+
+        if (ref.documentId && ref.path === undefined) {
+            setDocModalMeta('Laddar...');
+            try {
+                const res = await fetch(DOC_API + '/' + encodeURIComponent(ref.documentId));
+                const doc = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(doc.error || ('HTTP ' + res.status));
+                ref = Object.assign({}, ref, {
+                    title: ref.title || doc.name,
+                    meta: ref.meta || documentMeta(doc),
+                    path: doc.path,
+                    text: ref.text || doc.content || null
+                });
+            } catch (error) {
+                setDocModalMeta('Kunde inte h\u00e4mta: ' + error.message);
+            }
+        }
+        if (ref.title) docModalTitle.textContent = ref.title;
+        setDocModalMeta(ref.meta);
+
+        const download = docDownloadUrl(ref);
+        if (download) {
+            const link = document.createElement('a');
+            link.href = download;
+            link.textContent = 'Ladda ner';
+            docModalActions.appendChild(link);
+        }
+
+        const pdf = docPdfUrl(ref);
+        if (pdf) showDocModalPdf(pdf, ref.text);
+        else showDocModalText(ref.text);
+    }
+
+    function closeDocumentPopup() {
+        docOverlay.classList.add('hidden');
+        docModalFrame.removeAttribute('src');
+        docModalFrame.classList.add('hidden');
+        docModalText.classList.add('hidden');
+        docModalText.innerHTML = '';
+        docModalActions.innerHTML = '';
+    }
+
+    async function viewDocument(id) {
+        await openDocumentPopup({documentId: id});
     }
 
     async function deleteDocument(id) {
@@ -1897,15 +2019,63 @@
         }
     }
 
+    function updateBulkBar() {
+        const n = selectedDocIds.size;
+        docsBulkCount.textContent = n ? n + ' markerade' : '';
+        docsBulkDownload.disabled = !n;
+        docsBulkDelete.disabled = !n;
+        const visible = visibleDocuments();
+        docsSelectAll.checked = visible.length > 0 && visible.every(d => selectedDocIds.has(d.id));
+        docsSelectAll.indeterminate = visible.some(d => selectedDocIds.has(d.id)) && !docsSelectAll.checked;
+    }
+
+    docsSelectAll.addEventListener('change', () => {
+        for (const doc of visibleDocuments()) {
+            if (docsSelectAll.checked) selectedDocIds.add(doc.id); else selectedDocIds.delete(doc.id);
+            persistSelectedDocIds();
+        }
+        renderDocuments();
+    });
+
+    docsBulkDownload.addEventListener('click', () => {
+        for (const id of Array.from(selectedDocIds)) {
+            const a = document.createElement('a');
+            a.href = DOC_API + '/' + encodeURIComponent(id) + '/download';
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+    });
+
+    docsBulkDelete.addEventListener('click', async () => {
+        if (!selectedDocIds.size) return;
+        if (!confirm('Ta bort ' + selectedDocIds.size + ' markerade dokument och alla deras vektorer?')) return;
+        const ids = Array.from(selectedDocIds);
+        let failed = 0;
+        for (const id of ids) {
+            try {
+                const res = await fetch(DOC_API + '/' + encodeURIComponent(id), {method: 'DELETE'});
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                selectedDocIds.delete(id);
+                persistSelectedDocIds();
+            } catch (e) {
+                failed++;
+            }
+        }
+        await loadDocuments();
+        setDocumentsStatus((ids.length - failed) + ' dokument borttagna' + (failed ? ' · ' + failed + ' misslyckades' : ''), failed ? 'err' : 'ok');
+    });
+
     function openDocuments() {
-        closeDocViewer();
+        closeDocumentPopup();
         documentsPage.classList.remove('hidden');
         loadDocuments();
         loadUploadOptions();
     }
 
     function closeDocuments() {
-        closeDocViewer();
+        closeDocumentPopup();
         documentsPage.classList.add('hidden');
     }
 
@@ -2010,13 +2180,12 @@
     documentsBtn.addEventListener('click', openDocuments);
     documentsClose.addEventListener('click', closeDocuments);
     docsSearch.addEventListener('input', renderDocuments);
-    docsFilterCollection.addEventListener('change', renderDocuments);
-    docsFilterTag.addEventListener('change', renderDocuments);
-    docsSort.addEventListener('change', renderDocuments);
+    docsFilterCollection.addEventListener('change', () => { localStorage.setItem('docs_filter_collection', docsFilterCollection.value); renderDocuments(); });
+    docsFilterTag.addEventListener('change', () => { localStorage.setItem('docs_filter_tag', docsFilterTag.value); renderDocuments(); });
+    docsSort.addEventListener('change', () => { localStorage.setItem('docs_sort', docsSort.value); renderDocuments(); });
     documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchDocumentsTab(btn.dataset.tab));
     });
-    docViewerBack.addEventListener('click', closeDocViewer);
     uploadCollection.addEventListener('change', () => {
         if (uploadCollection.value !== '__new__') {
             newCollectionName.value = '';
@@ -2052,6 +2221,72 @@
         return Array.from(collectionList.querySelectorAll('input[type=checkbox]:checked')).map(cb => cb.value);
     }
 
+    function formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'kB', 'MB', 'GB'];
+        let value = bytes;
+        let i = 0;
+        while (value >= 1024 && i < units.length - 1) {
+            value /= 1024;
+            i++;
+        }
+        return (i === 0 ? Math.round(value) : value.toFixed(1)) + ' ' + units[i];
+    }
+
+    function setUploadProgress(state, label, pct, detail) {
+        uploadProgress.className = 'upload-progress' + (state ? ' ' + state : '');
+        if (label !== undefined) uploadProgressLabel.textContent = label;
+        if (pct !== undefined) {
+            const clamped = pct === null ? 0 : Math.max(0, Math.min(100, pct));
+            uploadProgressFill.style.width = clamped + '%';
+            uploadProgressPct.textContent = pct === null ? '' : Math.round(pct) + '%';
+        }
+        if (detail !== undefined) uploadProgressDetail.textContent = detail;
+    }
+
+    function hideUploadProgress() {
+        uploadProgress.className = 'upload-progress hidden';
+        setUploadProgress('', '', 0, '');
+    }
+
+    function uploadFile(file, collection, tags, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', DOC_API);
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable && onProgress) onProgress(event.loaded, event.total);
+            };
+            xhr.onload = () => {
+                let data = {};
+                try {
+                    data = JSON.parse(xhr.responseText || '{}');
+                } catch (ignored) {
+                    data = {};
+                }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(Array.isArray(data) ? data : []);
+                } else {
+                    reject(new Error(data.error || ('HTTP ' + xhr.status)));
+                }
+            };
+            xhr.onerror = () => reject(new Error('Uppladdningen avbröts'));
+            xhr.onabort = () => reject(new Error('Uppladdningen avbröts'));
+            const formData = new FormData();
+            formData.append('files', file);
+            if (collection) formData.append('collection', collection);
+            for (const tag of tags) formData.append('tags', tag);
+            xhr.send(formData);
+        });
+    }
+
+    let uploadInProgress = false;
+    window.addEventListener('beforeunload', (event) => {
+        if (uploadInProgress) {
+            event.preventDefault();
+            event.returnValue = 'Uppladdning pågår – vill du lämna sidan?';
+        }
+    });
+
     uploadForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const files = Array.from(uploadForm.elements.namedItem('files').files);
@@ -2068,33 +2303,71 @@
             }
         }
         const tags = uploadTags.value.split(',').map(t => t.trim()).filter(Boolean);
+        const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
         uploadBtn.disabled = true;
-        setDocumentsStatus('Laddar upp ' + files.length + ' fil(er)...', '');
+        uploadInProgress = true;
+        setDocumentsStatus('Laddar upp...', '');
+        setUploadProgress('', 'Förbereder uppladdning', 0,
+            files.length + ' fil(er) · ' + formatBytes(totalBytes));
+
+        const uploaded = [];
+        let sentBytes = 0;
         try {
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append('files', file);
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const base = sentBytes;
+                setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
+                    totalBytes ? (base / totalBytes) * 100 : 100,
+                    formatBytes(base) + ' av ' + formatBytes(totalBytes));
+                const added = await uploadFile(file, collection, tags, (loaded) => {
+                    const pct = totalBytes ? ((base + loaded) / totalBytes) * 100 : 100;
+                    setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
+                        pct, formatBytes(base + loaded) + ' av ' + formatBytes(totalBytes));
+                });
+                uploaded.push(...added);
+                sentBytes += file.size;
             }
-            if (collection) formData.append('collection', collection);
-            for (const tag of tags) {
-                formData.append('tags', tag);
-            }
-            const res = await fetch(DOC_API, {method: 'POST', body: formData});
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+
+            setUploadProgress('processing', 'Alla filer skickade', 100,
+                'Bearbetar, chunkar och indexerar i arkivet...');
             uploadForm.reset();
             newCollectionName.value = '';
             uploadTags.value = '';
             toggleNewCollectionField();
-            const count = Array.isArray(data) ? data.length : 0;
-            setDocumentsStatus(count + ' dokument uppladdade', 'ok');
             qdrantCollections = null;
             await Promise.all([loadUploadOptions(), loadDocuments()]);
+            const addedCount = uploaded.filter(d => !d.skipped).length;
+            const skippedCount = uploaded.filter(d => d.skipped).length;
+            let detail = addedCount + ' dokument tillagda i arkivet';
+            if (skippedCount) detail += ' · ' + skippedCount + ' redan i arkivet (hoppades över)';
+            setUploadProgress('ok', 'Klart', 100, detail);
+            let msg = addedCount + ' dokument uppladdade';
+            if (skippedCount) msg += ' · ' + skippedCount + ' redan i arkivet (hoppades över)';
+            setDocumentsStatus(msg, skippedCount && !addedCount ? '' : 'ok');
+            window.setTimeout(hideUploadProgress, 5000);
         } catch (error) {
+            setUploadProgress('err', 'Fel vid uppladdning', null, error.message);
             setDocumentsStatus('Fel: ' + error.message, 'err');
         } finally {
             uploadBtn.disabled = false;
+            uploadInProgress = false;
         }
+    });
+
+    uploadFolderBtn.addEventListener('click', () => uploadFolderInput.click());
+    uploadFolderInput.addEventListener('change', () => {
+        const picked = Array.from(uploadFolderInput.files || []).filter(f => /\.pdf$/i.test(f.name));
+        if (!picked.length) {
+            setDocumentsStatus('Inga PDF-filer i vald mapp', 'err');
+            uploadFolderInput.value = '';
+            return;
+        }
+        const dt = new DataTransfer();
+        for (const f of picked) dt.items.add(f);
+        const input = uploadForm.elements.namedItem('files');
+        input.files = dt.files;
+        setDocumentsStatus(picked.length + ' PDF-filer valda från mapp – klicka "Ladda upp"', '');
+        uploadFolderInput.value = '';
     });
 
     chatForm.addEventListener('submit', async (event) => {

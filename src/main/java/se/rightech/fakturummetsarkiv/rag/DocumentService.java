@@ -24,7 +24,9 @@ import java.util.UUID;
 public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
-    private static final int EMBED_BATCH = 64;
+    private static final int EMBED_BATCH = 16;
+    /** Antal punkter per upsert-anrop mot Qdrant (håller varje request långt under 32 MB). */
+    private static final int UPSERT_BATCH = 64;
     private static final List<String> DOC_FIELDS =
             List.of("documentId", "source", "title", "path", "page", "createdAt", "collection", "tags");
 
@@ -49,7 +51,7 @@ public class DocumentService {
     }
 
     public record DocumentInfo(String id, String name, int chunks, int characters, String path,
-                               String collection, List<String> tags, Instant createdAt) {
+                               String collection, List<String> tags, Instant createdAt, boolean skipped) {
     }
 
     public record DocumentChunk(Integer page, Integer chunkIndex, String text) {
@@ -71,6 +73,17 @@ public class DocumentService {
         String title = filename == null || filename.isBlank() ? "Dokument" : filename.trim();
         String target = resolveCollection(collection);
         List<String> cleanTags = cleanTags(tags);
+
+        for (DocumentInfo existing : list()) {
+            if (existing.name() != null && existing.name().trim().equalsIgnoreCase(title)) {
+                log.info("Dokumentet '{}' finns redan i arkivet – hoppar över uppladdning", title);
+                return new DocumentInfo(existing.id(), title, existing.chunks(), existing.characters(),
+                        existing.path(), existing.collection() != null ? existing.collection() : target,
+                        existing.tags() != null && !existing.tags().isEmpty() ? existing.tags() : cleanTags,
+                        existing.createdAt(), true);
+            }
+        }
+
         Path stored = fileStore.store(title, bytes);
         String path = stored.toAbsolutePath().toString();
 
@@ -147,11 +160,27 @@ public class DocumentService {
             payload.put("text", chunk.text());
             points.add(new QdrantClient.Point(UUID.randomUUID().toString(), vectors.get(i), payload));
         }
-        qdrantClient.upsert(collection, points);
+
+        // Skicka i batcher så att varje request håller sig under Qdrants gräns (32 MB).
+        try {
+            for (int i = 0; i < points.size(); i += UPSERT_BATCH) {
+                List<QdrantClient.Point> batch =
+                        new ArrayList<>(points.subList(i, Math.min(i + UPSERT_BATCH, points.size())));
+                qdrantClient.upsert(collection, batch);
+            }
+        } catch (RuntimeException e) {
+            // Undvik ett halvindexerat dokument om något batch misslyckas.
+            try {
+                qdrantClient.deleteByMatch(collection, "documentId", documentId);
+            } catch (RuntimeException cleanupError) {
+                log.warn("Kunde inte rensa delvis indexerat dokument {}", documentId, cleanupError);
+            }
+            throw e;
+        }
 
         log.info("Indexerade '{}' ({} textstycken) i kollektionen '{}'", title, chunks.size(), collection);
         return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
-                Instant.ofEpochMilli(createdAt));
+                Instant.ofEpochMilli(createdAt), false);
     }
 
     /** Listar dokumenten som faktiskt finns i vektordatabasen (grupperade per dokument). */
@@ -191,7 +220,7 @@ public class DocumentService {
                 .sorted(Comparator.comparingLong((Group group) -> group.createdAt).reversed())
                 .map(group -> new DocumentInfo(group.id, group.name, group.chunks, 0, group.path,
                         group.collection, List.copyOf(group.tags),
-                        group.createdAt > 0 ? Instant.ofEpochMilli(group.createdAt) : null))
+                        group.createdAt > 0 ? Instant.ofEpochMilli(group.createdAt) : null, false))
                 .toList();
     }
 

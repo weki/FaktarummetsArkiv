@@ -150,6 +150,7 @@ class ChatServiceTest {
     void answersDirectlyWithoutSearchWhenGateSaysSo() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20));
+        when(searchGate.decide("hej")).thenReturn(new SearchGate.Decision(false, "hej"));
         when(searchGate.needsSearch("hej")).thenReturn(false);
         respondWith("Hej");
 

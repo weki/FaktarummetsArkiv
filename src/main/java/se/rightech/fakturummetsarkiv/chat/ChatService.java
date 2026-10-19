@@ -63,14 +63,16 @@ public class ChatService {
                 ? settings.chatModel() : ollama.model();
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
-        boolean search = !smart || searchGate.needsSearch(question);
+        SearchGate.Decision gate = smart ? searchGate.decide(question) : new SearchGate.Decision(true, question);
+        boolean search = gate.search();
 
         List<Map<String, Object>> sources;
         String systemPrompt;
-        String searchQuery = question;
+        String searchQuery = gate.query();
         if (search) {
             if (!history.isEmpty()
-                    && (settings.rewriteQuery() == null || settings.rewriteQuery())) {
+                    && (settings.rewriteQuery() == null || settings.rewriteQuery())
+                    && searchQuery.equalsIgnoreCase(question.trim())) {
                 searchQuery = queryRewriter.rewrite(question, history, model);
             }
             if (onSearchPlan != null) {
