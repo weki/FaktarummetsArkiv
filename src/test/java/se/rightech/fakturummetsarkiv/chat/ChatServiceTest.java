@@ -53,9 +53,10 @@ class ChatServiceTest {
     @Test
     void streamsSourcesContentAndFinal() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
-        when(retrievalService.retrieve(anyString(), any(), anyInt(), any()))
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
                 .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
+        when(searchGate.decide(anyString())).thenReturn(new SearchGate.Decision(true, "q"));
         respondWith("<" + "think>fundera<" + "/think>Hej", "!");
 
         List<Map<String, Object>> sources = new ArrayList<>();
@@ -82,8 +83,8 @@ class ChatServiceTest {
     @Test
     void keepsSeparateThinkingOutOfTheAnswer() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
-        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
             Consumer<String> onContent = invocation.getArgument(3);
@@ -115,10 +116,10 @@ class ChatServiceTest {
     @Test
     void rewritesFollowUpBeforeSearch() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
         sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
         when(queryRewriter.rewrite(anyString(), any(), anyString())).thenReturn("Hur aktiverar jag OPC UA på en server?");
-        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
         service.streamChat("hur aktiverar jag det på en server?", "s1", token -> {
@@ -126,15 +127,15 @@ class ChatServiceTest {
         }, null, token -> {
         }, null);
 
-        verify(retrievalService).retrieve("Hur aktiverar jag OPC UA på en server?", List.of("docs"), 5, null);
+        verify(retrievalService).retrieve("Hur aktiverar jag OPC UA på en server?", List.of("docs"), 5, null, null);
     }
 
     @Test
     void skipsRewriteWhenDisabled() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, false, List.of("docs"), null, 5, 0.0, 20));
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, false, List.of("docs"), null, 5, 0.0, 20, null));
         sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
-        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
         service.streamChat("hur aktiverar jag det?", "s1", token -> {
@@ -143,13 +144,13 @@ class ChatServiceTest {
         }, null);
 
         verify(queryRewriter, never()).rewrite(anyString(), any(), anyString());
-        verify(retrievalService).retrieve("hur aktiverar jag det?", List.of("docs"), 5, null);
+        verify(retrievalService).retrieve("hur aktiverar jag det?", List.of("docs"), 5, null, null);
     }
 
     @Test
     void answersDirectlyWithoutSearchWhenGateSaysSo() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20));
+                "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
         when(searchGate.decide("hej")).thenReturn(new SearchGate.Decision(false, "hej"));
         when(searchGate.needsSearch("hej")).thenReturn(false);
         respondWith("Hej");
@@ -175,8 +176,8 @@ class ChatServiceTest {
     @Test
     void storesHistoryForSession() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
-                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20));
-        when(retrievalService.retrieve(anyString(), any(), anyInt(), any())).thenReturn(List.of());
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
         service.streamChat("hej", "s1", token -> {

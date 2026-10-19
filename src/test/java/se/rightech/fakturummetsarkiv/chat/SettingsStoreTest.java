@@ -43,7 +43,7 @@ class SettingsStoreTest {
         SettingsStore store = store();
 
         WorkspaceSettings updated = store.update(new WorkspaceSettings(
-                "query", null, null, null, null, null, List.of("docs", "manuals"), 0.3, 12, 0.5, null));
+                "query", null, null, null, null, null, List.of("docs", "manuals"), 0.3, 12, 0.5, null, null));
 
         assertThat(updated.chatMode()).isEqualTo("query");
         assertThat(updated.similarityThreshold()).isEqualTo(0.3);
@@ -60,19 +60,19 @@ class SettingsStoreTest {
         SettingsStore store = store();
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, 1.5, null, null, null)))
+                null, null, null, null, null, null, null, 1.5, null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, null, 0, null, null)))
+                null, null, null, null, null, null, null, null, 0, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, null, null, 3.0, null)))
+                null, null, null, null, null, null, null, null, null, 3.0, null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> store.update(new WorkspaceSettings(
-                null, null, null, null, null, null, null, null, null, null, 200)))
+                null, null, null, null, null, null, null, null, null, null, 200, null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

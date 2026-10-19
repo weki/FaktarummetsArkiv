@@ -80,7 +80,7 @@ public class ChatService {
             }
             int topK = settings.topN() != null ? settings.topN() : 5;
             Double threshold = settings.similarityThreshold();
-            sources = retrievalService.retrieve(searchQuery, settings.collections(), topK, threshold);
+            sources = retrievalService.retrieve(searchQuery, settings.collections(), topK, threshold, settings.documentIds());
             if (onSources != null) {
                 onSources.accept(sources);
             }

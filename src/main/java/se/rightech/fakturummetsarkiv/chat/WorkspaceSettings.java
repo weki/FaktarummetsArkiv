@@ -18,5 +18,6 @@ public record WorkspaceSettings(
         Double similarityThreshold,
         Integer topN,
         Double temperature,
-        Integer historySize) {
+        Integer historySize,
+        List<String> documentIds) {
 }

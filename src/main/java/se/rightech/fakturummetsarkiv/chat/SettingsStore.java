@@ -36,7 +36,8 @@ public class SettingsStore {
                 null,
                 qdrant.topK(),
                 0.0,
-                rag.maxHistory());
+                rag.maxHistory(),
+                null);
     }
 
     public WorkspaceSettings get() {
@@ -65,7 +66,8 @@ public class SettingsStore {
                 update.similarityThreshold() != null ? update.similarityThreshold() : base.similarityThreshold(),
                 update.topN() != null ? update.topN() : base.topN(),
                 update.temperature() != null ? update.temperature() : base.temperature(),
-                update.historySize() != null ? update.historySize() : base.historySize());
+                update.historySize() != null ? update.historySize() : base.historySize(),
+                update.documentIds() != null ? clean(update.documentIds()) : base.documentIds());
     }
 
     private static List<String> clean(List<String> collections) {
