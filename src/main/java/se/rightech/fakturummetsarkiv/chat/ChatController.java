@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,7 +52,8 @@ public class ChatController {
         this.ollamaClient = ollamaClient;
     }
 
-    public record ChatRequest(String message, String mode, String sessionId) {
+    public record ChatRequest(String message, String mode, String sessionId,
+                             List<String> collections, List<String> documentIds) {
     }
 
     @GetMapping("/auth")
@@ -87,6 +89,7 @@ public class ChatController {
             try {
                 ChatService.StreamResult result = chatService.streamChat(
                         request.message(), request.sessionId(),
+                        request.collections(), request.documentIds(),
                         content -> sendEvent(emitter, "content", json(content), MediaType.TEXT_PLAIN),
                         thought -> sendEvent(emitter, "thought", json(thought), MediaType.TEXT_PLAIN),
                         sources -> {
@@ -102,15 +105,25 @@ public class ChatController {
 
                 WorkspaceSettings settings = settingsStore.get();
                 sendEvent(emitter, "answerHtml", json(markdownRenderer.toHtml(result.answer())), MediaType.TEXT_PLAIN);
-                if (result.searched()) {
-                    boolean validate = settings.validateGrounding() == null || settings.validateGrounding();
-                    GroundingResult validation = groundingValidator.validate(
-                            request.message(), collectedSources, result.answer(),
-                            settings.validatorModel(), validate);
+
+                boolean validate = result.searched()
+                        && (settings.validateGrounding() == null || settings.validateGrounding());
+                CompletableFuture<GroundingResult> validationFuture = validate
+                        ? CompletableFuture.supplyAsync(() -> groundingValidator.validate(
+                                request.message(), collectedSources, result.answer(),
+                                settings.validatorModel(), true), streamExecutor)
+                        : CompletableFuture.completedFuture(null);
+                CompletableFuture<List<String>> followUpsFuture = CompletableFuture.supplyAsync(
+                        () -> followUpGenerator.generate(
+                                request.message(), result.answer(), collectedSources,
+                                settings.chatModel(), settings.refineModel(), 3),
+                        streamExecutor);
+
+                GroundingResult validation = validationFuture.join();
+                if (validation != null) {
                     sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
                 }
-                List<String> followUps = followUpGenerator.generate(
-                        request.message(), result.answer(), collectedSources, settings.chatModel(), 3);
+                List<String> followUps = followUpsFuture.join();
                 sendEvent(emitter, "followups", followUps, MediaType.APPLICATION_JSON);
                 sendEvent(emitter, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();

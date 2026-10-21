@@ -45,16 +45,19 @@ public class ChatService {
     public record SearchPlan(boolean needed, String query) {
     }
 
-    public StreamResult streamChat(String question, String sessionId,
-                                   Consumer<String> onContent,
-                                   Consumer<String> onThought,
-                                   Consumer<List<Map<String, Object>>> onSources,
-                                   Consumer<String> onFinal,
-                                   Consumer<SearchPlan> onSearchPlan) {
+public StreamResult streamChat(String question, String sessionId,
+                                    List<String> collections, List<String> documentIds,
+                                    Consumer<String> onContent,
+                                    Consumer<String> onThought,
+                                    Consumer<List<Map<String, Object>>> onSources,
+                                    Consumer<String> onFinal,
+                                    Consumer<SearchPlan> onSearchPlan) {
         if (question == null || question.isBlank()) {
             throw new IllegalArgumentException("Ingen fråga angiven");
         }
         WorkspaceSettings settings = settingsStore.get();
+        List<String> effectiveCollections = (collections != null && !collections.isEmpty()) ? collections : settings.collections();
+        List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
         List<Map<String, String>> history = useHistory(settings)
                 ? sessionMemory.history(sessionId, historySize(settings))
                 : List.of();
@@ -63,7 +66,9 @@ public class ChatService {
                 ? settings.chatModel() : ollama.model();
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
-        SearchGate.Decision gate = smart ? searchGate.decide(question) : new SearchGate.Decision(true, question);
+        SearchGate.Decision gate = smart
+                ? searchGate.decide(question, settings.gateModel())
+                : new SearchGate.Decision(true, question);
         boolean search = gate.search();
 
         List<Map<String, Object>> sources;
@@ -73,14 +78,16 @@ public class ChatService {
             if (!history.isEmpty()
                     && (settings.rewriteQuery() == null || settings.rewriteQuery())
                     && searchQuery.equalsIgnoreCase(question.trim())) {
-                searchQuery = queryRewriter.rewrite(question, history, model);
+                String rewriteModel = settings.rewriteModel() != null && !settings.rewriteModel().isBlank()
+                        ? settings.rewriteModel() : model;
+                searchQuery = queryRewriter.rewrite(question, history, rewriteModel);
             }
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(true, searchQuery));
             }
             int topK = settings.topN() != null ? settings.topN() : 5;
             Double threshold = settings.similarityThreshold();
-            sources = retrievalService.retrieve(searchQuery, settings.collections(), topK, threshold, settings.documentIds());
+            sources = retrievalService.retrieve(searchQuery, effectiveCollections, topK, threshold, effectiveDocumentIds);
             if (onSources != null) {
                 onSources.accept(sources);
             }

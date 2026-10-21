@@ -1,6 +1,7 @@
 package se.rightech.fakturummetsarkiv.rag;
 
 import org.springframework.stereotype.Service;
+import se.rightech.fakturummetsarkiv.chat.SettingsStore;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 
@@ -17,13 +18,15 @@ public class RetrievalService {
     private final OllamaProperties ollama;
     private final QdrantProperties qdrant;
     private final QdrantClient qdrantClient;
+    private final SettingsStore settingsStore;
 
     public RetrievalService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
-                            QdrantClient qdrantClient) {
+                            QdrantClient qdrantClient, SettingsStore settingsStore) {
         this.llm = llm;
         this.ollama = ollama;
         this.qdrant = qdrant;
         this.qdrantClient = qdrantClient;
+        this.settingsStore = settingsStore;
     }
 
     public List<Map<String, Object>> retrieve(String query, List<String> collections, int topK, Double scoreThreshold) {
@@ -32,7 +35,10 @@ public class RetrievalService {
 
     public List<Map<String, Object>> retrieve(String query, List<String> collections, int topK, Double scoreThreshold,
                                           List<String> documentIds) {
-        String model = ollama.embeddingModel();
+        String model = settingsStore.get().embeddingModel();
+        if (model == null || model.isBlank()) {
+            model = ollama.embeddingModel();
+        }
         if (model == null || model.isBlank() || query == null || query.isBlank()) {
             return List.of();
         }

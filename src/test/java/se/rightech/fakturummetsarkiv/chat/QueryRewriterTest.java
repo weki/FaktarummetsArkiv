@@ -55,9 +55,10 @@ class QueryRewriterTest {
     }
 
     @Test
-    void preferRewriteModelOverChatModel() {
+    void prefersExplicitModelAndFallsBackToPropertyModel() {
         QueryRewriter rewriter = new QueryRewriter(client, props("small-model"));
-        assertThat(rewriter.pickModel("gemma4:latest")).isEqualTo("small-model");
+        assertThat(rewriter.pickModel("gemma4:latest")).isEqualTo("gemma4:latest");
+        assertThat(rewriter.pickModel(null)).isEqualTo("small-model");
     }
 
     @Test

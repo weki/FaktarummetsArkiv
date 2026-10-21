@@ -56,12 +56,12 @@ public class QueryRewriter {
         }
     }
 
-    String pickModel(String chatModel) {
+    String pickModel(String model) {
+        if (model != null && !model.isBlank()) {
+            return model;
+        }
         if (properties.rewriteModel() != null && !properties.rewriteModel().isBlank()) {
             return properties.rewriteModel();
-        }
-        if (chatModel != null && !chatModel.isBlank()) {
-            return chatModel;
         }
         return properties.model() == null ? "" : properties.model();
     }

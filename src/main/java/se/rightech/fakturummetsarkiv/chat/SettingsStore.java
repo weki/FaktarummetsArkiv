@@ -37,7 +37,11 @@ public class SettingsStore {
                 qdrant.topK(),
                 0.0,
                 rag.maxHistory(),
-                null);
+                null,
+                ollama.embeddingModel(),
+                ollama.refineModel(),
+                ollama.gateModel(),
+                ollama.rewriteModel());
     }
 
     public WorkspaceSettings get() {
@@ -67,7 +71,11 @@ public class SettingsStore {
                 update.topN() != null ? update.topN() : base.topN(),
                 update.temperature() != null ? update.temperature() : base.temperature(),
                 update.historySize() != null ? update.historySize() : base.historySize(),
-                update.documentIds() != null ? clean(update.documentIds()) : base.documentIds());
+                update.documentIds() != null ? clean(update.documentIds()) : base.documentIds(),
+                pick(update.embeddingModel(), base.embeddingModel()),
+                pick(update.refineModel(), base.refineModel()),
+                pick(update.gateModel(), base.gateModel()),
+                pick(update.rewriteModel(), base.rewriteModel()));
     }
 
     private static List<String> clean(List<String> collections) {

@@ -58,11 +58,13 @@ class DocumentServiceTest {
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
                 Duration.ofSeconds(10), "query: ", "passage:");
-        Chunker chunker = new Chunker(new RagProperties(20, 1200, 200, 8000));
+        RagProperties rag = new RagProperties(20, 1200, 200, 8000);
+        Chunker chunker = new Chunker(rag);
         ArchiveProperties archive = new ArchiveProperties("", uploadDir.toString());
 
         service = new DocumentService(llm, ollama, qdrant, qdrantClient, chunker,
-                new PdfTextExtractor(), new FileStore(archive));
+                new PdfTextExtractor(), new FileStore(archive),
+                new se.rightech.fakturummetsarkiv.chat.SettingsStore(qdrant, ollama, rag));
 
         when(llm.embed(anyString(), anyList())).thenAnswer(invocation -> {
             List<String> inputs = invocation.getArgument(1);

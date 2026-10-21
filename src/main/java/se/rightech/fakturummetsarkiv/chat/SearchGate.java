@@ -42,15 +42,23 @@ public class SearchGate {
     }
 
     public boolean enabled() {
-        return properties.gateModel() != null && !properties.gateModel().isBlank();
+        return enabled(properties.gateModel());
+    }
+
+    public boolean enabled(String gateModel) {
+        return gateModel != null && !gateModel.isBlank();
     }
 
     public Decision decide(String question) {
-        if (!enabled() || question == null || question.isBlank()) {
+        return decide(question, properties.gateModel());
+    }
+
+    public Decision decide(String question, String gateModel) {
+        if (!enabled(gateModel) || question == null || question.isBlank()) {
             return new Decision(true, question);
         }
         try {
-            String raw = client.chat(properties.gateModel(), SYSTEM_PROMPT, question).trim();
+            String raw = client.chat(gateModel, SYSTEM_PROMPT, question).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");
                 return new Decision(true, question);

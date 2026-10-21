@@ -3,6 +3,7 @@ package se.rightech.fakturummetsarkiv.rag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import se.rightech.fakturummetsarkiv.chat.SettingsStore;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 
@@ -37,10 +38,12 @@ public class DocumentService {
     private final Chunker chunker;
     private final PdfTextExtractor pdfTextExtractor;
     private final FileStore fileStore;
+    private final SettingsStore settingsStore;
 
     public DocumentService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
                            QdrantClient qdrantClient, Chunker chunker,
-                           PdfTextExtractor pdfTextExtractor, FileStore fileStore) {
+                           PdfTextExtractor pdfTextExtractor, FileStore fileStore,
+                           SettingsStore settingsStore) {
         this.llm = llm;
         this.ollama = ollama;
         this.qdrant = qdrant;
@@ -48,6 +51,7 @@ public class DocumentService {
         this.chunker = chunker;
         this.pdfTextExtractor = pdfTextExtractor;
         this.fileStore = fileStore;
+        this.settingsStore = settingsStore;
     }
 
     public record DocumentInfo(String id, String name, int chunks, int characters, String path,
@@ -117,7 +121,10 @@ public class DocumentService {
 
     private DocumentInfo index(String title, String source, String collection, List<String> tags, String path,
                                List<IndexedChunk> chunks, int characters) {
-        String model = ollama.embeddingModel();
+        String model = settingsStore.get().embeddingModel();
+        if (model == null || model.isBlank()) {
+            model = ollama.embeddingModel();
+        }
         if (model == null || model.isBlank()) {
             throw new IllegalStateException("Ingen embedding-modell konfigurerad (ollama.embedding-model)");
         }

@@ -17,6 +17,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -56,7 +57,7 @@ class ChatServiceTest {
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
                 .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
-        when(searchGate.decide(anyString())).thenReturn(new SearchGate.Decision(true, "q"));
+        when(searchGate.decide(anyString(), any())).thenReturn(new SearchGate.Decision(true, "q"));
         respondWith("<" + "think>fundera<" + "/think>Hej", "!");
 
         List<Map<String, Object>> sources = new ArrayList<>();
@@ -65,7 +66,7 @@ class ChatServiceTest {
         List<String> finals = new ArrayList<>();
         List<Boolean> decisions = new ArrayList<>();
 
-        ChatService.StreamResult result = service.streamChat("hej", "s1", content::add, thoughts::add, s -> {
+        ChatService.StreamResult result = service.streamChat("hej", "s1", List.of(), List.of(), content::add, thoughts::add, s -> {
             sources.clear();
             sources.addAll(s);
         }, finals::add, plan -> decisions.add(plan.needed()));
@@ -101,7 +102,7 @@ class ChatServiceTest {
         List<String> thoughts = new ArrayList<>();
         List<String> finals = new ArrayList<>();
 
-        ChatService.StreamResult result = service.streamChat("vad är 2+2", "s1", content::add, thoughts::add,
+        ChatService.StreamResult result = service.streamChat("vad är 2+2", "s1", List.of(), List.of(), content::add, thoughts::add,
                 sources -> {
                 }, finals::add, plan -> {
         });
@@ -122,7 +123,7 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
-        service.streamChat("hur aktiverar jag det på en server?", "s1", token -> {
+        service.streamChat("hur aktiverar jag det på en server?", "s1", List.of(), List.of(), token -> {
         }, thought -> {
         }, null, token -> {
         }, null);
@@ -138,7 +139,7 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
-        service.streamChat("hur aktiverar jag det?", "s1", token -> {
+        service.streamChat("hur aktiverar jag det?", "s1", List.of(), List.of(), token -> {
         }, thought -> {
         }, null, token -> {
         }, null);
@@ -151,14 +152,14 @@ class ChatServiceTest {
     void answersDirectlyWithoutSearchWhenGateSaysSo() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
-        when(searchGate.decide("hej")).thenReturn(new SearchGate.Decision(false, "hej"));
+        when(searchGate.decide(eq("hej"), any())).thenReturn(new SearchGate.Decision(false, "hej"));
         when(searchGate.needsSearch("hej")).thenReturn(false);
         respondWith("Hej");
 
         List<Map<String, Object>> sources = new ArrayList<>();
         List<Boolean> decisions = new ArrayList<>();
 
-        ChatService.StreamResult result = service.streamChat("hej", "s1", token -> {
+        ChatService.StreamResult result = service.streamChat("hej", "s1", List.of(), List.of(), token -> {
         }, thought -> {
         }, s -> {
             sources.clear();
@@ -180,7 +181,7 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
-        service.streamChat("hej", "s1", token -> {
+        service.streamChat("hej", "s1", List.of(), List.of(), token -> {
         }, thought -> {
         }, null, token -> {
         }, null);
