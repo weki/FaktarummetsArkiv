@@ -35,7 +35,7 @@ public class SettingsStore {
                 !ollama.gateModel().isBlank(),
                 true,
                 List.of(qdrant.collection()),
-                null,
+                rag.similarityThreshold(),
                 qdrant.topK(),
                 0.0,
                 rag.maxHistory(),

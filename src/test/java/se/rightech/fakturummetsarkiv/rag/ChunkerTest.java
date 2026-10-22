@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChunkerTest {
 
     private static Chunker chunker(int size, int overlap) {
-        return new Chunker(new RagProperties(20, size, overlap, 8000, "en"));
+        return new Chunker(new RagProperties(20, size, overlap, 8000, "en", 0.3));
     }
 
     @Test

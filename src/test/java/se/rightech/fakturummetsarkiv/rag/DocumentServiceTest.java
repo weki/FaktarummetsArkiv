@@ -60,7 +60,7 @@ class DocumentServiceTest {
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
                 Duration.ofSeconds(10), "query: ", "passage:");
-        RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en");
+        RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
         Chunker chunker = new Chunker(rag);
         ArchiveProperties archive = new ArchiveProperties("", uploadDir.toString());
 
