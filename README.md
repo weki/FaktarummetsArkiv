@@ -60,3 +60,14 @@ all       5         1.00      0.87    0.90
 
 Använd resultatet före och efter en ändring för att avgöra om ändringen förbättrar retrieval,
 t.ex. innan hybrid search eller reranking slås på.
+
+## Hybridsökning
+
+`rag.hybrid.enabled=false` som default. När den slås på kombineras vektorsökning med ett
+Qdrant-fulltextindex (engelsk tokenizer, stoppord och Snowball-stemming) via Reciprocal Rank
+Fusion. Indexet skapas automatiskt första gången en kollektion söks. På exempelfrågorna i E1
+förbättrades MRR från 0.87 till 1.00; utvärdera mot det egna arkivet innan den aktiveras:
+
+```bash
+QDRANT_COLLECTION=Honeywell RAG_HYBRID_ENABLED=true ./gradlew eval
+```

@@ -19,14 +19,16 @@ public class RetrievalService {
     private final QdrantProperties qdrant;
     private final QdrantClient qdrantClient;
     private final SettingsStore settingsStore;
+    private final HybridProperties hybrid;
 
     public RetrievalService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
-                            QdrantClient qdrantClient, SettingsStore settingsStore) {
+                            QdrantClient qdrantClient, SettingsStore settingsStore, HybridProperties hybrid) {
         this.llm = llm;
         this.ollama = ollama;
         this.qdrant = qdrant;
         this.qdrantClient = qdrantClient;
         this.settingsStore = settingsStore;
+        this.hybrid = hybrid;
     }
 
     public List<Map<String, Object>> retrieve(String query, List<String> collections, int topK, Double scoreThreshold) {
@@ -52,31 +54,12 @@ public class RetrievalService {
             qdrantClient.ensureCollection();
         }
 
-        List<Map<String, Object>> sources = new ArrayList<>();
-        for (String collection : targets) {
-            for (QdrantClient.ScoredPoint hit : qdrantClient.search(collection, vector, topK, scoreThreshold,
-                    documentIds)) {
-                Map<String, Object> payload = hit.payload();
-                Map<String, Object> source = new LinkedHashMap<>();
-                Object title = payload.get("title");
-                if (title == null) {
-                    title = payload.get("source");
-                }
-                source.put("title", title == null ? "Källa" : title);
-                source.put("text", payload.getOrDefault("text", ""));
-                source.put("score", hit.score());
-                source.put("collection", collection);
-                copy(payload, source, "documentId");
-                copy(payload, source, "source");
-                copy(payload, source, "page");
-                copy(payload, source, "chunk");
-                copy(payload, source, "chunkIndex");
-                sources.add(source);
-            }
+        List<Map<String, Object>> sources;
+        if (hybrid.enabled()) {
+            sources = hybridSearch(query, vector, targets, topK, scoreThreshold, documentIds);
+        } else {
+            sources = denseSearch(vector, targets, topK, scoreThreshold, documentIds);
         }
-
-        sources.sort(Comparator.comparingDouble((Map<String, Object> source) ->
-                ((Number) source.get("score")).doubleValue()).reversed());
 
         List<Map<String, Object>> deduped = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -90,6 +73,118 @@ public class RetrievalService {
             }
         }
         return deduped;
+    }
+
+    private List<Map<String, Object>> denseSearch(double[] vector, List<String> targets, int topK,
+                                                  Double scoreThreshold, List<String> documentIds) {
+        List<Map<String, Object>> sources = new ArrayList<>();
+        for (String collection : targets) {
+            for (QdrantClient.ScoredPoint hit : qdrantClient.search(collection, vector, topK, scoreThreshold,
+                    documentIds)) {
+                sources.add(toSource(collection, hit.payload(), hit.score()));
+            }
+        }
+        sources.sort(Comparator.comparingDouble((Map<String, Object> source) ->
+                ((Number) source.get("score")).doubleValue()).reversed());
+        return sources;
+    }
+
+    private List<Map<String, Object>> hybridSearch(String query, double[] vector, List<String> targets, int topK,
+                                                   Double scoreThreshold, List<String> documentIds) {
+        int candidates = Math.max(topK * 4, 20);
+        Map<String, FusedHit> fused = new LinkedHashMap<>();
+
+        for (String collection : targets) {
+            qdrantClient.ensureTextIndex(collection);
+            List<QdrantClient.ScoredPoint> dense = qdrantClient.search(collection, vector, candidates,
+                    scoreThreshold, documentIds);
+            for (int i = 0; i < dense.size(); i++) {
+                QdrantClient.ScoredPoint hit = dense.get(i);
+                addFused(fused, hit, collection, 1.0 / (hybrid.rrfK() + i + 1));
+            }
+            List<QdrantClient.ScoredPoint> keyword = qdrantClient.keywordSearch(collection, query,
+                    hybrid.keywordLimit(), documentIds);
+            for (int i = 0; i < keyword.size(); i++) {
+                QdrantClient.ScoredPoint hit = keyword.get(i);
+                addFused(fused, hit, collection, 1.0 / (hybrid.rrfK() + i + 1));
+            }
+        }
+
+        List<FusedHit> ranked = new ArrayList<>(fused.values());
+        ranked.sort(Comparator.comparingDouble(FusedHit::rrf).reversed());
+
+        List<Map<String, Object>> sources = new ArrayList<>();
+        for (FusedHit hit : ranked) {
+            Map<String, Object> source = toSource(hit.collection(), hit.payload(), hit.rawScore());
+            source.put("score", hit.rrf());
+            sources.add(source);
+        }
+        return sources;
+    }
+
+    private static void addFused(Map<String, FusedHit> fused, QdrantClient.ScoredPoint hit,
+                                 String collection, double contribution) {
+        if (hit == null || hit.id() == null) {
+            return;
+        }
+        FusedHit current = fused.get(hit.id());
+        if (current == null) {
+            fused.put(hit.id(), new FusedHit(collection, hit.payload(), hit.score(), contribution));
+        } else {
+            current.add(contribution);
+        }
+    }
+
+    private static Map<String, Object> toSource(String collection, Map<String, Object> payload, double score) {
+        Map<String, Object> source = new LinkedHashMap<>();
+        Object title = payload.get("title");
+        if (title == null) {
+            title = payload.get("source");
+        }
+        source.put("title", title == null ? "Källa" : title);
+        source.put("text", payload.getOrDefault("text", ""));
+        source.put("score", score);
+        source.put("collection", collection);
+        copy(payload, source, "documentId");
+        copy(payload, source, "source");
+        copy(payload, source, "page");
+        copy(payload, source, "chunk");
+        copy(payload, source, "chunkIndex");
+        return source;
+    }
+
+    private static final class FusedHit {
+        private final String collection;
+        private final Map<String, Object> payload;
+        private final double rawScore;
+        private double rrf;
+
+        private FusedHit(String collection, Map<String, Object> payload, double rawScore, double rrf) {
+            this.collection = collection;
+            this.payload = payload;
+            this.rawScore = rawScore;
+            this.rrf = rrf;
+        }
+
+        void add(double contribution) {
+            rrf += contribution;
+        }
+
+        String collection() {
+            return collection;
+        }
+
+        Map<String, Object> payload() {
+            return payload;
+        }
+
+        double rawScore() {
+            return rawScore;
+        }
+
+        double rrf() {
+            return rrf;
+        }
     }
 
     private static void copy(Map<String, Object> payload, Map<String, Object> target, String key) {

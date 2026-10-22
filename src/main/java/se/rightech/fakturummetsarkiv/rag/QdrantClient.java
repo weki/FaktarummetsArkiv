@@ -11,9 +11,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 public class QdrantClient {
@@ -104,6 +108,99 @@ public class QdrantClient {
                 .retrieve()
                 .toBodilessEntity();
         log.info("Skapade Qdrant-kollektionen '{}'", collection);
+    }
+
+    /** Skapar ett fulltextindex med engelsk tokenizer, stoppord och stemming (idempotent). */
+    public void ensureTextIndex(String collection) {
+        if (!collectionExists(collection)) {
+            return;
+        }
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "text");
+        schema.put("tokenizer", "word");
+        schema.put("lowercase", true);
+        schema.put("stopwords", Map.of("languages", List.of("english")));
+        schema.put("stemmer", Map.of("type", "snowball", "language", "english"));
+        restClient.put()
+                .uri("/collections/{collection}/index?wait=true", collection)
+                .body(Map.of("field_name", "text", "field_schema", schema))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /**
+     * Nyckelordssökning via fulltextindexet. Qdrant saknar poängsättning för filter, så
+     * kandidaterna rangordnas lokalt efter antal matchande frågetermer.
+     */
+    public List<ScoredPoint> keywordSearch(String collection, String query, int limit, List<String> documentIds) {
+        List<String> terms = keywordTerms(query);
+        if (terms.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> must = new ArrayList<>();
+        must.add(Map.of("key", "text", "match", Map.of("text", query)));
+        List<String> ids = documentIds == null ? List.of() : documentIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (!ids.isEmpty()) {
+            must.add(Map.of("key", "documentId", "match", Map.of("any", ids)));
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("limit", Math.max(1, limit));
+        body.put("with_payload", true);
+        body.put("with_vector", false);
+        body.put("filter", Map.of("must", must));
+        JsonNode node;
+        try {
+            node = restClient.post()
+                    .uri("/collections/{collection}/points/scroll", collection)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (HttpClientErrorException.NotFound ex) {
+            return List.of();
+        }
+        List<ScoredPoint> hits = new ArrayList<>();
+        if (node == null) {
+            return hits;
+        }
+        JsonNode points = node.at("/result/points");
+        if (points == null || !points.isArray()) {
+            return hits;
+        }
+        for (JsonNode point : points) {
+            JsonNode payload = point.get("payload");
+            Map<String, Object> map = payload == null || payload.isNull() ? Map.of() : toMap(payload);
+            String text = String.valueOf(map.getOrDefault("text", "")).toLowerCase(Locale.ROOT);
+            long matches = terms.stream().filter(text::contains).count();
+            if (matches == 0) {
+                continue;
+            }
+            JsonNode id = point.get("id");
+            hits.add(new ScoredPoint(id == null ? null : id.asString(), matches, map));
+        }
+        hits.sort(Comparator.comparingDouble(ScoredPoint::score).reversed());
+        return hits.size() > limit ? hits.subList(0, limit) : hits;
+    }
+
+    private static final Set<String> STOP_WORDS = Set.of(
+            "the", "and", "for", "with", "that", "this", "from", "are", "was", "were", "will",
+            "do", "does", "did", "is", "to", "of", "in", "on", "a", "an", "what", "which", "how",
+            "och", "att", "det", "som", "för", "med", "den", "har", "hur", "vad", "jag", "kan",
+            "är", "en", "ett", "på", "av", "till", "i");
+
+    static List<String> keywordTerms(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        Set<String> terms = new LinkedHashSet<>();
+        for (String token : query.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+            if (token.length() > 1 && !STOP_WORDS.contains(token)) {
+                terms.add(token);
+            }
+        }
+        return List.copyOf(terms);
     }
 
     public void upsert(List<Point> points) {

@@ -120,6 +120,55 @@ class QdrantClientTest {
     }
 
     @Test
+    void createsEnglishTextIndex() {
+        server.expect(requestTo(BASE + "/collections/docs"))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + "/collections/docs/index?wait=true"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json("""
+                        {"field_name":"text","field_schema":{
+                          "type":"text","tokenizer":"word","lowercase":true,
+                          "stopwords":{"languages":["english"]},
+                          "stemmer":{"type":"snowball","language":"english"}}}
+                        """))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.ensureTextIndex("docs");
+        server.verify();
+    }
+
+    @Test
+    void keywordSearchRanksByMatchedTerms() {
+        server.expect(requestTo(BASE + "/collections/docs/points/scroll"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"limit":10,"with_payload":true,"with_vector":false,
+                         "filter":{"must":[
+                           {"key":"text","match":{"text":"OPC UA server"}},
+                           {"key":"documentId","match":{"any":["d1"]}}]}}
+                        """))
+                .andRespond(withSuccess("""
+                        {"result":{"points":[
+                          {"id":"p1","payload":{"text":"OPC UA overview"}},
+                          {"id":"p2","payload":{"text":"OPC UA server configuration and server steps"}},
+                          {"id":"p3","payload":{"text":"unrelated"}}],
+                          "next_page_offset":null},"status":"ok"}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<QdrantClient.ScoredPoint> hits = client.keywordSearch("docs", "OPC UA server", 10, List.of("d1"));
+
+        assertThat(hits).extracting(QdrantClient.ScoredPoint::id).containsExactly("p2", "p1");
+        assertThat(hits.get(0).score()).isEqualTo(3.0);
+        server.verify();
+    }
+
+    @Test
+    void keywordTermsSkipStopWords() {
+        assertThat(QdrantClient.keywordTerms("How do I plan the OPC UA server?"))
+                .containsExactly("plan", "opc", "ua", "server");
+    }
+
+    @Test
     void listsCollections() {
         server.expect(requestTo(BASE + "/collections"))
                 .andExpect(method(HttpMethod.GET))
