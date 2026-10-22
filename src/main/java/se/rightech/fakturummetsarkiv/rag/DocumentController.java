@@ -1,5 +1,7 @@
 package se.rightech.fakturummetsarkiv.rag;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -33,6 +35,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/documents")
 public class DocumentController {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentController.class);
 
     private final DocumentService documentService;
     private final PdfService pdfService;
@@ -163,6 +167,7 @@ public class DocumentController {
     @ExceptionHandler({RestClientException.class, IllegalStateException.class})
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public Map<String, String> handleUnavailable(RuntimeException ex) {
-        return Map.of("error", ex.getMessage());
+        log.warn("Tjänstefel vid dokumentanrop", ex);
+        return Map.of("error", "Tjänsten är inte tillgänglig just nu");
     }
 }

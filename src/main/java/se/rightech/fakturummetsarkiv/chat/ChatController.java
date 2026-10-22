@@ -1,5 +1,7 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,6 +32,7 @@ import java.util.concurrent.Executors;
 @RequestMapping("/api/chat")
 public class ChatController {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final long STREAM_TIMEOUT_MS = 600_000L;
 
@@ -159,6 +162,7 @@ public class ChatController {
     @ExceptionHandler(RestClientException.class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public Map<String, String> handleUnavailable(RestClientException ex) {
-        return Map.of("error", "Ollama eller Qdrant är inte nåbar", "detail", ex.getMessage());
+        log.warn("Ollama eller Qdrant svarade inte", ex);
+        return Map.of("error", "Ollama eller Qdrant är inte nåbar");
     }
 }
