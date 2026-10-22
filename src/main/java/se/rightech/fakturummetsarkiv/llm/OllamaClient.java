@@ -23,16 +23,23 @@ public class OllamaClient {
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static final String KEEP_ALIVE = "1h";
+    private static final int DEFAULT_NUM_CTX = 16384;
 
     private final RestClient restClient;
+    private final int chatNumCtx;
 
     @Autowired
     public OllamaClient(OllamaProperties properties) {
-        this(createRestClient(properties));
+        this(createRestClient(properties), properties.chatNumCtx());
     }
 
     OllamaClient(RestClient restClient) {
+        this(restClient, DEFAULT_NUM_CTX);
+    }
+
+    OllamaClient(RestClient restClient, int chatNumCtx) {
         this.restClient = restClient;
+        this.chatNumCtx = chatNumCtx > 0 ? chatNumCtx : DEFAULT_NUM_CTX;
     }
 
     private static RestClient createRestClient(OllamaProperties properties) {
@@ -50,6 +57,10 @@ public class OllamaClient {
     }
 
     public String chat(String model, String systemPrompt, String userPrompt, double temperature) {
+        return chat(model, systemPrompt, userPrompt, temperature, chatNumCtx);
+    }
+
+    public String chat(String model, String systemPrompt, String userPrompt, double temperature, int numCtx) {
         List<Map<String, String>> messages = new ArrayList<>();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             messages.add(Map.of("role", "system", "content", systemPrompt));
@@ -60,7 +71,7 @@ public class OllamaClient {
         body.put("model", model);
         body.put("stream", false);
         body.put("messages", messages);
-        body.put("options", Map.of("temperature", temperature));
+        body.put("options", Map.of("temperature", temperature, "num_ctx", numCtx));
         body.put("keep_alive", KEEP_ALIVE);
 
         JsonNode node = restClient.post()
@@ -77,11 +88,16 @@ public class OllamaClient {
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature,
                            Consumer<String> onContent, Consumer<String> onThought) {
+        chatStream(model, messages, temperature, chatNumCtx, onContent, onThought);
+    }
+
+    public void chatStream(String model, List<Map<String, String>> messages, double temperature, int numCtx,
+                           Consumer<String> onContent, Consumer<String> onThought) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("stream", true);
         body.put("messages", messages);
-        body.put("options", Map.of("temperature", temperature));
+        body.put("options", Map.of("temperature", temperature, "num_ctx", numCtx));
         body.put("keep_alive", KEEP_ALIVE);
 
         restClient.post()

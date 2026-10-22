@@ -22,7 +22,7 @@ class QueryRewriterTest {
     private static OllamaProperties props(String rewriteModel) {
         return new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "", rewriteModel);
+                "", rewriteModel, 16384, 4096);
     }
 
     private static List<Map<String, String>> history() {

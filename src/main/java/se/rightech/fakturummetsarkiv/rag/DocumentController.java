@@ -109,13 +109,17 @@ public class DocumentController {
                 .body(new ByteArrayResource(bytes));
     }
 
-    @GetMapping("/pdf")
-    public ResponseEntity<Resource> pdf(@RequestParam("path") String path,
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<Resource> pdf(@PathVariable String id,
                                         @RequestParam(name = "download", defaultValue = "false") boolean download) {
-        Path file = pdfService.resolve(path);
+        DocumentService.DocumentDetail detail = documentService.detail(id);
+        if (detail.path() == null || detail.path().isBlank()) {
+            throw new IllegalArgumentException("Dokumentet har ingen PDF-fil");
+        }
+        Path file = pdfService.resolve(detail.path());
         Resource resource = new FileSystemResource(file);
         ContentDisposition disposition = ContentDisposition.builder(download ? "attachment" : "inline")
-                .filename(file.getFileName().toString(), StandardCharsets.UTF_8)
+                .filename(detail.name(), StandardCharsets.UTF_8)
                 .build();
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)

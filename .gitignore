@@ -8,6 +8,10 @@ build/
 ### Application runtime data ###
 archive/
 
+### Lokal konfiguration (IP-adresser, hemligheter) ###
+application-local.properties
+**/application-local.properties
+
 ### STS ###
 .apt_generated
 .classpath

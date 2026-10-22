@@ -6,7 +6,9 @@ import se.rightech.fakturummetsarkiv.rag.QdrantProperties;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class SettingsStore {
@@ -108,6 +110,23 @@ public class SettingsStore {
         Integer history = settings.historySize();
         if (history != null && (history < 0 || history > 100)) {
             throw new IllegalArgumentException("historySize måste vara mellan 0 och 100");
+        }
+        Set<String> models = new LinkedHashSet<>();
+        addModel(models, settings.chatModel());
+        addModel(models, settings.validatorModel());
+        addModel(models, settings.embeddingModel());
+        addModel(models, settings.refineModel());
+        addModel(models, settings.gateModel());
+        addModel(models, settings.rewriteModel());
+        if (models.size() > 3) {
+            throw new IllegalArgumentException(
+                    "Max 3 olika modeller får användas samtidigt (valda: " + String.join(", ", models) + ")");
+        }
+    }
+
+    private static void addModel(Set<String> models, String model) {
+        if (model != null && !model.isBlank()) {
+            models.add(model.trim());
         }
     }
 }

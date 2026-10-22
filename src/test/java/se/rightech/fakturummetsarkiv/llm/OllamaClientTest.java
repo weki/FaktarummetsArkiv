@@ -23,7 +23,7 @@ class OllamaClientTest {
 
     private final OllamaProperties properties = new OllamaProperties(
             BASE, "gemma4:latest", "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true,
-            "gemma4:latest", "", "");
+            "gemma4:latest", "", "", 16384, 4096);
     private final RestClient.Builder restClientBuilder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
     private final OllamaClient client = new OllamaClient(restClientBuilder.baseUrl(BASE).build());
@@ -33,7 +33,7 @@ class OllamaClientTest {
         server.expect(requestTo(BASE + "/api/chat"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("""
-                        {"model":"phi3.5:latest","stream":false,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hej"}],"options":{"temperature":0.0}}
+                        {"model":"phi3.5:latest","stream":false,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384}}
                         """))
                 .andRespond(withSuccess("""
                         {"model":"phi3.5:latest","message":{"role":"assistant","content":"svar"},"done":true}

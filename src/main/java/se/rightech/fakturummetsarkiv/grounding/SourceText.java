@@ -20,7 +20,7 @@ public final class SourceText {
             }
             String title = str(source.get("title"));
             String text = str(source.get("text"));
-            String block = "--- " + title + " ---\n" + text + "\n\n";
+            String block = "<<<SOURCE: " + title + ">>>\n" + text + "\n<<<END SOURCE>>>\n\n";
             if (block.length() > budget) {
                 sb.append(block, 0, budget);
                 budget = 0;

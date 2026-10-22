@@ -1,5 +1,6 @@
 package se.rightech.fakturummetsarkiv.rag;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -54,14 +55,14 @@ public class DocumentService {
         this.settingsStore = settingsStore;
     }
 
-    public record DocumentInfo(String id, String name, int chunks, int characters, String path,
+    public record DocumentInfo(String id, String name, int chunks, int characters, @JsonIgnore String path,
                                String collection, List<String> tags, Instant createdAt, boolean skipped) {
     }
 
     public record DocumentChunk(Integer page, Integer chunkIndex, String text) {
     }
 
-    public record DocumentDetail(String id, String name, String path, String collection, List<String> tags,
+    public record DocumentDetail(String id, String name, @JsonIgnore String path, String collection, List<String> tags,
                                  int chunks, int characters, List<DocumentChunk> content) {
     }
 
@@ -78,9 +79,11 @@ public class DocumentService {
         String target = resolveCollection(collection);
         List<String> cleanTags = cleanTags(tags);
 
+        validateContent(title, bytes);
+
         for (DocumentInfo existing : list()) {
             if (existing.name() != null && existing.name().trim().equalsIgnoreCase(title)) {
-                log.info("Dokumentet '{}' finns redan i arkivet – hoppar över uppladdning", title);
+                log.info("Dokumentet {} finns redan i arkivet – hoppar över uppladdning", existing.id());
                 return new DocumentInfo(existing.id(), title, existing.chunks(), existing.characters(),
                         existing.path(), existing.collection() != null ? existing.collection() : target,
                         existing.tags() != null && !existing.tags().isEmpty() ? existing.tags() : cleanTags,
@@ -185,7 +188,7 @@ public class DocumentService {
             throw e;
         }
 
-        log.info("Indexerade '{}' ({} textstycken) i kollektionen '{}'", title, chunks.size(), collection);
+        log.info("Indexerade dokument {} ({} textstycken) i kollektionen '{}'", documentId, chunks.size(), collection);
         return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
                 Instant.ofEpochMilli(createdAt), false);
     }
@@ -395,5 +398,52 @@ public class DocumentService {
 
     private static boolean isPdf(String filename) {
         return filename != null && filename.toLowerCase().endsWith(".pdf");
+    }
+
+    private static final List<String> TEXT_EXTENSIONS =
+            List.of(".txt", ".md", ".csv", ".json", ".log", ".xml");
+
+    private static void validateContent(String filename, byte[] bytes) {
+        if (isPdf(filename)) {
+            if (!looksLikePdf(bytes)) {
+                throw new IllegalArgumentException("Filen har .pdf-ändelse men innehållet är inte en PDF");
+            }
+            return;
+        }
+        String lower = filename == null ? "" : filename.toLowerCase();
+        if (TEXT_EXTENSIONS.stream().noneMatch(lower::endsWith)) {
+            throw new IllegalArgumentException("Filtypen stöds inte. Tillåtna: PDF, TXT, MD, CSV, JSON, LOG, XML");
+        }
+        if (looksBinary(bytes)) {
+            throw new IllegalArgumentException("Filen verkar vara binär och kan inte läsas som text");
+        }
+    }
+
+    private static boolean looksLikePdf(byte[] bytes) {
+        byte[] magic = {'%', 'P', 'D', 'F', '-'};
+        int limit = Math.min(bytes.length - magic.length, 1024);
+        for (int i = 0; i <= limit; i++) {
+            boolean match = true;
+            for (int j = 0; j < magic.length; j++) {
+                if (bytes[i + j] != magic[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean looksBinary(byte[] bytes) {
+        int limit = Math.min(bytes.length, 8192);
+        for (int i = 0; i < limit; i++) {
+            if (bytes[i] == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 }

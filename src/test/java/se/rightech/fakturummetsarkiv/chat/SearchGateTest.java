@@ -18,7 +18,7 @@ class SearchGateTest {
     private static OllamaProperties props(String gateModel) {
         return new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                gateModel, "");
+                gateModel, "", 16384, 4096);
     }
 
     @Test

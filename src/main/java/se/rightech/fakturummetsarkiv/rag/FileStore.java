@@ -36,6 +36,15 @@ public class FileStore {
         if (slash >= 0) {
             name = name.substring(slash + 1);
         }
-        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
+        name = name.replaceAll("[^a-zA-Z0-9._-]", "_").replaceAll("^\\.+", "");
+        if (name.isBlank() || name.equals(".") || name.equals("..")) {
+            name = "dokument";
+        }
+        if (name.length() > 120) {
+            int dot = name.lastIndexOf('.');
+            String extension = dot > 0 && name.length() - dot <= 10 ? name.substring(dot) : "";
+            name = name.substring(0, Math.min(dot > 0 ? dot : 120, 120 - extension.length())) + extension;
+        }
+        return name;
     }
 }

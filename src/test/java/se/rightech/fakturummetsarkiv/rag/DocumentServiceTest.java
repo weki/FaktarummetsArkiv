@@ -16,12 +16,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +56,7 @@ class DocumentServiceTest {
     void setUp() {
         OllamaProperties ollama = new OllamaProperties(
                 "http://localhost:11434", "chat", "embed-model", Duration.ofSeconds(30),
-                "validator", false, "", "", "");
+                "validator", false, "", "", "", 16384, 4096);
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
                 Duration.ofSeconds(10), "query: ", "passage:");
@@ -249,6 +251,18 @@ class DocumentServiceTest {
         return captor.getValue().stream()
                 .map(QdrantClient.Point::payload)
                 .toList();
+    }
+
+    @Test
+    void doesNotSerializeServerPaths() throws Exception {
+        JsonMapper json = JsonMapper.builder().build();
+        String info = json.writeValueAsString(new DocumentService.DocumentInfo(
+                "id", "a.pdf", 1, 10, "/srv/hemligt/a.pdf", "docs", List.of(), Instant.now(), false));
+        String detail = json.writeValueAsString(new DocumentService.DocumentDetail(
+                "id", "a.pdf", "/srv/hemligt/a.pdf", "docs", List.of(), 1, 10, List.of()));
+
+        assertThat(info).doesNotContain("/srv/hemligt");
+        assertThat(detail).doesNotContain("/srv/hemligt");
     }
 
     private static byte[] twoPagePdf() throws IOException {

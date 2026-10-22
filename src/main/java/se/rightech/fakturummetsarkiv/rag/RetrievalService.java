@@ -74,7 +74,6 @@ public class RetrievalService {
                 source.put("collection", collection);
                 copy(payload, source, "documentId");
                 copy(payload, source, "source");
-                copy(payload, source, "path");
                 copy(payload, source, "page");
                 copy(payload, source, "chunk");
                 copy(payload, source, "chunkIndex");

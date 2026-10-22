@@ -18,7 +18,7 @@ class SettingsStoreTest {
                 Duration.ofSeconds(5), "query: ", "passage:");
         OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "phi3.5:latest", "");
+                "phi3.5:latest", "", 16384, 4096);
         RagProperties rag = new RagProperties(20, 1200, 200, 8000);
         return new SettingsStore(qdrant, ollama, rag);
     }
@@ -53,6 +53,17 @@ class SettingsStoreTest {
         assertThat(updated.validatorModel()).isEqualTo("phi3.5:latest");
         assertThat(updated.collections()).containsExactly("docs", "manuals");
         assertThat(store.get().topN()).isEqualTo(12);
+    }
+
+    @Test
+    void rejectsMoreThanThreeDistinctModels() {
+        SettingsStore store = store();
+
+        assertThatThrownBy(() -> store.update(new WorkspaceSettings(
+                "chat", "model-a", "model-b", true, true, true, List.of("docs"), null, 5, 0.0, 20, null,
+                "model-c", "model-d", null, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Max 3");
     }
 
     @Test

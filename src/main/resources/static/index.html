@@ -1016,7 +1016,7 @@
                     <select name="rewriteModel"></select>
                 </label>
             </div>
-            <p class="tab-hint">Embedding-modellen måste matcha vektordatabasens dimension (qdrant.vector-size).</p>
+            <p class="tab-hint">Max 3 olika modeller samtidigt. Embedding-modellen måste matcha vektordatabasens dimension (qdrant.vector-size).</p>
             <label class="settings-check">
                 <input type="checkbox" name="validateGrounding">
                 Validera svar mot källorna med domarmodellen
@@ -1387,7 +1387,6 @@
             const ref = {
                 title: title,
                 meta: bits.join(' · '),
-                path: source.path,
                 documentId: source.documentId,
                 text: source.text || source.content || ''
             };
@@ -1992,18 +1991,12 @@
             date.toLocaleTimeString('sv-SE', {hour: '2-digit', minute: '2-digit'});
     }
 
-    function isPdfPath(path) {
-        return typeof path === 'string' && path.toLowerCase().endsWith('.pdf');
-    }
-
     function docPdfUrl(ref) {
-        return ref.path && isPdfPath(ref.path) ? DOC_API + '/pdf?path=' + encodeURIComponent(ref.path) : null;
+        return ref.documentId ? DOC_API + '/' + encodeURIComponent(ref.documentId) + '/pdf' : null;
     }
 
     function docDownloadUrl(ref) {
-        if (ref.documentId) return DOC_API + '/' + encodeURIComponent(ref.documentId) + '/download';
-        const pdf = docPdfUrl(ref);
-        return pdf ? pdf + '&download=true' : null;
+        return ref.documentId ? DOC_API + '/' + encodeURIComponent(ref.documentId) + '/download' : null;
     }
 
     function documentMeta(doc) {
@@ -2074,7 +2067,7 @@
         docModalText.classList.add('hidden');
         docModalText.innerHTML = '';
 
-        if (ref.documentId && ref.path === undefined) {
+        if (ref.documentId && !ref.text) {
             setDocModalMeta('Laddar...');
             try {
                 const res = await fetch(DOC_API + '/' + encodeURIComponent(ref.documentId));
@@ -2083,7 +2076,6 @@
                 ref = Object.assign({}, ref, {
                     title: ref.title || doc.name,
                     meta: ref.meta || documentMeta(doc),
-                    path: doc.path,
                     text: ref.text || doc.content || null
                 });
             } catch (error) {
