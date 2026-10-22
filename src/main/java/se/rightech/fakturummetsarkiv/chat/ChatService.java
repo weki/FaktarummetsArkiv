@@ -68,7 +68,7 @@ public StreamResult streamChat(String question, String sessionId,
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
         SearchGate.Decision gate = smart
-                ? searchGate.decide(question, settings.gateModel())
+                ? searchGate.decide(question, history, settings.gateModel())
                 : new SearchGate.Decision(true, question);
         boolean search = gate.search();
 

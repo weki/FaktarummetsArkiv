@@ -5,6 +5,7 @@ import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -37,7 +38,47 @@ class SearchGateTest {
 
     @Test
     void defaultsToSearchWhenGateDisabled() {
-        assertThat(new SearchGate(client, props("")).needsSearch("Hej")).isTrue();
+        assertThat(new SearchGate(client, props("")).needsSearch("vad är OPC UA?")).isTrue();
+    }
+
+    @Test
+    void skipsSmallTalkWithoutCallingModel() {
+        SearchGate gate = new SearchGate(client, props("phi3.5:latest"));
+
+        assertThat(gate.needsSearch("tack")).isFalse();
+        assertThat(gate.needsSearch("Hej, hur mår du?")).isFalse();
+        org.mockito.Mockito.verifyNoInteractions(client);
+    }
+
+    @Test
+    void searchesShortFollowUpEvenWhenModelSaysDirect() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("DIRECT");
+        SearchGate gate = new SearchGate(client, props("phi3.5:latest"));
+
+        SearchGate.Decision decision = gate.decide("och då?", List.of(), "phi3.5:latest");
+
+        assertThat(decision.search()).isTrue();
+        assertThat(decision.query()).isEqualTo("och då?");
+    }
+
+    @Test
+    void passesRecentHistoryToGate() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("OPC UA next steps");
+        SearchGate gate = new SearchGate(client, props("phi3.5:latest"));
+
+        gate.decide("och då?", List.of(
+                java.util.Map.of("role", "user", "content", "vad är OPC UA?"),
+                java.util.Map.of("role", "assistant", "content", "OPC UA is a protocol.")),
+                "phi3.5:latest");
+
+        org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(client).chat(
+                org.mockito.ArgumentMatchers.eq("phi3.5:latest"),
+                anyString(), prompt.capture());
+        assertThat(prompt.getValue())
+                .contains("RECENT CONVERSATION")
+                .contains("vad är OPC UA?")
+                .contains("och då?");
     }
 
     @Test
