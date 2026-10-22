@@ -18,8 +18,8 @@ public final class SourceText {
             if (budget <= 0) {
                 break;
             }
-            String title = str(source.get("title"));
-            String text = str(source.get("text"));
+            String title = sanitize(source.get("title"));
+            String text = sanitize(source.get("text"));
             String block = "<<<SOURCE: " + title + ">>>\n" + text + "\n<<<END SOURCE>>>\n\n";
             if (block.length() > budget) {
                 sb.append(block, 0, budget);
@@ -30,6 +30,11 @@ public final class SourceText {
             }
         }
         return sb.toString();
+    }
+
+    /** Tar bort sekvenser som kan imitera källblockens avgränsare. */
+    public static String sanitize(Object value) {
+        return str(value).replace("<<<", "< < <").replace(">>>", "> > >");
     }
 
     private static String str(Object value) {

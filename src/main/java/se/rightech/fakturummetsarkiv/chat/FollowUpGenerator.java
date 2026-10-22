@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.grounding.SourceText;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -152,13 +153,13 @@ public class FollowUpGenerator {
                 break;
             }
             StringBuilder header = new StringBuilder("<<<SOURCE: ")
-                    .append(str(source.get("title"), "Källa"));
+                    .append(SourceText.sanitize(str(source.get("title"), "Källa")));
             Object page = source.get("page");
             if (page != null) {
                 header.append(", page ").append(page);
             }
             header.append(">>>\n");
-            String block = header + str(source.get("text"), "") + "\n<<<END SOURCE>>>\n\n";
+            String block = header + SourceText.sanitize(source.get("text")) + "\n<<<END SOURCE>>>\n\n";
             if (block.length() > budget) {
                 sb.append(block, 0, budget);
                 budget = 0;

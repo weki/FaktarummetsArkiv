@@ -3,6 +3,7 @@ package se.rightech.fakturummetsarkiv.chat;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.grounding.SourceText;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
 import se.rightech.fakturummetsarkiv.rag.RetrievalService;
 
@@ -179,8 +180,8 @@ public StreamResult streamChat(String question, String sessionId,
             if (budget <= 0) {
                 break;
             }
-            String title = str(source.get("title"));
-            String text = str(source.get("text"));
+            String title = SourceText.sanitize(source.get("title"));
+            String text = SourceText.sanitize(source.get("text"));
             String block = "<<<SOURCE: " + title + ">>>\n" + text + "\n<<<END SOURCE>>>\n\n";
             if (block.length() > budget) {
                 sb.append(block, 0, budget);
