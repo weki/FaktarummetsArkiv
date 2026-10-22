@@ -25,7 +25,7 @@ class PdfServiceTest {
 
         Path resolved = service(root.toString()).resolve(pdf.toString());
 
-        assertThat(resolved).isEqualTo(pdf.toAbsolutePath().normalize());
+        assertThat(resolved).isEqualTo(pdf.toRealPath());
     }
 
     @Test
@@ -36,7 +36,7 @@ class PdfServiceTest {
 
         Path resolved = service("").resolve(pdf.toString());
 
-        assertThat(resolved).isEqualTo(pdf.toAbsolutePath().normalize());
+        assertThat(resolved).isEqualTo(pdf.toRealPath());
     }
 
     @Test
@@ -61,6 +61,22 @@ class PdfServiceTest {
 
         assertThatThrownBy(() -> service("").resolve(pdf.toString()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsSymlinkPointingOutsideRoot() throws IOException {
+        Path outside = Files.writeString(root.resolveSibling("outside-link-target.pdf"), "%PDF-1.4");
+        Path link = root.resolve("link.pdf");
+        Files.createSymbolicLink(link, outside);
+
+        assertThatThrownBy(() -> service(root.toString()).resolve(link.toString()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsRootDirectoryAsArchiveRoot() {
+        assertThatThrownBy(() -> new PdfService(new ArchiveProperties("/", root.resolve(".uploads").toString())))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

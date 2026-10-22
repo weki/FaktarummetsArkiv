@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.rag;
 
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -14,6 +15,11 @@ public class PdfService {
 
     public PdfService(ArchiveProperties properties) {
         this.properties = properties;
+        for (Path root : properties.allowedRoots()) {
+            if (root.toString().isBlank() || root.getParent() == null) {
+                throw new IllegalStateException("Ogiltig arkivrot: " + root + " (får inte vara / eller tom)");
+            }
+        }
     }
 
     /** Löser en sökväg som måste ligga inom de tillåtna arkivmapparna och existera. */
@@ -21,21 +27,33 @@ public class PdfService {
         if (rawPath == null || rawPath.isBlank()) {
             throw new IllegalArgumentException("Ingen filsökväg angiven");
         }
-        Path path;
+        Path candidate;
         try {
-            path = Path.of(rawPath).toAbsolutePath().normalize();
+            candidate = Path.of(rawPath).toAbsolutePath().normalize();
         } catch (InvalidPathException ex) {
-            throw new IllegalArgumentException("Ogiltig filsökväg");
-        }
-        List<Path> roots = properties.allowedRoots();
-        boolean allowed = roots.stream().anyMatch(path::startsWith);
-        if (!allowed) {
-            throw new IllegalArgumentException("Filen ligger utanför de tillåtna arkivmapparna");
-        }
-        if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("Filen finns inte");
         }
-        return path;
+        Path real;
+        try {
+            real = candidate.toRealPath();
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("Filen finns inte");
+        }
+        boolean allowed = false;
+        for (Path root : properties.allowedRoots()) {
+            try {
+                if (real.startsWith(root.toRealPath())) {
+                    allowed = true;
+                    break;
+                }
+            } catch (IOException ignored) {
+                // Roten finns inte (t.ex. uppladdningsmappen före första uppladdningen)
+            }
+        }
+        if (!allowed || !Files.isRegularFile(real)) {
+            throw new IllegalArgumentException("Filen finns inte");
+        }
+        return real;
     }
 
     public Path resolve(String rawPath) {
