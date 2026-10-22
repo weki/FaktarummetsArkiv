@@ -1,5 +1,6 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -35,10 +36,16 @@ class ChatServiceTest {
 
     private final OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
             "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "phi3.5:latest", "", 16384, 4096);
-    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000);
+    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en");
 
     private final ChatService service = new ChatService(llm, ollama, rag, retrievalService,
             searchGate, queryRewriter, settingsStore, sessionMemory);
+
+    @BeforeEach
+    void defaultRewriteKeepsTheQuestion() {
+        when(queryRewriter.rewrite(anyString(), any(), anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @SuppressWarnings("unchecked")
     private void respondWith(String... tokens) {
@@ -57,7 +64,7 @@ class ChatServiceTest {
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
                 .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
-        when(searchGate.decide(anyString(), any(), any())).thenReturn(new SearchGate.Decision(true, "q"));
+        when(searchGate.decide(anyString(), any(), any(), any())).thenReturn(new SearchGate.Decision(true, "q"));
         respondWith("<" + "think>fundera<" + "/think>Hej", "!");
 
         List<Map<String, Object>> sources = new ArrayList<>();
@@ -119,7 +126,7 @@ class ChatServiceTest {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
         sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
-        when(queryRewriter.rewrite(anyString(), any(), anyString())).thenReturn("Hur aktiverar jag OPC UA på en server?");
+        when(queryRewriter.rewrite(anyString(), any(), anyString(), anyString())).thenReturn("Hur aktiverar jag OPC UA på en server?");
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
@@ -144,7 +151,7 @@ class ChatServiceTest {
         }, null, token -> {
         }, null);
 
-        verify(queryRewriter, never()).rewrite(anyString(), any(), anyString());
+        verify(queryRewriter, never()).rewrite(anyString(), any(), anyString(), anyString());
         verify(retrievalService).retrieve("hur aktiverar jag det?", List.of("docs"), 5, null, null);
     }
 
@@ -152,7 +159,7 @@ class ChatServiceTest {
     void answersDirectlyWithoutSearchWhenGateSaysSo() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
-        when(searchGate.decide(eq("hej"), any(), any())).thenReturn(new SearchGate.Decision(false, "hej"));
+        when(searchGate.decide(eq("hej"), any(), any(), any())).thenReturn(new SearchGate.Decision(false, "hej"));
         when(searchGate.needsSearch("hej")).thenReturn(false);
         respondWith("Hej");
 

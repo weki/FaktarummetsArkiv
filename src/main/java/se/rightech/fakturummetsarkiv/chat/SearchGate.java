@@ -34,7 +34,8 @@ public class SearchGate {
             Decide if the user's message needs a document search.
             - Reply DIRECT only for clear small talk: greetings, thanks, goodbye or similar social phrases.
             - For EVERYTHING else, including short follow-ups like "and then?" or "vad menar du?", reply with a
-              concise English search query (3-12 keywords) optimized for semantic retrieval in the archive.
+              concise search query (3-12 keywords) optimized for semantic retrieval in the archive.
+            - Write the search query in the SEARCH LANGUAGE specified below, regardless of the message language.
             - Use the RECENT CONVERSATION to turn follow-ups into a self-contained search query.
 
             Examples:
@@ -72,6 +73,11 @@ public class SearchGate {
     }
 
     public Decision decide(String question, List<Map<String, String>> history, String gateModel) {
+        return decide(question, history, gateModel, "en");
+    }
+
+    public Decision decide(String question, List<Map<String, String>> history, String gateModel,
+                           String searchLanguage) {
         if (question == null || question.isBlank()) {
             return new Decision(true, question);
         }
@@ -82,7 +88,8 @@ public class SearchGate {
             return new Decision(true, question);
         }
         try {
-            String raw = client.chat(gateModel, SYSTEM_PROMPT, buildPrompt(question, history)).trim();
+            String raw = client.chat(gateModel, SYSTEM_PROMPT,
+                    buildPrompt(question, history, searchLanguage)).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");
                 return new Decision(true, question);
@@ -118,8 +125,11 @@ public class SearchGate {
         return SMALL_TALK.contains(normalized);
     }
 
-    private static String buildPrompt(String question, List<Map<String, String>> history) {
+    private static String buildPrompt(String question, List<Map<String, String>> history,
+                                      String searchLanguage) {
         StringBuilder sb = new StringBuilder();
+        sb.append("SEARCH LANGUAGE: ").append(searchLanguage == null || searchLanguage.isBlank()
+                ? "en" : searchLanguage).append("\n\n");
         if (history != null && !history.isEmpty()) {
             sb.append("RECENT CONVERSATION:\n");
             int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);

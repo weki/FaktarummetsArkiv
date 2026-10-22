@@ -77,8 +77,23 @@ class SearchGateTest {
                 anyString(), prompt.capture());
         assertThat(prompt.getValue())
                 .contains("RECENT CONVERSATION")
+                .contains("SEARCH LANGUAGE: en")
                 .contains("vad är OPC UA?")
                 .contains("och då?");
+    }
+
+    @Test
+    void usesConfiguredSearchLanguageForTheQuery() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("OPC UA översikt");
+        SearchGate gate = new SearchGate(client, props("phi3.5:latest"));
+
+        gate.decide("vad är OPC UA?", List.of(), "phi3.5:latest", "sv");
+
+        org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(client).chat(
+                org.mockito.ArgumentMatchers.eq("phi3.5:latest"),
+                anyString(), prompt.capture());
+        assertThat(prompt.getValue()).contains("SEARCH LANGUAGE: sv");
     }
 
     @Test

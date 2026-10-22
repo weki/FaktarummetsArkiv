@@ -11,7 +11,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,10 +40,17 @@ class QueryRewriterTest {
     }
 
     @Test
-    void skipsLlmWhenNoHistory() {
-        String result = new QueryRewriter(client, props("")).rewrite("hej", List.of(), "gemma4:latest");
-        assertThat(result).isEqualTo("hej");
-        verify(client, never()).chat(anyString(), anyString(), anyString());
+    void rewritesWithoutHistoryToTheSearchLanguage() {
+        when(client.chat(anyString(), anyString(), anyString())).thenReturn("OPC UA overview");
+        String result = new QueryRewriter(client, props("")).rewrite(
+                "vad är OPC UA?", List.of(), "gemma4:latest", "en");
+        assertThat(result).isEqualTo("OPC UA overview");
+
+        org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(client).chat(anyString(), anyString(), prompt.capture());
+        assertThat(prompt.getValue())
+                .contains("SEARCH LANGUAGE: en")
+                .contains("vad är OPC UA?");
     }
 
     @Test

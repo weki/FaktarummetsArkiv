@@ -68,7 +68,7 @@ public StreamResult streamChat(String question, String sessionId,
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
         SearchGate.Decision gate = smart
-                ? searchGate.decide(question, history, settings.gateModel())
+                ? searchGate.decide(question, history, settings.gateModel(), rag.searchLanguage())
                 : new SearchGate.Decision(true, question);
         boolean search = gate.search();
 
@@ -76,12 +76,11 @@ public StreamResult streamChat(String question, String sessionId,
         String systemPrompt;
         String searchQuery = gate.query();
         if (search) {
-            if (!history.isEmpty()
-                    && (settings.rewriteQuery() == null || settings.rewriteQuery())
+            if ((settings.rewriteQuery() == null || settings.rewriteQuery())
                     && searchQuery.equalsIgnoreCase(question.trim())) {
                 String rewriteModel = settings.rewriteModel() != null && !settings.rewriteModel().isBlank()
                         ? settings.rewriteModel() : model;
-                searchQuery = queryRewriter.rewrite(question, history, rewriteModel);
+                searchQuery = queryRewriter.rewrite(question, history, rewriteModel, rag.searchLanguage());
             }
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(true, searchQuery));

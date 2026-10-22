@@ -22,7 +22,7 @@ public class QueryRewriter {
             terms) that are implied by the conversation, for example by resolving pronouns like "it",
             "that" or "det" to the thing they refer to.
             Keep technical terms, product names and abbreviations unchanged.
-            Preserve the language of the latest message.
+            Write the query in the SEARCH LANGUAGE specified below, regardless of the conversation language.
             Reply with ONLY the rewritten query: no explanations, no quotes, no bullet points, no numbering.
             If the latest message is already self-contained, return it unchanged.
             """;
@@ -36,15 +36,22 @@ public class QueryRewriter {
     }
 
     public String rewrite(String question, List<Map<String, String>> history, String chatModel) {
-        if (question == null || question.isBlank() || history == null || history.isEmpty()) {
+        return rewrite(question, history, chatModel, "en");
+    }
+
+    public String rewrite(String question, List<Map<String, String>> history, String chatModel,
+                          String searchLanguage) {
+        if (question == null || question.isBlank()) {
             return question;
         }
+        List<Map<String, String>> safeHistory = history == null ? List.of() : history;
         String model = pickModel(chatModel);
         if (model.isBlank()) {
             return question;
         }
         try {
-            String raw = client.chat(model, SYSTEM_PROMPT, buildPrompt(history, question));
+            String raw = client.chat(model, SYSTEM_PROMPT,
+                    buildPrompt(safeHistory, question, searchLanguage));
             String cleaned = clean(raw);
             if (cleaned.isEmpty() || cleaned.equalsIgnoreCase(question.trim())) {
                 return question;
@@ -67,6 +74,10 @@ public class QueryRewriter {
     }
 
     static String buildPrompt(List<Map<String, String>> history, String question) {
+        return buildPrompt(history, question, "en");
+    }
+
+    static String buildPrompt(List<Map<String, String>> history, String question, String searchLanguage) {
         StringBuilder transcript = new StringBuilder();
         for (Map<String, String> message : history) {
             String role = "assistant".equals(message.get("role")) ? "assistant" : "user";
@@ -77,7 +88,9 @@ public class QueryRewriter {
         if (text.length() > MAX_HISTORY_CHARS) {
             text = text.substring(text.length() - MAX_HISTORY_CHARS);
         }
-        return "CONVERSATION HISTORY:\n" + text
+        return "SEARCH LANGUAGE: " + (searchLanguage == null || searchLanguage.isBlank()
+                ? "en" : searchLanguage)
+                + "\n\nCONVERSATION HISTORY:\n" + text
                 + "\nLATEST USER MESSAGE:\n" + question
                 + "\n\nSTANDALONE SEARCH QUERY:\n";
     }
