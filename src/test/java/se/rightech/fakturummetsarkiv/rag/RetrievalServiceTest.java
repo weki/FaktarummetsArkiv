@@ -25,6 +25,7 @@ class RetrievalServiceTest {
     private final OllamaClient llm = mock(OllamaClient.class);
     private final QdrantClient qdrantClient = mock(QdrantClient.class);
     private final SettingsStore settingsStore = mock(SettingsStore.class);
+    private final Reranker reranker = mock(Reranker.class);
 
     private static final OllamaProperties OLLAMA = new OllamaProperties(
             "http://localhost:11434", "qwen3:8b", "qllama/multilingual-e5-large",
@@ -34,12 +35,17 @@ class RetrievalServiceTest {
             Duration.ofSeconds(5), "query: ", "passage: ");
 
     private RetrievalService service(boolean hybridEnabled) {
+        return service(hybridEnabled, false);
+    }
+
+    private RetrievalService service(boolean hybridEnabled, boolean rerankEnabled) {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "qwen3:8b", "qwen3:8b", true, true, true,
                 List.of("docs"), 0.3, 5, 0.0, 20, null));
         when(llm.embedOne(anyString(), anyString())).thenReturn(new double[]{0.1, 0.2});
         return new RetrievalService(llm, OLLAMA, QDRANT, qdrantClient, settingsStore,
-                new HybridProperties(hybridEnabled, 50, 60));
+                new HybridProperties(hybridEnabled, 50, 60), reranker,
+                new RerankProperties(rerankEnabled, 25, "", 600));
     }
 
     private static QdrantClient.ScoredPoint hit(String id, double score, String text) {
@@ -62,6 +68,25 @@ class RetrievalServiceTest {
         assertThat(sources).extracting(source -> source.get("title"))
                 .containsExactly("doc-b", "doc-a", "doc-c");
         verify(qdrantClient).ensureTextIndex("docs");
+    }
+
+    @Test
+    void reranksCandidatesBeforeApplyingTopK() {
+        RetrievalService service = service(false, true);
+        List<Map<String, Object>> candidates = List.of(
+                source("a", "alpha"), source("b", "beta"), source("c", "gamma"));
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(hit("a", 0.9, "alpha"), hit("b", 0.8, "beta"), hit("c", 0.7, "gamma")));
+        when(reranker.rerank(eq("beta"), any(), eq(2))).thenReturn(List.of(candidates.get(1), candidates.get(2)));
+
+        List<Map<String, Object>> sources = service.retrieve("beta", List.of("docs"), 2, 0.3, null);
+
+        assertThat(sources).extracting(source -> source.get("title"))
+                .containsExactly("doc-b", "doc-c");
+    }
+
+    private static Map<String, Object> source(String id, String text) {
+        return Map.of("title", "doc-" + id, "text", text);
     }
 
     @Test

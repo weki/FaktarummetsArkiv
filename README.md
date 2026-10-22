@@ -71,3 +71,14 @@ förbättrades MRR från 0.87 till 1.00; utvärdera mot det egna arkivet innan d
 ```bash
 QDRANT_COLLECTION=Honeywell RAG_HYBRID_ENABLED=true ./gradlew eval
 ```
+
+## Reranking
+
+`rag.rerank.enabled=false` som default. När den slås på hämtas `rag.rerank.candidates`
+(25) kandidater och en LLM-bedömning via Ollama rangordnar dem innan `topN` returneras.
+`rag.rerank.model` tom betyder att `ollama.model` används, så ingen fjärde modell laddas.
+På exempelfrågorna i E1 förbättrades MRR från 0.87 till 1.00:
+
+```bash
+QDRANT_COLLECTION=Honeywell RAG_RERANK_ENABLED=true ./gradlew eval
+```

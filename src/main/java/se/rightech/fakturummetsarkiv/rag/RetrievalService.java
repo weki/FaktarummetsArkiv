@@ -20,15 +20,20 @@ public class RetrievalService {
     private final QdrantClient qdrantClient;
     private final SettingsStore settingsStore;
     private final HybridProperties hybrid;
+    private final Reranker reranker;
+    private final RerankProperties rerank;
 
     public RetrievalService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
-                            QdrantClient qdrantClient, SettingsStore settingsStore, HybridProperties hybrid) {
+                            QdrantClient qdrantClient, SettingsStore settingsStore, HybridProperties hybrid,
+                            Reranker reranker, RerankProperties rerank) {
         this.llm = llm;
         this.ollama = ollama;
         this.qdrant = qdrant;
         this.qdrantClient = qdrantClient;
         this.settingsStore = settingsStore;
         this.hybrid = hybrid;
+        this.reranker = reranker;
+        this.rerank = rerank;
     }
 
     public List<Map<String, Object>> retrieve(String query, List<String> collections, int topK, Double scoreThreshold) {
@@ -67,12 +72,18 @@ public class RetrievalService {
             String key = dedupKey(source);
             if (seen.add(key)) {
                 deduped.add(source);
-                if (deduped.size() >= topK) {
-                    break;
-                }
             }
         }
-        return deduped;
+        if (rerank.enabled() && deduped.size() > 1) {
+            int candidates = Math.max(topK, rerank.candidates());
+            List<Map<String, Object>> shortlist = deduped.size() > candidates
+                    ? deduped.subList(0, candidates) : deduped;
+            List<Map<String, Object>> reranked = reranker.rerank(query, shortlist, topK);
+            if (reranked != null && !reranked.isEmpty()) {
+                return reranked.size() > topK ? reranked.subList(0, topK) : reranked;
+            }
+        }
+        return deduped.size() > topK ? deduped.subList(0, topK) : deduped;
     }
 
     private List<Map<String, Object>> denseSearch(double[] vector, List<String> targets, int topK,
