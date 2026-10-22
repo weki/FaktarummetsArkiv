@@ -14,7 +14,7 @@ public class Chunker {
         this.properties = properties;
     }
 
-    public record Chunk(int index, String text) {
+    public record Chunk(int index, String text, int start) {
     }
 
     public List<Chunk> chunk(String text) {
@@ -37,7 +37,7 @@ public class Chunker {
             }
             String chunkText = normalized.substring(start, end).trim();
             if (!chunkText.isEmpty()) {
-                chunks.add(new Chunk(index++, chunkText));
+                chunks.add(new Chunk(index++, chunkText, start));
             }
             if (end >= normalized.length()) {
                 break;

@@ -99,12 +99,20 @@ public class DocumentService {
         if (isPdf(title)) {
             chunks = new ArrayList<>();
             characters = 0;
+            StringBuilder whole = new StringBuilder();
+            List<PageStart> pageStarts = new ArrayList<>();
             for (PdfTextExtractor.PdfPage page : pdfTextExtractor.extract(bytes)) {
-                int index = 0;
-                for (Chunker.Chunk chunk : chunker.chunk(page.text())) {
-                    chunks.add(new IndexedChunk(page.page(), index++, chunk.text()));
+                if (whole.length() > 0) {
+                    whole.append('\n');
                 }
+                pageStarts.add(new PageStart(whole.length(), page.page()));
+                whole.append(page.text());
                 characters += page.text().length();
+            }
+            int index = 0;
+            for (Chunker.Chunk chunk : chunker.chunk(whole.toString())) {
+                int midpoint = chunk.start() + chunk.text().length() / 2;
+                chunks.add(new IndexedChunk(pageAt(pageStarts, midpoint), index++, chunk.text()));
             }
         } else {
             String text = new String(bytes, StandardCharsets.UTF_8);
@@ -133,21 +141,30 @@ public class DocumentService {
         }
         String embeddingModel = model;
 
+        qdrantClient.ensureCollection(collection);
+        requireCompatibleCollection(collection, embeddingModel);
+
         List<double[]> vectors = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i += EMBED_BATCH) {
             List<String> inputs = chunks.subList(i, Math.min(i + EMBED_BATCH, chunks.size())).stream()
-                    .map(chunk -> qdrant.passageInput(embeddingModel, chunk.text()))
+                    .map(chunk -> qdrant.passageInput(embeddingModel, embeddingText(title, chunk)))
                     .toList();
             List<double[]> batch = llm.embed(embeddingModel, inputs);
             if (batch.size() != inputs.size()) {
                 throw new IllegalStateException("Kunde inte skapa embeddings för alla textstycken");
+            }
+            for (double[] vector : batch) {
+                if (vector.length != qdrant.vectorSize()) {
+                    throw new IllegalStateException("Embeddingmodellen " + embeddingModel + " ger "
+                            + vector.length + " dimensioner men kollektionen '" + collection + "' använder "
+                            + qdrant.vectorSize());
+                }
             }
             vectors.addAll(batch);
         }
 
         String documentId = UUID.randomUUID().toString();
         long createdAt = System.currentTimeMillis();
-        qdrantClient.ensureCollection(collection);
 
         List<QdrantClient.Point> points = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
@@ -169,6 +186,8 @@ public class DocumentService {
             }
             payload.put("chunkIndex", chunk.index());
             payload.put("text", chunk.text());
+            payload.put("embeddingModel", embeddingModel);
+            payload.put("vectorSize", qdrant.vectorSize());
             points.add(new QdrantClient.Point(UUID.randomUUID().toString(), vectors.get(i), payload));
         }
 
@@ -192,6 +211,43 @@ public class DocumentService {
         log.info("Indexerade dokument {} ({} textstycken) i kollektionen '{}'", documentId, chunks.size(), collection);
         return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
                 Instant.ofEpochMilli(createdAt), false);
+    }
+
+    private void requireCompatibleCollection(String collection, String embeddingModel) {
+        Map<String, Object> metadata = qdrantClient.firstEmbeddingMetadata(collection);
+        Object storedModel = metadata.get("embeddingModel");
+        if (storedModel != null && !String.valueOf(storedModel).isBlank()
+                && !String.valueOf(storedModel).equals(embeddingModel)) {
+            throw new IllegalStateException("Kollektionen '" + collection + "' använder embeddingmodellen "
+                    + storedModel + " och kan inte blandas med " + embeddingModel);
+        }
+        Object storedSize = metadata.get("vectorSize");
+        if (storedSize instanceof Number number && number.intValue() != qdrant.vectorSize()) {
+            throw new IllegalStateException("Kollektionen '" + collection + "' använder "
+                    + number.intValue() + " dimensioner och kan inte blandas med " + qdrant.vectorSize());
+        }
+    }
+
+    private static String embeddingText(String title, IndexedChunk chunk) {
+        StringBuilder sb = new StringBuilder("Document: ").append(title).append('\n');
+        if (chunk.page() != null) {
+            sb.append("Page: ").append(chunk.page()).append('\n');
+        }
+        return sb.append('\n').append(chunk.text()).toString();
+    }
+
+    private static Integer pageAt(List<PageStart> starts, int offset) {
+        Integer page = null;
+        for (PageStart start : starts) {
+            if (start.offset() > offset) {
+                break;
+            }
+            page = start.page();
+        }
+        return page;
+    }
+
+    private record PageStart(int offset, int page) {
     }
 
     /** Listar dokumenten som faktiskt finns i vektordatabasen (grupperade per dokument). */

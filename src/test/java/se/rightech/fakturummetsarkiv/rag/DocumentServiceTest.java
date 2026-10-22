@@ -59,8 +59,8 @@ class DocumentServiceTest {
                 "validator", false, "", "", "", 16384, 4096);
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
-                Duration.ofSeconds(10), "query: ", "passage:");
-        RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
+                Duration.ofSeconds(10), "query: ", "passage: ");
+        RagProperties rag = new RagProperties(20, 40, 10, 8000, "en", 0.3);
         Chunker chunker = new Chunker(rag);
         ArchiveProperties archive = new ArchiveProperties("", uploadDir.toString());
 
@@ -105,6 +105,48 @@ class DocumentServiceTest {
         });
 
         verify(qdrantClient).ensureCollection("docs");
+    }
+
+    @Test
+    void embedsTitleAndPageHeaderButKeepsPayloadTextClean() throws IOException {
+        service.addFile("manual.pdf", twoPagePdf(), "docs", List.of());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> inputs = ArgumentCaptor.forClass(List.class);
+        verify(llm, org.mockito.Mockito.atLeastOnce()).embed(eq("embed-model"), inputs.capture());
+
+        List<String> allInputs = inputs.getAllValues().stream().flatMap(List::stream).toList();
+        assertThat(allInputs).anySatisfy(input ->
+                assertThat(input).startsWith("Document: manual.pdf\nPage: 1\n\n"));
+        assertThat(allInputs).anySatisfy(input ->
+                assertThat(input).contains("Page: 2"));
+        assertThat(capturedPayloads()).allSatisfy(payload ->
+                assertThat(String.valueOf(payload.get("text"))).doesNotContain("Document:"));
+        assertThat(capturedPayloads()).allSatisfy(payload -> {
+            assertThat(payload.get("embeddingModel")).isEqualTo("embed-model");
+            assertThat(payload.get("vectorSize")).isEqualTo(1024);
+        });
+    }
+
+    @Test
+    void refusesToMixEmbeddingModelsInOneCollection() {
+        when(qdrantClient.firstEmbeddingMetadata("docs")).thenReturn(
+                Map.of("embeddingModel", "other-model", "vectorSize", 1024));
+
+        assertThatThrownBy(() -> service.addFile("manual.pdf", twoPagePdf(), "docs", List.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("other-model");
+        verify(qdrantClient, org.mockito.Mockito.never()).upsert(anyString(), anyList());
+    }
+
+    @Test
+    void refusesToMixVectorSizesInOneCollection() {
+        when(qdrantClient.firstEmbeddingMetadata("docs")).thenReturn(
+                Map.of("embeddingModel", "embed-model", "vectorSize", 768));
+
+        assertThatThrownBy(() -> service.addFile("manual.pdf", twoPagePdf(), "docs", List.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("768");
     }
 
     @Test

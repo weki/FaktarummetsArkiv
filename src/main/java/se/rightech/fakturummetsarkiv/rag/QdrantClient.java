@@ -203,6 +203,27 @@ public class QdrantClient {
         return List.copyOf(terms);
     }
 
+    /** Hämtar payloaden för första punkten som har metadata om embeddingmodell. */
+    public Map<String, Object> firstEmbeddingMetadata(String collection) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("limit", 1);
+        body.put("with_payload", List.of("embeddingModel", "vectorSize"));
+        body.put("with_vector", false);
+        body.put("filter", Map.of("must_not", List.of(
+                Map.of("is_empty", Map.of("key", "embeddingModel")))));
+        try {
+            JsonNode node = restClient.post()
+                    .uri("/collections/{collection}/points/scroll", collection)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            JsonNode point = node == null ? null : node.at("/result/points/0/payload");
+            return point == null || point.isMissingNode() || point.isNull() ? Map.of() : toMap(point);
+        } catch (HttpClientErrorException.NotFound ex) {
+            return Map.of();
+        }
+    }
+
     public void upsert(List<Point> points) {
         upsert(properties.collection(), points);
     }
