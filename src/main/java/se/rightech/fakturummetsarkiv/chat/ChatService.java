@@ -107,30 +107,28 @@ public StreamResult streamChat(String question, String sessionId,
 
         double temperature = settings.temperature() != null ? settings.temperature() : 0.0;
 
-        ThinkFilter thinkFilter = new ThinkFilter();
-        StringBuilder raw = new StringBuilder();
-        llm.chatStream(model, messages, temperature,
-                token -> {
-                    raw.append(token);
-                    thinkFilter.filter(token,
-                            clean -> {
-                                if (!clean.isEmpty() && onContent != null) {
-                                    onContent.accept(clean);
-                                }
-                            },
-                            thought -> {
-                                if (!thought.isEmpty() && onThought != null) {
-                                    onThought.accept(thought);
-                                }
-                            });
+        StringBuilder answerText = new StringBuilder();
+        ThinkTagFilter thinkFilter = new ThinkTagFilter(
+                clean -> {
+                    answerText.append(clean);
+                    if (onContent != null) {
+                        onContent.accept(clean);
+                    }
                 },
+                thought -> {
+                    if (onThought != null) {
+                        onThought.accept(thought);
+                    }
+                });
+        llm.chatStream(model, messages, temperature, thinkFilter::accept,
                 thought -> {
                     if (thought != null && !thought.isEmpty() && onThought != null) {
                         onThought.accept(thought);
                     }
                 });
 
-        String answer = stripThink(raw.toString()).trim();
+        thinkFilter.finish();
+        String answer = answerText.toString().trim();
         if (onFinal != null) {
             onFinal.accept(answer);
         }
@@ -207,68 +205,4 @@ public StreamResult streamChat(String question, String sessionId,
         return value == null ? "" : String.valueOf(value);
     }
 
-    private static final class ThinkFilter {
-        private static final String OPEN = "<think";
-        private static final String CLOSE = "</think";
-        private boolean inThink = false;
-
-        void filter(String text, Consumer<String> visible, Consumer<String> thought) {
-            StringBuilder out = new StringBuilder();
-            String t = text;
-            while (true) {
-                if (inThink) {
-                    int end = t.indexOf(CLOSE);
-                    if (end < 0) {
-                        thought.accept(t);
-                        break;
-                    }
-                    thought.accept(t.substring(0, end));
-                    inThink = false;
-                    t = t.substring(end + CLOSE.length());
-                    if (t.startsWith(">")) {
-                        t = t.substring(1);
-                    }
-                } else {
-                    int start = t.indexOf(OPEN);
-                    if (start < 0) {
-                        out.append(t);
-                        break;
-                    }
-                    out.append(t, 0, start);
-                    inThink = true;
-                    t = t.substring(start + OPEN.length());
-                    if (t.startsWith(">")) {
-                        t = t.substring(1);
-                    }
-                }
-            }
-            if (out.length() > 0) {
-                visible.accept(out.toString());
-            }
-        }
-    }
-
-    private static String stripThink(String s) {
-        if (s == null) {
-            return "";
-        }
-        String t = s;
-        int idx = t.indexOf("<think");
-        if (idx >= 0) {
-            int gt = t.indexOf('>', idx);
-            int end = t.indexOf("</think", gt >= 0 ? gt : idx);
-            if (end >= 0) {
-                int endGt = t.indexOf('>', end);
-                t = endGt >= 0 ? t.substring(0, idx) + t.substring(endGt + 1) : t.substring(0, idx);
-            } else {
-                t = t.substring(0, idx);
-            }
-        }
-        idx = t.indexOf("</think");
-        if (idx >= 0) {
-            int endGt = t.indexOf('>', idx);
-            t = endGt >= 0 ? t.substring(endGt + 1) : "";
-        }
-        return t;
-    }
 }
