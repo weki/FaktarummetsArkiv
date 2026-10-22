@@ -52,17 +52,11 @@ public class RetrievalService {
             qdrantClient.ensureCollection();
         }
 
-        java.util.Set<String> allowed = (documentIds == null || documentIds.isEmpty())
-                ? null : new java.util.HashSet<>(documentIds);
-
         List<Map<String, Object>> sources = new ArrayList<>();
         for (String collection : targets) {
-            for (QdrantClient.ScoredPoint hit : qdrantClient.search(collection, vector, topK, scoreThreshold)) {
+            for (QdrantClient.ScoredPoint hit : qdrantClient.search(collection, vector, topK, scoreThreshold,
+                    documentIds)) {
                 Map<String, Object> payload = hit.payload();
-                String docId = payload.get("documentId") == null ? null : String.valueOf(payload.get("documentId"));
-                if (allowed != null && (docId == null || !allowed.contains(docId))) {
-                    continue;
-                }
                 Map<String, Object> source = new LinkedHashMap<>();
                 Object title = payload.get("title");
                 if (title == null) {

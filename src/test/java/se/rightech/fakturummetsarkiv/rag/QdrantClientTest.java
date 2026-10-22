@@ -86,6 +86,40 @@ class QdrantClientTest {
     }
 
     @Test
+    void searchesWithDocumentIdFilter() {
+        server.expect(requestTo(BASE + "/collections/docs/points/search"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"vector":[0.1,0.2],"limit":5,"with_payload":true,
+                         "filter":{"must":[{"key":"documentId","match":{"any":["d1","d2"]}}]}}
+                        """))
+                .andRespond(withSuccess("""
+                        {"result":[{"id":"p1","score":0.9,"payload":{"documentId":"d1"}}],"status":"ok"}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<QdrantClient.ScoredPoint> hits = client.search("docs", new double[]{0.1, 0.2}, 5, null,
+                List.of("d1", "d2", "d1"));
+
+        assertThat(hits).hasSize(1);
+        server.verify();
+    }
+
+    @Test
+    void omitsFilterForBlankDocumentIds() {
+        server.expect(requestTo(BASE + "/collections/docs/points/search"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"vector":[0.1,0.2],"limit":5,"with_payload":true}
+                        """))
+                .andRespond(withSuccess("""
+                        {"result":[],"status":"ok"}
+                        """, MediaType.APPLICATION_JSON));
+
+        client.search("docs", new double[]{0.1, 0.2}, 5, null, List.of("", " "));
+        server.verify();
+    }
+
+    @Test
     void listsCollections() {
         server.expect(requestTo(BASE + "/collections"))
                 .andExpect(method(HttpMethod.GET))

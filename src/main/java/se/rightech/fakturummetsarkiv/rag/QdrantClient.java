@@ -130,16 +130,29 @@ public class QdrantClient {
     }
 
     public List<ScoredPoint> search(double[] vector, int limit, Double scoreThreshold) {
-        return search(properties.collection(), vector, limit, scoreThreshold);
+        return search(properties.collection(), vector, limit, scoreThreshold, null);
     }
 
     public List<ScoredPoint> search(String collection, double[] vector, int limit, Double scoreThreshold) {
+        return search(collection, vector, limit, scoreThreshold, null);
+    }
+
+    public List<ScoredPoint> search(String collection, double[] vector, int limit, Double scoreThreshold,
+                                    List<String> documentIds) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("vector", vector);
         body.put("limit", limit);
         body.put("with_payload", true);
         if (scoreThreshold != null) {
             body.put("score_threshold", scoreThreshold);
+        }
+        List<String> ids = documentIds == null ? List.of() : documentIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (!ids.isEmpty()) {
+            body.put("filter", Map.of("must", List.of(
+                    Map.of("key", "documentId", "match", Map.of("any", ids)))));
         }
         JsonNode node = restClient.post()
                 .uri("/collections/{collection}/points/search", collection)
