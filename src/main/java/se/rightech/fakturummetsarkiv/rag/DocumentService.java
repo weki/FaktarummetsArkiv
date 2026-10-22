@@ -131,13 +131,14 @@ public class DocumentService {
         if (model == null || model.isBlank()) {
             throw new IllegalStateException("Ingen embedding-modell konfigurerad (ollama.embedding-model)");
         }
+        String embeddingModel = model;
 
         List<double[]> vectors = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i += EMBED_BATCH) {
             List<String> inputs = chunks.subList(i, Math.min(i + EMBED_BATCH, chunks.size())).stream()
-                    .map(chunk -> qdrant.passagePrefix() + chunk.text())
+                    .map(chunk -> qdrant.passageInput(embeddingModel, chunk.text()))
                     .toList();
-            List<double[]> batch = llm.embed(model, inputs);
+            List<double[]> batch = llm.embed(embeddingModel, inputs);
             if (batch.size() != inputs.size()) {
                 throw new IllegalStateException("Kunde inte skapa embeddings för alla textstycken");
             }

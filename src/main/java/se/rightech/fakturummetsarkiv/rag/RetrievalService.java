@@ -42,7 +42,7 @@ public class RetrievalService {
         if (model == null || model.isBlank() || query == null || query.isBlank()) {
             return List.of();
         }
-        double[] vector = llm.embedOne(model, qdrant.queryPrefix() + query);
+        double[] vector = llm.embedOne(model, qdrant.queryInput(model, query));
         if (vector.length == 0) {
             return List.of();
         }
