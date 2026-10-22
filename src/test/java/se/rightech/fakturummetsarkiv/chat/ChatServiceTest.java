@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -197,5 +198,32 @@ class ChatServiceTest {
         assertThat(history).hasSize(2);
         assertThat(history.get(0)).containsEntry("role", "user").containsEntry("content", "hej");
         assertThat(history.get(1)).containsEntry("role", "assistant").containsEntry("content", "svar");
+    }
+
+    @Test
+    void doesNotStoreNoAnswerInHistory() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true,
+                List.of("docs"), null, 5, 0.0, 20, null));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
+                .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
+        respondWith("I cannot find that information in the documents.");
+
+        service.streamChat("okänd fraga", "s1", List.of(), List.of(), token -> { }, thought -> { },
+                sources -> { }, token -> { }, plan -> { });
+
+        assertThat(sessionMemory.history("s1", 20)).isEmpty();
+    }
+
+    @Test
+    void rejectsInvalidTopN() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true,
+                List.of("docs"), null, 0, 0.0, 20, null));
+
+        assertThatThrownBy(() -> service.streamChat("fraga", "s1", List.of(), List.of(), token -> { },
+                thought -> { }, sources -> { }, token -> { }, plan -> { }))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("topN");
     }
 }

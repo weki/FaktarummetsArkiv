@@ -146,7 +146,11 @@ public class ChatController {
                 sendEvent(emitter, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();
             } catch (Exception ex) {
-                emitter.completeWithError(ex);
+                log.warn("Chat-strömmen misslyckades", ex);
+                sendEvent(emitter, "error",
+                        Map.of("message", "Kunde inte slutföra svaret. Försök igen."),
+                        MediaType.APPLICATION_JSON);
+                emitter.complete();
             }
         });
         return emitter;

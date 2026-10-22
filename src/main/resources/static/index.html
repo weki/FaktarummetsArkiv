@@ -2772,6 +2772,11 @@
                     } else if (evt.event === 'followups') {
                         followUps = JSON.parse(evt.data) || [];
                         appendFollowUps(div, followUps);
+                    } else if (evt.event === 'error') {
+                        const payload = JSON.parse(evt.data) || {};
+                        div.remove();
+                        addMessage(payload.message || 'Kunde inte slutföra svaret.', 'error');
+                        done = true;
                     } else if (evt.event === 'done') {
                         if (!contentText) {
                             answer.classList.remove('md');

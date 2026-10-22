@@ -85,7 +85,7 @@ public StreamResult streamChat(String question, String sessionId,
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(true, searchQuery));
             }
-            int topK = settings.topN() != null ? settings.topN() : 5;
+            int topK = validatedTopK(settings.topN());
             Double threshold = settings.similarityThreshold();
             sources = retrievalService.retrieve(searchQuery, effectiveCollections, topK, threshold, effectiveDocumentIds);
             if (onSources != null) {
@@ -105,7 +105,7 @@ public StreamResult streamChat(String question, String sessionId,
         messages.addAll(history);
         messages.add(Map.of("role", "user", "content", question));
 
-        double temperature = settings.temperature() != null ? settings.temperature() : 0.0;
+        double temperature = validatedTemperature(settings.temperature());
 
         StringBuilder answerText = new StringBuilder();
         ThinkTagFilter thinkFilter = new ThinkTagFilter(
@@ -132,7 +132,9 @@ public StreamResult streamChat(String question, String sessionId,
         if (onFinal != null) {
             onFinal.accept(answer);
         }
-        sessionMemory.add(sessionId, question, answer, historySize(settings));
+        if (!answer.isBlank() && !isNoAnswer(answer)) {
+            sessionMemory.add(sessionId, question, answer, historySize(settings));
+        }
         return new StreamResult(sources, answer, search);
     }
 
@@ -145,7 +147,32 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     private int historySize(WorkspaceSettings settings) {
-        return settings.historySize() != null ? settings.historySize() : rag.maxHistory();
+        int size = settings.historySize() != null ? settings.historySize() : rag.maxHistory();
+        if (size < 0 || size > 100) {
+            throw new IllegalArgumentException("historySize måste vara mellan 0 och 100");
+        }
+        return size;
+    }
+
+    private static int validatedTopK(Integer topN) {
+        int topK = topN != null ? topN : 5;
+        if (topK < 1 || topK > 50) {
+            throw new IllegalArgumentException("topN måste vara mellan 1 och 50");
+        }
+        return topK;
+    }
+
+    private static double validatedTemperature(Double value) {
+        double temperature = value != null ? value : 0.0;
+        if (temperature < 0.0 || temperature > 2.0) {
+            throw new IllegalArgumentException("temperature måste vara mellan 0 och 2");
+        }
+        return temperature;
+    }
+
+    private static boolean isNoAnswer(String answer) {
+        return answer.toLowerCase(java.util.Locale.ROOT)
+                .contains(NO_ANSWER_MARKER.toLowerCase(java.util.Locale.ROOT));
     }
 
     private String directPrompt() {
