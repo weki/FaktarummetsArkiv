@@ -11,6 +11,13 @@ archive/
 ### Lokal konfiguration (IP-adresser, hemligheter) ###
 application-local.properties
 **/application-local.properties
+.env
+*.env
+
+### Dokument och loggar (kan innehålla personuppgifter) ###
+*.pdf
+*.log
+logs/
 
 ### STS ###
 .apt_generated
