@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -40,7 +41,7 @@ class ChatServiceTest {
     private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
 
     private final ChatService service = new ChatService(llm, ollama, rag, retrievalService,
-            searchGate, queryRewriter, settingsStore, sessionMemory);
+            searchGate, queryRewriter, settingsStore, sessionMemory, new ChatProperties(0.1, true));
 
     @BeforeEach
     void defaultRewriteKeepsTheQuestion() {
@@ -51,12 +52,12 @@ class ChatServiceTest {
     @SuppressWarnings("unchecked")
     private void respondWith(String... tokens) {
         doAnswer(invocation -> {
-            Consumer<String> onToken = invocation.getArgument(3);
+            Consumer<String> onToken = invocation.getArgument(4);
             for (String token : tokens) {
                 onToken.accept(token);
             }
             return null;
-        }).when(llm).chatStream(anyString(), any(), anyDouble(), any(), any());
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -96,15 +97,15 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<String> onContent = invocation.getArgument(3);
+            Consumer<String> onContent = invocation.getArgument(4);
             @SuppressWarnings("unchecked")
-            Consumer<String> onThought = invocation.getArgument(4);
+            Consumer<String> onThought = invocation.getArgument(5);
             onThought.accept("Thinking Process:\n1. Scan the sources.");
             onContent.accept("The answer is 4.");
             onThought.accept(" Final review done.");
             onContent.accept(" Done.");
             return null;
-        }).when(llm).chatStream(anyString(), any(), anyDouble(), any(), any());
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyBoolean(), any(), any());
 
         List<String> content = new ArrayList<>();
         List<String> thoughts = new ArrayList<>();

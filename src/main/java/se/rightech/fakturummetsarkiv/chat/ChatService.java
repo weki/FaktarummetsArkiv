@@ -25,11 +25,13 @@ public class ChatService {
     private final QueryRewriter queryRewriter;
     private final SettingsStore settingsStore;
     private final SessionMemory sessionMemory;
+    private final ChatProperties chat;
 
     public ChatService(OllamaClient llm, OllamaProperties ollama, RagProperties rag,
                        RetrievalService retrievalService, SearchGate searchGate,
                        QueryRewriter queryRewriter,
-                       SettingsStore settingsStore, SessionMemory sessionMemory) {
+                       SettingsStore settingsStore, SessionMemory sessionMemory,
+                       ChatProperties chat) {
         this.llm = llm;
         this.ollama = ollama;
         this.rag = rag;
@@ -38,6 +40,7 @@ public class ChatService {
         this.queryRewriter = queryRewriter;
         this.settingsStore = settingsStore;
         this.sessionMemory = sessionMemory;
+        this.chat = chat;
     }
 
     public record StreamResult(List<Map<String, Object>> sources, String answer, boolean searched) {
@@ -120,7 +123,7 @@ public StreamResult streamChat(String question, String sessionId,
                         onThought.accept(thought);
                     }
                 });
-        llm.chatStream(model, messages, temperature, thinkFilter::accept,
+        llm.chatStream(model, messages, temperature, chat.thinking(), thinkFilter::accept,
                 thought -> {
                     if (thought != null && !thought.isEmpty() && onThought != null) {
                         onThought.accept(thought);

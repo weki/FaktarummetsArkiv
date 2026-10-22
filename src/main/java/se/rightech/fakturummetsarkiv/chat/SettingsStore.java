@@ -16,13 +16,16 @@ public class SettingsStore {
     private final QdrantProperties qdrant;
     private final OllamaProperties ollama;
     private final RagProperties rag;
+    private final ChatProperties chat;
 
     private volatile WorkspaceSettings current;
 
-    public SettingsStore(QdrantProperties qdrant, OllamaProperties ollama, RagProperties rag) {
+    public SettingsStore(QdrantProperties qdrant, OllamaProperties ollama, RagProperties rag,
+                         ChatProperties chat) {
         this.qdrant = qdrant;
         this.ollama = ollama;
         this.rag = rag;
+        this.chat = chat;
         this.current = defaults();
     }
 
@@ -37,7 +40,7 @@ public class SettingsStore {
                 List.of(qdrant.collection()),
                 rag.similarityThreshold(),
                 qdrant.topK(),
-                0.0,
+                chat.answerTemperature(),
                 rag.maxHistory(),
                 null,
                 ollama.embeddingModel(),

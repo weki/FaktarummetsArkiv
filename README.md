@@ -61,6 +61,17 @@ all       5         1.00      0.87    0.90
 Använd resultatet före och efter en ändring för att avgöra om ändringen förbättrar retrieval,
 t.ex. innan hybrid search eller reranking slås på.
 
+## Svar och thinking
+
+`chat.answer-temperature=0.1` håller svaren faktainriktade; temperaturen kan också ändras per
+workspace i gränssnittet. `chat.thinking=true` skickar `think` till Ollama, så qwen3-modeller får
+resonera i `<think>`-taggen. Stäng av med `CHAT_THINKING=false` om modellen inte stöder det eller
+om svarstiden är viktigare än resonemanget.
+
+```bash
+CHAT_THINKING=false ./gradlew bootRun
+```
+
 ## Hybridsökning
 
 `rag.hybrid.enabled=false` som default. När den slås på kombineras vektorsökning med ett

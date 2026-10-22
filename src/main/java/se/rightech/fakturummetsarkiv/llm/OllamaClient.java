@@ -88,16 +88,27 @@ public class OllamaClient {
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature,
                            Consumer<String> onContent, Consumer<String> onThought) {
-        chatStream(model, messages, temperature, chatNumCtx, onContent, onThought);
+        chatStream(model, messages, temperature, chatNumCtx, true, onContent, onThought);
+    }
+
+    public void chatStream(String model, List<Map<String, String>> messages, double temperature,
+                           boolean thinking, Consumer<String> onContent, Consumer<String> onThought) {
+        chatStream(model, messages, temperature, chatNumCtx, thinking, onContent, onThought);
     }
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature, int numCtx,
                            Consumer<String> onContent, Consumer<String> onThought) {
+        chatStream(model, messages, temperature, numCtx, true, onContent, onThought);
+    }
+
+    public void chatStream(String model, List<Map<String, String>> messages, double temperature, int numCtx,
+                           boolean thinking, Consumer<String> onContent, Consumer<String> onThought) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("stream", true);
         body.put("messages", messages);
         body.put("options", Map.of("temperature", temperature, "num_ctx", numCtx));
+        body.put("think", thinking);
         body.put("keep_alive", KEEP_ALIVE);
 
         restClient.post()
@@ -123,9 +134,9 @@ public class OllamaClient {
                                         onContent.accept(token);
                                     }
                                 }
-                                JsonNode thinking = node.at("/message/thinking");
-                                if (!thinking.isMissingNode() && !thinking.isNull()) {
-                                    String token = thinking.asString();
+                                JsonNode thought = node.at("/message/thinking");
+                                if (!thought.isMissingNode() && !thought.isNull()) {
+                                    String token = thought.asString();
                                     if (!token.isEmpty() && onThought != null) {
                                         onThought.accept(token);
                                     }

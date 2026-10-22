@@ -20,7 +20,7 @@ class SettingsStoreTest {
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
                 "phi3.5:latest", "", 16384, 4096);
         RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
-        return new SettingsStore(qdrant, ollama, rag);
+        return new SettingsStore(qdrant, ollama, rag, new ChatProperties(0.1, true));
     }
 
     @Test
@@ -36,6 +36,7 @@ class SettingsStoreTest {
         assertThat(settings.rewriteQuery()).isTrue();
         assertThat(settings.collections()).containsExactly("docs");
         assertThat(settings.similarityThreshold()).isEqualTo(0.3);
+        assertThat(settings.temperature()).isEqualTo(0.1);
         assertThat(settings.historySize()).isEqualTo(20);
     }
 

@@ -66,6 +66,9 @@ class OllamaClientTest {
     void streamsTokens() {
         server.expect(requestTo(BASE + "/api/chat"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"model":"gemma4:latest","stream":true,"think":true,"messages":[{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384},"keep_alive":"1h"}
+                        """))
                 .andRespond(withSuccess("""
                         {"message":{"role":"assistant","content":"Hej"},"done":false}
                         {"message":{"role":"assistant","content":"!"},"done":false}
@@ -76,6 +79,25 @@ class OllamaClientTest {
         client.chatStream("gemma4:latest", List.of(Map.of("role", "user", "content", "hej")), 0.0, tokens::add);
 
         assertThat(String.join("", tokens)).isEqualTo("Hej!");
+        server.verify();
+    }
+
+    @Test
+    void canDisableThinking() {
+        server.expect(requestTo(BASE + "/api/chat"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"model":"gemma4:latest","stream":true,"think":false,"messages":[{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384},"keep_alive":"1h"}
+                        """))
+                .andRespond(withSuccess("""
+                        {"message":{"role":"assistant","content":"Hej"},"done":true}
+                        """, MediaType.APPLICATION_NDJSON));
+
+        List<String> tokens = new ArrayList<>();
+        client.chatStream("gemma4:latest", List.of(Map.of("role", "user", "content", "hej")), 0.0, false,
+                tokens::add, thought -> { });
+
+        assertThat(String.join("", tokens)).isEqualTo("Hej");
         server.verify();
     }
 
