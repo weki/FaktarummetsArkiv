@@ -1,0 +1,5 @@
+{"id": "en-icon-console", "lang": "en", "question": "How do I plan the installation of the Honeywell Icon Series console?", "expectedDocuments": ["Honeywell Icon Series"], "expectedPhrases": ["installation", "planning"]}
+{"id": "sv-t5810xl", "lang": "sv", "question": "Vad behöver jag tänka på vid planering av T5810XL-servern?", "expectedDocuments": ["T5810XL"], "expectedPhrases": ["planering", "installation"]}
+{"id": "en-windows-domain", "lang": "en", "question": "What are the planning steps for a Windows domain controller?", "expectedDocuments": ["Windows Domain"], "expectedPhrases": ["domain", "planning"]}
+{"id": "sv-r7610", "lang": "sv", "question": "Hur installerar jag R7610-servern?", "expectedDocuments": ["R7610"], "expectedPhrases": ["installation"]}
+{"id": "en-cn100", "lang": "en", "question": "Which guide covers CN100 hardware planning?", "expectedDocuments": ["CN100"], "expectedPhrases": ["hardware", "planning"]}

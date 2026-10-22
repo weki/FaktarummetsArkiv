@@ -28,5 +28,23 @@ dependencies {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'eval'
+    }
+}
+
+// Utvärdering mot körande Ollama + Qdrant. Frågorna ligger i src/test/resources/eval/questions.jsonl.
+tasks.register('eval', Test) {
+    group = 'verification'
+    description = 'Kör retrieval-utvärdering (recall@5 och MRR) mot en körande Ollama och Qdrant.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'eval'
+    }
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+    }
+    outputs.upToDateWhen { false }
 }
