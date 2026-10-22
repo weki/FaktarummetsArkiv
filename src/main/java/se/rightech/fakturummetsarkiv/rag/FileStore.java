@@ -1,5 +1,7 @@
 package se.rightech.fakturummetsarkiv.rag;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -9,6 +11,8 @@ import java.util.UUID;
 
 @Component
 public class FileStore {
+
+    private static final Logger log = LoggerFactory.getLogger(FileStore.class);
 
     private final ArchiveProperties properties;
 
@@ -25,8 +29,32 @@ public class FileStore {
         if (!target.startsWith(directory)) {
             throw new IllegalArgumentException("Ogiltigt filnamn");
         }
-        Files.write(target, bytes);
+        try {
+            Files.write(target, bytes);
+        } catch (IOException e) {
+            Files.deleteIfExists(target);
+            throw e;
+        }
         return target;
+    }
+
+    /** Raderar en sparad originalfil, men bara inom uppladdningsmappen. */
+    public boolean delete(Path path) {
+        if (path == null) {
+            return false;
+        }
+        Path file = path.toAbsolutePath().normalize();
+        Path root = properties.uploadPath();
+        if (!file.startsWith(root)) {
+            log.warn("Vägrade radera fil utanför uppladdningsmappen: {}", file);
+            return false;
+        }
+        try {
+            return Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.warn("Kunde inte radera originalfilen {}", file, e);
+            return false;
+        }
     }
 
     private static String sanitize(String filename) {

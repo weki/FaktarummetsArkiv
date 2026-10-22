@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class PdfService {
@@ -58,7 +59,7 @@ public class PdfService {
 
     public Path resolve(String rawPath) {
         Path path = resolveWithinRoots(rawPath);
-        if (!path.getFileName().toString().toLowerCase().endsWith(".pdf")) {
+        if (!path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".pdf")) {
             throw new IllegalArgumentException("Endast PDF-filer kan visas");
         }
         return path;

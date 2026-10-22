@@ -8,6 +8,7 @@ import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -46,7 +47,7 @@ public class AnswerRefiner {
     }
 
     public boolean isRefusal(String answer) {
-        return answer != null && answer.toLowerCase().contains(REFUSAL_MARKER);
+        return answer != null && answer.toLowerCase(Locale.ROOT).contains(REFUSAL_MARKER);
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft) {

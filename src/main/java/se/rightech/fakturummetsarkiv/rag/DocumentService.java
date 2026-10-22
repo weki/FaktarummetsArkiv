@@ -11,16 +11,21 @@ import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class DocumentService {
@@ -30,7 +35,8 @@ public class DocumentService {
     /** Antal punkter per upsert-anrop mot Qdrant (håller varje request långt under 32 MB). */
     private static final int UPSERT_BATCH = 64;
     private static final List<String> DOC_FIELDS =
-            List.of("documentId", "source", "title", "path", "page", "createdAt", "collection", "tags");
+            List.of("documentId", "source", "title", "path", "page", "createdAt", "collection", "tags",
+                    "contentHash", "characters", "text");
 
     private final OllamaClient llm;
     private final OllamaProperties ollama;
@@ -40,6 +46,7 @@ public class DocumentService {
     private final PdfTextExtractor pdfTextExtractor;
     private final FileStore fileStore;
     private final SettingsStore settingsStore;
+    private final ConcurrentHashMap<String, Object> hashLocks = new ConcurrentHashMap<>();
 
     public DocumentService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
                            QdrantClient qdrantClient, Chunker chunker,
@@ -56,7 +63,8 @@ public class DocumentService {
     }
 
     public record DocumentInfo(String id, String name, int chunks, int characters, @JsonIgnore String path,
-                               String collection, List<String> tags, Instant createdAt, boolean skipped) {
+                               String collection, List<String> tags, Instant createdAt, boolean skipped,
+                               String notice) {
     }
 
     public record DocumentChunk(Integer page, Integer chunkIndex, String text) {
@@ -69,7 +77,7 @@ public class DocumentService {
     private record IndexedChunk(Integer page, int index, String text) {
     }
 
-    /** Filuppladdning: sparar originalet och indexerar innehållet (PDF eller text). */
+    /** Filuppladdning: indexerar innehållet och sparar originalet först när det lyckats. */
     public DocumentInfo addFile(String filename, byte[] bytes, String collection, List<String> tags)
             throws IOException {
         if (bytes == null || bytes.length == 0) {
@@ -80,58 +88,111 @@ public class DocumentService {
         List<String> cleanTags = cleanTags(tags);
 
         validateContent(title, bytes);
+        String contentHash = sha256(bytes);
 
-        for (DocumentInfo existing : list()) {
-            if (existing.name() != null && existing.name().trim().equalsIgnoreCase(title)) {
-                log.info("Dokumentet {} finns redan i arkivet – hoppar över uppladdning", existing.id());
-                return new DocumentInfo(existing.id(), title, existing.chunks(), existing.characters(),
-                        existing.path(), existing.collection() != null ? existing.collection() : target,
-                        existing.tags() != null && !existing.tags().isEmpty() ? existing.tags() : cleanTags,
-                        existing.createdAt(), true);
+        Object lock = hashLocks.computeIfAbsent(contentHash, key -> new Object());
+        synchronized (lock) {
+            DocumentInfo existing = findByContentHash(contentHash);
+            if (existing != null) {
+                log.info("Identiskt innehåll {} finns redan som dokument {} – hoppar över uppladdning",
+                        contentHash, existing.id());
+                return new DocumentInfo(existing.id(), existing.name(), existing.chunks(), existing.characters(),
+                        existing.path(), existing.collection(), existing.tags(), existing.createdAt(), true,
+                        "Identiskt innehåll finns redan som " + existing.name() + " i " + existing.collection()
+                                + ". Nya taggar och kollektion har inte tillämpats.");
             }
-        }
 
-        Path stored = fileStore.store(title, bytes);
-        String path = stored.toAbsolutePath().toString();
-
-        List<IndexedChunk> chunks;
-        int characters;
-        if (isPdf(title)) {
-            chunks = new ArrayList<>();
-            characters = 0;
-            StringBuilder whole = new StringBuilder();
-            List<PageStart> pageStarts = new ArrayList<>();
-            for (PdfTextExtractor.PdfPage page : pdfTextExtractor.extract(bytes)) {
-                if (whole.length() > 0) {
-                    whole.append('\n');
+            List<IndexedChunk> chunks;
+            int characters;
+            if (isPdf(title)) {
+                chunks = new ArrayList<>();
+                characters = 0;
+                StringBuilder whole = new StringBuilder();
+                List<PageStart> pageStarts = new ArrayList<>();
+                for (PdfTextExtractor.PdfPage page : pdfTextExtractor.extract(bytes)) {
+                    if (whole.length() > 0) {
+                        whole.append('\n');
+                    }
+                    pageStarts.add(new PageStart(whole.length(), page.page()));
+                    whole.append(page.text());
+                    characters += page.text().length();
                 }
-                pageStarts.add(new PageStart(whole.length(), page.page()));
-                whole.append(page.text());
-                characters += page.text().length();
+                int index = 0;
+                for (Chunker.Chunk chunk : chunker.chunk(whole.toString())) {
+                    int midpoint = chunk.start() + chunk.text().length() / 2;
+                    chunks.add(new IndexedChunk(pageAt(pageStarts, midpoint), index++, chunk.text()));
+                }
+            } else {
+                String text = new String(bytes, StandardCharsets.UTF_8);
+                chunks = new ArrayList<>();
+                int index = 0;
+                for (Chunker.Chunk chunk : chunker.chunk(text)) {
+                    chunks.add(new IndexedChunk(null, index++, chunk.text()));
+                }
+                characters = text.length();
             }
-            int index = 0;
-            for (Chunker.Chunk chunk : chunker.chunk(whole.toString())) {
-                int midpoint = chunk.start() + chunk.text().length() / 2;
-                chunks.add(new IndexedChunk(pageAt(pageStarts, midpoint), index++, chunk.text()));
-            }
-        } else {
-            String text = new String(bytes, StandardCharsets.UTF_8);
-            chunks = new ArrayList<>();
-            int index = 0;
-            for (Chunker.Chunk chunk : chunker.chunk(text)) {
-                chunks.add(new IndexedChunk(null, index++, chunk.text()));
-            }
-            characters = text.length();
-        }
 
-        if (chunks.isEmpty()) {
-            throw new IllegalArgumentException("Dokumentet innehåller ingen text (kan behöva OCR)");
+            if (chunks.isEmpty()) {
+                throw new IllegalArgumentException("Dokumentet innehåller ingen text (kan behöva OCR)");
+            }
+
+            Path stored = fileStore.store(title, bytes);
+            String path = stored.toAbsolutePath().toString();
+            try {
+                return index(title, title, target, cleanTags, path, chunks, characters, contentHash);
+            } catch (RuntimeException | IOException e) {
+                fileStore.delete(stored);
+                throw e;
+            }
         }
-        return index(title, title, target, cleanTags, path, chunks, characters);
+    }
+
+    /** Söker efter ett identiskt innehåll utan att läsa in alla punkter i kollektionerna. */
+    private DocumentInfo findByContentHash(String contentHash) {
+        Map<String, Object> filter = Map.of("must", List.of(
+                Map.of("key", "contentHash", "match", Map.of("value", contentHash))));
+        for (String collection : qdrantClient.listCollections()) {
+            List<Map<String, Object>> payloads =
+                    qdrantClient.scrollPayloads(collection, DOC_FIELDS, filter);
+            if (!payloads.isEmpty()) {
+                return infoFromPayloads(collection, payloads);
+            }
+        }
+        return null;
+    }
+
+    private static DocumentInfo infoFromPayloads(String collection, List<Map<String, Object>> payloads) {
+        Map<String, Object> first = payloads.get(0);
+        String id = firstText(first.get("documentId"));
+        String name = firstText(first.get("title"));
+        String path = firstText(first.get("path"));
+        Set<String> tags = new LinkedHashSet<>();
+        long characters = 0;
+        long createdAt = 0;
+        for (Map<String, Object> payload : payloads) {
+            tags.addAll(tagsOf(payload));
+            Number chars = asNumber(payload.get("characters"));
+            if (chars != null) {
+                characters = Math.max(characters, chars.longValue());
+            } else {
+                String text = firstText(payload.get("text"));
+                if (text != null) {
+                    characters += text.length();
+                }
+            }
+            Number created = asNumber(payload.get("createdAt"));
+            if (created != null) {
+                createdAt = Math.max(createdAt, created.longValue());
+            }
+        }
+        return new DocumentInfo(id, name == null ? "Dokument" : name, payloads.size(), (int) characters, path,
+                collection, List.copyOf(tags), createdAt > 0 ? Instant.ofEpochMilli(createdAt) : null,
+                true, null);
     }
 
     private DocumentInfo index(String title, String source, String collection, List<String> tags, String path,
-                               List<IndexedChunk> chunks, int characters) {
+                               List<IndexedChunk> chunks, int characters, String contentHash)
+            throws IOException {
         String model = settingsStore.get().embeddingModel();
         if (model == null || model.isBlank()) {
             model = ollama.embeddingModel();
@@ -188,6 +249,8 @@ public class DocumentService {
             payload.put("text", chunk.text());
             payload.put("embeddingModel", embeddingModel);
             payload.put("vectorSize", qdrant.vectorSize());
+            payload.put("contentHash", contentHash);
+            payload.put("characters", characters);
             points.add(new QdrantClient.Point(UUID.randomUUID().toString(), vectors.get(i), payload));
         }
 
@@ -210,7 +273,7 @@ public class DocumentService {
 
         log.info("Indexerade dokument {} ({} textstycken) i kollektionen '{}'", documentId, chunks.size(), collection);
         return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
-                Instant.ofEpochMilli(createdAt), false);
+                Instant.ofEpochMilli(createdAt), false, null);
     }
 
     private void requireCompatibleCollection(String collection, String embeddingModel) {
@@ -272,6 +335,15 @@ public class DocumentService {
                 final String docName = name == null ? "Dokument" : name;
                 Group group = groups.computeIfAbsent(id, key -> new Group(key, docName, collection));
                 group.chunks++;
+                Number chars = asNumber(payload.get("characters"));
+                if (chars != null) {
+                    group.characters = Math.max(group.characters, chars.longValue());
+                } else {
+                    String text = firstText(payload.get("text"));
+                    if (text != null) {
+                        group.characters += text.length();
+                    }
+                }
                 String path = firstText(payload.get("path"));
                 if (path != null) {
                     group.path = path;
@@ -285,9 +357,9 @@ public class DocumentService {
         }
         return groups.values().stream()
                 .sorted(Comparator.comparingLong((Group group) -> group.createdAt).reversed())
-                .map(group -> new DocumentInfo(group.id, group.name, group.chunks, 0, group.path,
-                        group.collection, List.copyOf(group.tags),
-                        group.createdAt > 0 ? Instant.ofEpochMilli(group.createdAt) : null, false))
+                .map(group -> new DocumentInfo(group.id, group.name, group.chunks, (int) group.characters,
+                        group.path, group.collection, List.copyOf(group.tags),
+                        group.createdAt > 0 ? Instant.ofEpochMilli(group.createdAt) : null, false, null))
                 .toList();
     }
 
@@ -299,14 +371,20 @@ public class DocumentService {
         Map<String, Object> filter = Map.of("should", List.of(
                 Map.of("key", "documentId", "match", Map.of("value", id)),
                 Map.of("key", "source", "match", Map.of("value", id))));
+        List<Map<String, Object>> allPayloads = new ArrayList<>();
+        Set<String> collections = new LinkedHashSet<>();
         for (String collection : qdrantClient.listCollections()) {
             List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(collection,
-                    List.of("title", "source", "path", "page", "chunkIndex", "text", "tags"), filter);
+                    List.of("title", "source", "path", "page", "chunkIndex", "text", "tags", "collection"), filter);
             if (!payloads.isEmpty()) {
-                return buildDetail(id, collection, payloads);
+                allPayloads.addAll(payloads);
+                collections.add(collection);
             }
         }
-        throw new IllegalArgumentException("Dokumentet finns inte");
+        if (allPayloads.isEmpty()) {
+            throw new IllegalArgumentException("Dokumentet finns inte");
+        }
+        return buildDetail(id, String.join(", ", collections), allPayloads);
     }
 
     private DocumentDetail buildDetail(String id, String collection, List<Map<String, Object>> payloads) {
@@ -344,7 +422,7 @@ public class DocumentService {
 
     /** Alla taggar som används i någon kollektion. */
     public List<String> tags() {
-        TreeSet<String> result = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        TreeSet<String> result = new TreeSet<>();
         for (String collection : qdrantClient.listCollections()) {
             for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection, List.of("tags"))) {
                 result.addAll(tagsOf(payload));
@@ -360,14 +438,26 @@ public class DocumentService {
         qdrantClient.ensureCollection(validateName(name.trim()));
     }
 
-    /** Tar bort alla vektorer för ett dokument (matchar documentId eller source) i alla kollektioner. */
+    /** Tar bort alla vektorer för ett dokument via documentId och raderar originalet. */
     public void delete(String id) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Inget dokument-id angivet");
         }
+        Set<String> paths = new LinkedHashSet<>();
+        Map<String, Object> filter = Map.of("must", List.of(
+                Map.of("key", "documentId", "match", Map.of("value", id))));
         for (String collection : qdrantClient.listCollections()) {
+            for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection,
+                    List.of("path"), filter)) {
+                String path = firstText(payload.get("path"));
+                if (path != null) {
+                    paths.add(path);
+                }
+            }
             qdrantClient.deleteByMatch(collection, "documentId", id);
-            qdrantClient.deleteByMatch(collection, "source", id);
+        }
+        for (String path : paths) {
+            fileStore.delete(Path.of(path));
         }
         log.info("Tog bort dokument {} ur vektordatabasen", id);
     }
@@ -390,17 +480,14 @@ public class DocumentService {
         if (tags == null) {
             return List.of();
         }
-        List<String> result = new ArrayList<>();
+        Set<String> result = new LinkedHashSet<>();
         for (String tag : tags) {
-            if (tag == null) {
-                continue;
-            }
-            String trimmed = tag.trim();
-            if (!trimmed.isEmpty() && !result.contains(trimmed)) {
-                result.add(trimmed);
+            String normalized = normalizeTag(tag);
+            if (normalized != null) {
+                result.add(normalized);
             }
         }
-        return result;
+        return List.copyOf(result);
     }
 
     private static List<String> tagsOf(Map<String, Object> payload) {
@@ -408,17 +495,30 @@ public class DocumentService {
         if (!(value instanceof List<?> list)) {
             return List.of();
         }
-        List<String> tags = new ArrayList<>();
+        Set<String> tags = new LinkedHashSet<>();
         for (Object tag : list) {
-            if (tag == null) {
-                continue;
-            }
-            String trimmed = String.valueOf(tag).trim();
-            if (!trimmed.isEmpty()) {
-                tags.add(trimmed);
+            String normalized = normalizeTag(tag == null ? null : String.valueOf(tag));
+            if (normalized != null) {
+                tags.add(normalized);
             }
         }
-        return tags;
+        return List.copyOf(tags);
+    }
+
+    private static String normalizeTag(String tag) {
+        if (tag == null) {
+            return null;
+        }
+        String normalized = tag.trim().toLowerCase(Locale.ROOT);
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static String sha256(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 är inte tillgängligt", e);
+        }
     }
 
     private static final class Group {
@@ -427,6 +527,7 @@ public class DocumentService {
         private final String collection;
         private String path;
         private int chunks;
+        private long characters;
         private long createdAt;
         private final Set<String> tags = new LinkedHashSet<>();
 
@@ -454,7 +555,7 @@ public class DocumentService {
     }
 
     private static boolean isPdf(String filename) {
-        return filename != null && filename.toLowerCase().endsWith(".pdf");
+        return filename != null && filename.toLowerCase(Locale.ROOT).endsWith(".pdf");
     }
 
     private static final List<String> TEXT_EXTENSIONS =
@@ -467,7 +568,7 @@ public class DocumentService {
             }
             return;
         }
-        String lower = filename == null ? "" : filename.toLowerCase();
+        String lower = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
         if (TEXT_EXTENSIONS.stream().noneMatch(lower::endsWith)) {
             throw new IllegalArgumentException("Filtypen stöds inte. Tillåtna: PDF, TXT, MD, CSV, JSON, LOG, XML");
         }

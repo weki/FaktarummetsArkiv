@@ -1,22 +1,84 @@
 # Fakturummets Arkiv RAG
 
-Spring Boot-tjänst för frågor mot ett lokalt dokumentarkiv. PDF:er och textfiler indexeras i
-Qdrant med embeddings från Ollama, och svar genereras av en lokal chattmodell.
+Lokal RAG-tjänst för frågor mot ett dokumentarkiv. PDF:er och textfiler indexeras i
+[Qdrant](https://qdrant.tech/) med embeddings från [Ollama](https://ollama.com/), och svar
+genereras av en lokal chattmodell. Allt kan köras utan molntjänster.
 
-## Köra
+Tjänsten innehåller ett webbgränssnitt, dokumentuppladdning, källhänvisningar, validering av
+svar, följdfrågor, hybridsökning och LLM-baserad reranking (de två sista är opt-in).
+
+## Krav
+
+- Java 21
+- Ollama med modellerna nedan
+- Qdrant 1.18 eller senare (behöver inte vara igång före första start om du använder
+  `docker compose`, se nedan)
+
+### Ollama-modeller
+
+Appens standardkonfiguration använder tre modeller:
+
+```bash
+ollama pull qwen3:8b
+ollama pull qllama/multilingual-e5-large
+ollama pull phi3.5:latest
+```
+
+- `qwen3:8b` – chatt, svarsvalidering, förfining och följdfrågor
+- `qllama/multilingual-e5-large` – embeddings (1024 dimensioner)
+- `phi3.5:latest` – sök-gate och omformulering av sökfrågor
+
+Modellerna kan bytas i `src/main/resources/application.properties` eller i inställningarna i
+webbgränssnittet.
+
+## Köra lokalt
+
+Starta Qdrant om du inte redan har en instans:
+
+```bash
+docker run --rm -p 6333:6333 -p 6334:6334 -v qdrant-data:/qdrant/storage qdrant/qdrant:v1.18.2
+```
+
+Starta sedan appen:
 
 ```bash
 ./gradlew bootRun
 ```
 
-Konfiguration ligger i `src/main/resources/application.properties`. Adresser till Ollama och
-Qdrant kan sättas med `OLLAMA_BASE_URL` och `QDRANT_BASE_URL`, eller i den gitignorerade filen
-`application-local.properties`:
+Öppna <http://localhost:8080>. Kollektionen skapas automatiskt vid första uppladdningen.
+
+### Miljövariabler
+
+| Variabel | Standard | Beskrivning |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Adress till Ollama |
+| `QDRANT_BASE_URL` | `http://localhost:6333` | Adress till Qdrant |
+| `QDRANT_COLLECTION` | `docs` | Standardkollektion |
+| `CHAT_THINKING` | `true` | Skicka `think` till qwen3-modeller |
+
+Övriga inställningar kan sättas i `src/main/resources/application.properties` eller i den
+gitignorerade filen `application-local.properties`:
 
 ```properties
 ollama.base-url=http://localhost:11434
 qdrant.base-url=http://localhost:6333
+qdrant.collection=docs
 ```
+
+Uppladdade original sparas i `archive/` (kan ändras med `archive.upload-dir`). PDF-filer utanför
+den mappen kan läsas om deras rötter anges i `archive.pdf-roots` (kommaseparerat).
+
+## Docker Compose
+
+`docker-compose.yml` startar appen och Qdrant:
+
+```bash
+docker compose up --build
+```
+
+Ollama körs normalt på värden. Compose pekar appen mot
+`http://host.docker.internal:11434`; sätt `OLLAMA_BASE_URL` om Ollama finns någon annanstans.
+Originalfiler hamnar i `./archive` och Qdrants data i volymen `qdrant-data`.
 
 ## Tester
 
@@ -24,7 +86,8 @@ qdrant.base-url=http://localhost:6333
 ./gradlew test
 ```
 
-Utvärderingstestet (`@Tag("eval")`) körs inte som en del av den vanliga testsviten.
+Utvärderingstestet (`@Tag("eval")`) körs inte som en del av den vanliga testsviten. CI kör
+`./gradlew build`, vilket även bygger ett körbart jar-paket.
 
 ## Retrieval-utvärdering (E1)
 
@@ -93,3 +156,14 @@ På exempelfrågorna i E1 förbättrades MRR från 0.87 till 1.00:
 ```bash
 QDRANT_COLLECTION=Honeywell RAG_RERANK_ENABLED=true ./gradlew eval
 ```
+
+## Indexering och dubbletter
+
+Uppladdning dedupliceras på SHA-256 av filinnehållet. Ett identiskt dokument indexeras inte igen,
+och svaret anger att nya taggar eller kollektioner inte tillämpades. Originalfilen sparas först
+när innehållet har kunnat läsas och chunkas; om indexeringen misslyckas raderas den. När ett
+dokument tas bort raderas även originalfilen.
+
+## Licens
+
+Licens är inte vald ännu. Fråga ägaren innan projektet återanvänds eller publiceras.

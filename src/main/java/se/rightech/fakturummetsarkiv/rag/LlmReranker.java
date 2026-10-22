@@ -9,6 +9,7 @@ import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -111,7 +112,7 @@ public class LlmReranker implements Reranker {
 
     private static String stripThink(String text) {
         String cleaned = text.replaceAll("(?is)<think.*?</think\\s*>", " ");
-        int open = cleaned.toLowerCase().indexOf("<think");
+        int open = cleaned.toLowerCase(Locale.ROOT).indexOf("<think");
         return open >= 0 ? cleaned.substring(0, open) : cleaned;
     }
 }

@@ -1,0 +1,10 @@
+.git
+.gradle
+build
+archive
+.idea
+application-local.properties
+*.env
+.env
+*.pdf
+*.log

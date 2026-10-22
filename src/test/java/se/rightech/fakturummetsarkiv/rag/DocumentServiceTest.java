@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -95,6 +96,8 @@ class DocumentServiceTest {
             assertThat(payload.get("tags")).isEqualTo(List.of("manual"));
             assertThat(String.valueOf(payload.get("documentId"))).isNotBlank();
             assertThat(payload.get("text").toString()).isNotBlank();
+            assertThat(String.valueOf(payload.get("contentHash"))).matches("[0-9a-f]{64}");
+            assertThat(payload.get("characters")).isInstanceOf(Number.class);
         });
         assertThat(payloads).anySatisfy(payload -> assertThat(payload.get("page")).isEqualTo(1));
         assertThat(payloads).anySatisfy(payload -> assertThat(payload.get("page")).isEqualTo(2));
@@ -195,7 +198,7 @@ class DocumentServiceTest {
         when(qdrantClient.scrollPayloads(eq("docs"), anyList())).thenReturn(List.of(
                 Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
                 Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
-                Map.of("source", "gammal.pdf", "path", "/x/gammal.pdf")));
+                Map.of("source", "gammal.pdf", "path", "/x/gammal.pdf", "text", "gammal text")));
         when(qdrantClient.scrollPayloads(eq("manuals"), anyList())).thenReturn(List.of(
                 Map.of("documentId", "d2", "title", "b.pdf", "collection", "manuals",
                         "tags", List.of("manual"), "createdAt", 2000L)));
@@ -207,6 +210,10 @@ class DocumentServiceTest {
             assertThat(doc.id()).isEqualTo("d1");
             assertThat(doc.name()).isEqualTo("a.pdf");
             assertThat(doc.chunks()).isEqualTo(2);
+        });
+        assertThat(docs).anySatisfy(doc -> {
+            assertThat(doc.id()).isEqualTo("gammal.pdf");
+            assertThat(doc.characters()).isEqualTo("gammal text".length());
         });
         assertThat(docs).anySatisfy(doc -> {
             assertThat(doc.id()).isEqualTo("gammal.pdf");
@@ -240,15 +247,14 @@ class DocumentServiceTest {
     }
 
     @Test
-    void deletesByDocumentIdAndSourceInEveryCollection() {
+    void deletesByDocumentIdOnlyInEveryCollection() {
         when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
 
         service.delete("d1");
 
         verify(qdrantClient).deleteByMatch("docs", "documentId", "d1");
-        verify(qdrantClient).deleteByMatch("docs", "source", "d1");
         verify(qdrantClient).deleteByMatch("manuals", "documentId", "d1");
-        verify(qdrantClient).deleteByMatch("manuals", "source", "d1");
+        verify(qdrantClient, org.mockito.Mockito.never()).deleteByMatch(anyString(), eq("source"), anyString());
     }
 
     @Test
@@ -299,7 +305,7 @@ class DocumentServiceTest {
     void doesNotSerializeServerPaths() throws Exception {
         JsonMapper json = JsonMapper.builder().build();
         String info = json.writeValueAsString(new DocumentService.DocumentInfo(
-                "id", "a.pdf", 1, 10, "/srv/hemligt/a.pdf", "docs", List.of(), Instant.now(), false));
+                "id", "a.pdf", 1, 10, "/srv/hemligt/a.pdf", "docs", List.of(), Instant.now(), false, null));
         String detail = json.writeValueAsString(new DocumentService.DocumentDetail(
                 "id", "a.pdf", "/srv/hemligt/a.pdf", "docs", List.of(), 1, 10, List.of()));
 
@@ -324,5 +330,74 @@ class DocumentServiceTest {
             document.save(out);
             return out.toByteArray();
         }
+    }
+
+    @Test
+    void skipsIdenticalContentAndExplainsWhyTagsWereNotApplied() throws IOException {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs"));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of(
+                Map.of("documentId", "old", "title", "original.txt", "collection", "docs",
+                        "contentHash", "abc", "characters", 5, "tags", List.of("old"))));
+
+        DocumentService.DocumentInfo info = service.addFile(
+                "kopia.txt", "samma".getBytes(), "manuals", List.of("ny"));
+
+        assertThat(info.skipped()).isTrue();
+        assertThat(info.id()).isEqualTo("old");
+        assertThat(info.notice()).contains("Nya taggar och kollektion har inte tillämpats");
+        verify(qdrantClient, never()).upsert(anyString(), anyList());
+        try (var files = Files.list(uploadDir)) {
+            assertThat(files).isEmpty();
+        }
+    }
+
+    @Test
+    void deletesStoredOriginalWhenIndexingFails() throws IOException {
+        when(llm.embed(anyString(), anyList())).thenThrow(new IllegalStateException("Ollama nere"));
+
+        assertThatThrownBy(() -> service.addFile(
+                "trasig.txt", "innehall".getBytes(), "docs", List.of()))
+                .isInstanceOf(IllegalStateException.class);
+        try (var files = Files.list(uploadDir)) {
+            assertThat(files).isEmpty();
+        }
+    }
+
+    @Test
+    void deletesOriginalFileWhenDocumentIsDeleted() throws IOException {
+        Path original = Files.writeString(uploadDir.resolve("original.txt"), "innehall");
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs"));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of(
+                Map.of("documentId", "d1", "path", original.toString())));
+
+        service.delete("d1");
+
+        assertThat(Files.exists(original)).isFalse();
+        verify(qdrantClient).deleteByMatch("docs", "documentId", "d1");
+    }
+
+    @Test
+    void normalisesTagsToLowerCaseAndDeduplicates() throws IOException {
+        DocumentService.DocumentInfo info = service.addFile(
+                "taggar.txt", "innehall".getBytes(), "docs", List.of("Manual", "MANUAL", " Experion "));
+
+        assertThat(info.tags()).containsExactly("manual", "experion");
+        assertThat(capturedPayloads().get(0).get("tags")).isEqualTo(List.of("manual", "experion"));
+    }
+
+    @Test
+    void detailMergesMatchesFromSeveralCollections() {
+        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of(
+                Map.of("title", "a.pdf", "chunkIndex", 0, "text", "del ett")));
+        when(qdrantClient.scrollPayloads(eq("manuals"), anyList(), any())).thenReturn(List.of(
+                Map.of("title", "a.pdf", "chunkIndex", 1, "text", "del tva")));
+
+        DocumentService.DocumentDetail detail = service.detail("d1");
+
+        assertThat(detail.chunks()).isEqualTo(2);
+        assertThat(detail.collection()).isEqualTo("docs, manuals");
+        assertThat(detail.content()).extracting(DocumentService.DocumentChunk::text)
+                .containsExactly("del ett", "del tva");
     }
 }

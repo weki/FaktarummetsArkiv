@@ -9,6 +9,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -142,7 +143,7 @@ public class GroundingValidator {
         if (node.isBoolean()) {
             return node.asBoolean();
         }
-        String value = node.asString("").trim().toLowerCase();
+        String value = node.asString("").trim().toLowerCase(Locale.ROOT);
         return switch (value) {
             case "true", "yes" -> Boolean.TRUE;
             case "false", "no" -> Boolean.FALSE;
@@ -154,7 +155,7 @@ public class GroundingValidator {
         Boolean ok = null;
         Matcher supported = SUPPORTED_PATTERN.matcher(text);
         if (supported.find()) {
-            String value = supported.group(1).toLowerCase();
+            String value = supported.group(1).toLowerCase(Locale.ROOT);
             ok = value.equals("true") || value.equals("yes") ? Boolean.TRUE : Boolean.FALSE;
         }
         Matcher reason = REASON_PATTERN.matcher(text);
