@@ -14,6 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 class GroundingValidatorTest {
 
@@ -23,7 +24,8 @@ class GroundingValidatorTest {
     private final OllamaProperties properties = new OllamaProperties(
             "http://localhost:11434", "gemma4:latest", "qllama/multilingual-e5-large",
             java.time.Duration.ofSeconds(5), "phi3.5:latest", true, "", "", "", 16384, 4096);
-    private final GroundingValidator validator = new GroundingValidator(client, properties);
+    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
+    private final GroundingValidator validator = new GroundingValidator(client, properties, rag);
 
     private static List<Map<String, Object>> sources() {
         return List.of(Map.of("title", "dok", "text", "innehall"));

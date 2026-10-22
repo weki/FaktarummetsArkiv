@@ -45,6 +45,23 @@ public class SessionMemory {
         }
     }
 
+    /** Ersätter senaste assistentmeddelandet, t.ex. efter en grundningskorrigering. */
+    public void replaceLastAssistant(String sessionId, String assistantMessage) {
+        if (sessionId == null || sessionId.isBlank() || assistantMessage == null || assistantMessage.isBlank()) {
+            return;
+        }
+        Deque<Map<String, String>> turns = sessions.get(sessionId);
+        if (turns == null) {
+            return;
+        }
+        synchronized (turns) {
+            if (!turns.isEmpty() && "assistant".equals(turns.peekLast().get("role"))) {
+                turns.removeLast();
+            }
+            turns.addLast(Map.of("role", "assistant", "content", assistantMessage));
+        }
+    }
+
     public void clear(String sessionId) {
         if (sessionId != null && !sessionId.isBlank()) {
             sessions.remove(sessionId);

@@ -3,6 +3,7 @@ package se.rightech.fakturummetsarkiv.grounding;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -16,7 +17,6 @@ import java.util.regex.Pattern;
 public class GroundingValidator {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final int MAX_SOURCE_CHARS = 6000;
 
     private static final String SYSTEM_PROMPT = """
             You are a strict grounding checker for a document question-answering system.
@@ -37,10 +37,12 @@ public class GroundingValidator {
 
     private final OllamaClient client;
     private final OllamaProperties properties;
+    private final RagProperties rag;
 
-    public GroundingValidator(OllamaClient client, OllamaProperties properties) {
+    public GroundingValidator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
         this.client = client;
         this.properties = properties;
+        this.rag = rag;
     }
 
     public GroundingResult validate(String question, List<Map<String, Object>> sources, String answer,
@@ -67,9 +69,9 @@ public class GroundingValidator {
         }
     }
 
-    private static String buildUserPrompt(String question, List<Map<String, Object>> sources, String answer) {
+    private String buildUserPrompt(String question, List<Map<String, Object>> sources, String answer) {
         return "QUESTION:\n" + (question == null ? "" : question)
-                + "\n\nSOURCES:\n" + SourceText.block(sources, MAX_SOURCE_CHARS)
+                + "\n\nSOURCES:\n" + SourceText.block(sources, rag.maxSourceChars())
                 + "\nDRAFT ANSWER:\n" + answer + "\n";
     }
 

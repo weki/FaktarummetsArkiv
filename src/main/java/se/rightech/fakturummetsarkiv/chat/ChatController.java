@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import se.rightech.fakturummetsarkiv.grounding.AnswerRefiner;
 import se.rightech.fakturummetsarkiv.grounding.GroundingResult;
 import se.rightech.fakturummetsarkiv.grounding.GroundingValidator;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
@@ -39,17 +40,20 @@ public class ChatController {
     private final ChatService chatService;
     private final SettingsStore settingsStore;
     private final GroundingValidator groundingValidator;
+    private final AnswerRefiner answerRefiner;
     private final FollowUpGenerator followUpGenerator;
     private final MarkdownRenderer markdownRenderer;
     private final OllamaClient ollamaClient;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
     public ChatController(ChatService chatService, SettingsStore settingsStore,
-                          GroundingValidator groundingValidator, FollowUpGenerator followUpGenerator,
+                          GroundingValidator groundingValidator, AnswerRefiner answerRefiner,
+                          FollowUpGenerator followUpGenerator,
                           MarkdownRenderer markdownRenderer, OllamaClient ollamaClient) {
         this.chatService = chatService;
         this.settingsStore = settingsStore;
         this.groundingValidator = groundingValidator;
+        this.answerRefiner = answerRefiner;
         this.followUpGenerator = followUpGenerator;
         this.markdownRenderer = markdownRenderer;
         this.ollamaClient = ollamaClient;
@@ -125,6 +129,17 @@ public class ChatController {
                 GroundingResult validation = validationFuture.join();
                 if (validation != null) {
                     sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
+                }
+                if (validation != null && Boolean.FALSE.equals(validation.supported()) && answerRefiner != null) {
+                    String refined = answerRefiner.refine(request.message(), collectedSources,
+                            result.answer(), settings.refineModel());
+                    if (refined != null && !refined.isBlank()
+                            && !refined.trim().equals(result.answer().trim())) {
+                        sendEvent(emitter, "refined", json(refined), MediaType.TEXT_PLAIN);
+                        sendEvent(emitter, "answerHtml",
+                                json(markdownRenderer.toHtml(refined)), MediaType.TEXT_PLAIN);
+                        chatService.correctLastAnswer(request.sessionId(), refined);
+                    }
                 }
                 List<String> followUps = followUpsFuture.join();
                 sendEvent(emitter, "followups", followUps, MediaType.APPLICATION_JSON);

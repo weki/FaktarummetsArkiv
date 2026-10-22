@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,6 @@ import java.util.Map;
 public class AnswerRefiner {
 
     private static final Logger log = LoggerFactory.getLogger(AnswerRefiner.class);
-    private static final int MAX_SOURCE_CHARS = 8000;
     private static final String REFUSAL_MARKER = "cannot find that information";
 
     private static final String SYSTEM_PROMPT = """
@@ -29,14 +29,19 @@ public class AnswerRefiner {
 
     private final OllamaClient client;
     private final OllamaProperties properties;
+    private final RagProperties rag;
 
-    public AnswerRefiner(OllamaClient client, OllamaProperties properties) {
+    public AnswerRefiner(OllamaClient client, OllamaProperties properties, RagProperties rag) {
         this.client = client;
         this.properties = properties;
+        this.rag = rag;
     }
 
     public boolean enabled() {
-        String model = properties.refineModel();
+        return enabled(properties.refineModel());
+    }
+
+    public boolean enabled(String model) {
         return model != null && !model.isBlank();
     }
 
@@ -45,11 +50,16 @@ public class AnswerRefiner {
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft) {
-        if (!enabled() || sources == null || sources.isEmpty()) {
+        return refine(question, sources, draft, properties.refineModel());
+    }
+
+    public String refine(String question, List<Map<String, Object>> sources, String draft, String model) {
+        String chosen = model != null && !model.isBlank() ? model : properties.refineModel();
+        if (!enabled(chosen) || sources == null || sources.isEmpty()) {
             return null;
         }
         try {
-            String raw = client.chat(properties.refineModel(), SYSTEM_PROMPT, buildPrompt(question, sources, draft));
+            String raw = client.chat(chosen, SYSTEM_PROMPT, buildPrompt(question, sources, draft));
             String answer = raw == null ? "" : raw.trim();
             return answer.isEmpty() ? null : answer;
         } catch (Exception ex) {
@@ -58,9 +68,9 @@ public class AnswerRefiner {
         }
     }
 
-    private static String buildPrompt(String question, List<Map<String, Object>> sources, String draft) {
+    private String buildPrompt(String question, List<Map<String, Object>> sources, String draft) {
         return "QUESTION:\n" + (question == null ? "" : question)
-                + "\n\nSOURCES:\n" + SourceText.block(sources, MAX_SOURCE_CHARS)
+                + "\n\nSOURCES:\n" + SourceText.block(sources, rag.maxSourceChars())
                 + "\nDRAFT ANSWER:\n" + (draft == null ? "" : draft) + "\n";
     }
 }

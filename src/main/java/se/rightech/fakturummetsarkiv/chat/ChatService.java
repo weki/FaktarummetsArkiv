@@ -138,6 +138,10 @@ public StreamResult streamChat(String question, String sessionId,
         return new StreamResult(sources, answer, search);
     }
 
+    public void correctLastAnswer(String sessionId, String answer) {
+        sessionMemory.replaceLastAssistant(sessionId, answer);
+    }
+
     private static boolean useHistory(WorkspaceSettings settings) {
         return !"query".equalsIgnoreCase(settings.chatMode());
     }

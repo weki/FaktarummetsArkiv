@@ -3,6 +3,7 @@ package se.rightech.fakturummetsarkiv.grounding;
 import org.junit.jupiter.api.Test;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.time.Duration;
 import java.util.List;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.when;
 class AnswerRefinerTest {
 
     private final OllamaClient client = mock(OllamaClient.class);
+    private static final RagProperties RAG = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
 
     private static OllamaProperties props(String refineModel) {
         return new OllamaProperties("http://localhost:11434", "deepseek-r1:14b",
@@ -30,7 +32,7 @@ class AnswerRefinerTest {
     @Test
     void refinesUsingConfiguredModel() {
         when(client.chat(eq("gemma4:latest"), any(), any())).thenReturn("  grundat svar  ");
-        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"));
+        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"), RAG);
 
         assertThat(refiner.enabled()).isTrue();
         assertThat(refiner.refine("fraga", sources(), "utkast")).isEqualTo("grundat svar");
@@ -38,7 +40,7 @@ class AnswerRefinerTest {
 
     @Test
     void disabledWithoutModel() {
-        AnswerRefiner refiner = new AnswerRefiner(client, props(""));
+        AnswerRefiner refiner = new AnswerRefiner(client, props(""), RAG);
 
         assertThat(refiner.enabled()).isFalse();
         assertThat(refiner.refine("fraga", sources(), "utkast")).isNull();
@@ -46,7 +48,7 @@ class AnswerRefinerTest {
 
     @Test
     void returnsNullWithoutSources() {
-        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"));
+        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"), RAG);
 
         assertThat(refiner.refine("fraga", List.of(), "utkast")).isNull();
     }
@@ -54,14 +56,14 @@ class AnswerRefinerTest {
     @Test
     void returnsNullOnError() {
         when(client.chat(any(), any(), any())).thenThrow(new RuntimeException("nere"));
-        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"));
+        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"), RAG);
 
         assertThat(refiner.refine("fraga", sources(), "utkast")).isNull();
     }
 
     @Test
     void detectsRefusal() {
-        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"));
+        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"), RAG);
 
         assertThat(refiner.isRefusal("I cannot find that information in the documents.")).isTrue();
         assertThat(refiner.isRefusal("Control Builder is used like this.")).isFalse();
