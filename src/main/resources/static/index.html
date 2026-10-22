@@ -1992,7 +1992,9 @@
     }
 
     function docPdfUrl(ref) {
-        return ref.documentId ? DOC_API + '/' + encodeURIComponent(ref.documentId) + '/pdf' : null;
+        if (!ref.documentId) return null;
+        const url = DOC_API + '/' + encodeURIComponent(ref.documentId) + '/pdf';
+        return ref.page !== undefined && ref.page !== null ? url + '#page=' + encodeURIComponent(ref.page) : url;
     }
 
     function docDownloadUrl(ref) {
