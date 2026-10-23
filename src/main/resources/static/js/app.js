@@ -359,13 +359,19 @@ const API = '/api/chat';
         if (!validation) return;
         let cls = 'unknown';
         let label = 'Ej verifierad';
-        if (validation.refused === true) {
-            cls = 'info';
-            label = 'Inget svar i källorna';
-        } else if (validation.supported === true) {
+        if (validation.verdict === 'SUPPORTED' || validation.supported === true) {
             cls = 'ok';
             label = 'Verifierad mot källor';
-        } else if (validation.supported === false) {
+        } else if (validation.verdict === 'PARTIALLY_SUPPORTED') {
+            cls = 'warn';
+            label = 'Delvis styrkt av källor';
+        } else if (validation.verdict === 'NOT_ENOUGH_INFO') {
+            cls = 'info';
+            label = 'Källorna räcker inte för att verifiera';
+        } else if (validation.refused === true) {
+            cls = 'info';
+            label = 'Inget svar i källorna';
+        } else if (validation.verdict === 'UNSUPPORTED' || validation.supported === false) {
             cls = 'warn';
             label = 'Ej styrkt av källor';
         }
@@ -378,6 +384,16 @@ const API = '/api/chat';
             reason.className = 'validation-reason';
             reason.textContent = 'Varför: ' + validation.reason;
             container.appendChild(reason);
+        }
+        if (Array.isArray(validation.unsupportedClaims) && validation.unsupportedClaims.length) {
+            const claims = document.createElement('ul');
+            claims.className = 'validation-claims';
+            for (const claim of validation.unsupportedClaims) {
+                const item = document.createElement('li');
+                item.textContent = claim;
+                claims.appendChild(item);
+            }
+            container.appendChild(claims);
         }
     }
 

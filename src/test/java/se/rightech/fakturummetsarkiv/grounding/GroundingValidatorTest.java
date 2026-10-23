@@ -45,6 +45,30 @@ class GroundingValidatorTest {
     }
 
     @Test
+    void parsesClaimLevelVerdict() {
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn(
+                "{\"verdict\":\"PARTIALLY_SUPPORTED\",\"supported\":false,\"reason\":\"ett pastaende saknas\","
+                        + "\"unsupportedClaims\":[\"Pastaende X\",\"Pastaende Y\"]}");
+
+        GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
+
+        assertThat(result.verdict()).isEqualTo(GroundingResult.PARTIALLY_SUPPORTED);
+        assertThat(result.supported()).isFalse();
+        assertThat(result.unsupportedClaims()).containsExactly("Pastaende X", "Pastaende Y");
+    }
+
+    @Test
+    void derivesVerdictFromLegacySupportedField() {
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("{\"supported\": true, \"reason\": \"ok\"}");
+
+        GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
+
+        assertThat(result.verdict()).isEqualTo(GroundingResult.SUPPORTED);
+        assertThat(result.unsupportedClaims()).isEmpty();
+    }
+
+    @Test
     void reportsUnsupportedWithSurroundingText() {
         when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("har ar svaret: {\"supported\": false, \"reason\": \"pastaende X saknas\"} klart");

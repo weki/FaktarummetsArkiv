@@ -398,6 +398,7 @@
             border: 1px solid rgba(251, 191, 36, .25);
         }
         .validation-reason { margin-top: 6px; font-size: 12px; color: var(--danger); }
+        .validation-claims { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
         .source-actions { display: flex; gap: 14px; padding: 8px 12px 10px; border-top: 1px solid var(--border); }
         .source-actions a, .source-actions button.link-btn { color: var(--accent); font-size: 12px; font-weight: 500; text-decoration: none; }
         .source-actions button.link-btn { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
