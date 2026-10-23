@@ -124,23 +124,27 @@ Originalfiler hamnar i `./archive` och Qdrants data i volymen `qdrant-data`.
 Utvärderingstestet (`@Tag("eval")`) körs inte som en del av den vanliga testsviten. CI kör
 `./gradlew build`, vilket även bygger ett körbart jar-paket.
 
-## Retrieval-utvärdering (E1)
+## Utvärdering (E1/T1/T2)
 
-Harnesset mäter **recall@5** och **MRR** per språk mot en körande Ollama och Qdrant. Frågorna
+Harnesset mäter både retrieval och det faktiska svaret mot en körande Ollama och Qdrant. Frågorna
 ligger i `src/test/resources/eval/questions.jsonl`, ett JSON-objekt per rad:
 
 ```json
-{"id": "en-example", "lang": "en", "question": "...", "expectedDocuments": ["del-av-filnamn"], "expectedPhrases": ["..."]}
+{"id": "en-example", "lang": "en", "question": "...", "expectedDocuments": ["del-av-filnamn"], "expectedPhrases": ["..."], "expectedFacts": ["..."], "expectedCitations": ["dokumenttitel"], "expectNoAnswer": false, "notes": "..."}
 ```
 
-`expectedDocuments` matchas mot källans `source`/`title` (skiftlägesokänsligt, delsträng), och
-`expectedPhrases` mäter hur stor del av förväntade fraser som finns i de hämtade textstyckena.
+- `expectedDocuments` matchas mot källans `source`/`title` (skiftlägesokänsligt, delsträng).
+- `expectedPhrases` mäter hur stor del av förväntade fraser som finns i hämtade textstycken.
+- `expectedFacts` mäter **factual recall** i det genererade svaret.
+- `expectedCitations` mäter **citation recall/precision** mot de källor som svaret faktiskt citerar.
+- `expectNoAnswer` mäter om exakt `I cannot find that information in the documents.` returneras.
+- `notes` är fritt för ägarens kommentarer.
 
-De fem medföljande frågorna är **exempel som ägaren ska ersätta** med frågor och förväntade
-dokument från det egna arkivet.
+Frågorna är **exempel som ägaren ska ersätta** med frågor, förväntade fakta och dokument från det
+egna arkivet. Använd minst 20–30 frågor per språk, blanda faktafrågor, följdfrågor och frågor som
+inte ska besvaras, och ändra inte frågorna när ni jämför före/efter en ändring.
 
-Kör mot lokala tjänster (samma konfiguration som appen). Ange vilken Qdrant-kollektion som ska
-utvärderas om den inte heter `docs`:
+Kör mot lokala tjänster (samma konfiguration som appen). Ange kollektion om den inte heter `docs`:
 
 ```bash
 QDRANT_COLLECTION=Honeywell ./gradlew eval
@@ -149,15 +153,43 @@ QDRANT_COLLECTION=Honeywell ./gradlew eval
 Exempel på utskrift:
 
 ```
+Question               Lang Rank   Recall  Phrase  Fact    CitRec  CitPrec NoAns
+------------------------------------------------------------------------------------
+en-icon-console        en   1      1.00    1.00    1.00    1.00    1.00    yes
+sv-t5810xl             sv   1      1.00    0.50    1.00    1.00    1.00    yes
+
 Language  Questions Recall@5  MRR     Phrase
 ------------------------------------------------
 en        3         1.00      0.78    1.00
-sv        2         1.00      1.00    0.75
-all       5         1.00      0.87    0.90
+sv        3         1.00      1.00    0.75
+all       6         1.00      0.87    0.90
+
+Language  Questions Fact     CitRec  CitPrec  NoAns
+--------------------------------------------------------
+all       6         0.92     0.83    0.75     1.00
 ```
 
-Använd resultatet före och efter en ändring för att avgöra om ändringen förbättrar retrieval,
-t.ex. innan hybrid search eller reranking slås på.
+Varje körning skriver också `eval/baseline-<timestamp>.json` med konfiguration (modeller,
+kontextstorlekar, top-k, tröskel och flaggor) och per-fråga-resultat. Filen är gitignored och ska
+inte committas. Jämför alltid mot samma frågeuppsättning och samma modeller; en enskild körning
+säger inget om kvaliteten.
+
+### Begränsningar
+
+- Harnesset kräver Ollama och Qdrant med indexerade dokument. CI kör bara `./gradlew build`; den
+  vanliga testsviten exkluderar `@Tag("eval")`.
+- Retrieval- och svarsmått mäter det egna urvalet, inte generell kvalitet. Små urval ger stor
+  slumpvariation.
+- `expectedFacts` matchas som normaliserad delsträng. Formuleringar som betyder samma sak men
+  använder andra ord räknas inte som träff.
+- `expectedCitations` matchas mot källtitel/source. Citeringssiffror kan ändras mellan körningar
+  eftersom de följer källordningen.
+- Brier-poängen beräknas bara när validering är på och domaren gav `supported`; den är en grov
+  kalibreringssignal, inte en sannolikhet.
+- Körningen ändrar inga dokument eller index. Den anropar däremot Ollama och kan ta lång tid.
+
+Använd resultatet före och efter en ändring för att avgöra om ändringen förbättrar retrieval eller
+svar, t.ex. innan hybrid search eller reranking slås på.
 
 ## Svar och thinking
 
