@@ -3,6 +3,7 @@ package se.rightech.fakturummetsarkiv.chat;
 import org.junit.jupiter.api.Test;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.time.Duration;
 import java.util.List;
@@ -27,6 +28,10 @@ class FollowUpGeneratorTest {
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     }
 
+    private static RagProperties rag() {
+        return new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
+    }
+
     private static List<Map<String, Object>> sources() {
         return List.of(Map.of("title", "OPCUA_v15.pdf", "text", "OPC UA uses redundancy."));
     }
@@ -38,7 +43,7 @@ class FollowUpGeneratorTest {
                 - What are the security requirements
                 2. Which systems support OPC UA?
                 """);
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         List<String> questions = generator.generate("Fraga", "OPC UA is redundant.", sources(), null, null, 3);
 
@@ -51,14 +56,14 @@ class FollowUpGeneratorTest {
     @Test
     void refusesWhenModelSaysNone() {
         when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("NONE");
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         assertThat(generator.generate("Fraga", "svar", sources(), null, null, 3)).isEmpty();
     }
 
     @Test
     void returnsEmptyWithoutSourcesOrAnswer() {
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         assertThat(generator.generate("Fraga", "svar", List.of(), null, null, 3)).isEmpty();
         assertThat(generator.generate("Fraga", "", sources(), null, null, 3)).isEmpty();
@@ -67,7 +72,7 @@ class FollowUpGeneratorTest {
     @Test
     void returnsEmptyOnError() {
         when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenThrow(new RuntimeException("nere"));
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         assertThat(generator.generate("Fraga", "svar", sources(), null, null, 3)).isEmpty();
     }
@@ -75,7 +80,7 @@ class FollowUpGeneratorTest {
     @Test
     void unansweredRefusalFallsBackToLocatorQuestion() {
         when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("NONE");
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         List<String> questions = generator.generate("Vad är redundant?",
                 "I cannot find that information in the documents.", sources(), null, null, 3);
@@ -89,7 +94,7 @@ class FollowUpGeneratorTest {
                 1. Which section of OPCUA_v15.pdf covers redundancy?
                 2. What does OPCUA_v15.pdf say about security?
                 """);
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         List<String> questions = generator.generate("Vad är redundant?", "Kunde inte hitta informationen.",
                 sources(), null, null, 3);
@@ -109,7 +114,7 @@ class FollowUpGeneratorTest {
         when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn(
                 "How does the redundancy mechanism in OPC UA handle failover between redundant servers in a "
                         + "multi-site deployment with high availability requirements?");
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         List<String> questions = generator.generate("Fraga", "OPC UA is redundant.", sources(), null, null, 3);
 
@@ -124,7 +129,7 @@ class FollowUpGeneratorTest {
                 How does redundancy work
                 Which systems support OPC UA?
                 """);
-        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
+        FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"), rag());
 
         List<String> questions = generator.generate("How does redundancy work?",
                 "OPC UA is redundant.", sources(), null, null, 3);
@@ -141,7 +146,7 @@ class FollowUpGeneratorTest {
                 "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
                 16384, 8192, 2048, 2048, false, false, false, false, true, null);
 
-        new FollowUpGenerator(client, thinking).generate("Fraga", "svar", sources(), "qwen3:8b", "qwen3:8b", 1);
+        new FollowUpGenerator(client, thinking, rag()).generate("Fraga", "svar", sources(), "qwen3:8b", "qwen3:8b", 1);
 
         org.mockito.ArgumentCaptor<Boolean> flag = org.mockito.ArgumentCaptor.forClass(Boolean.class);
         org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(),

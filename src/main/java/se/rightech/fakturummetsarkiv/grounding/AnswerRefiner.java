@@ -72,7 +72,7 @@ public class AnswerRefiner {
 
     private String buildPrompt(String question, List<Map<String, Object>> sources, String draft) {
         return "QUESTION:\n" + (question == null ? "" : question)
-                + "\n\nSOURCES:\n" + SourceText.block(sources, rag.maxSourceChars())
+                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, rag.maxSourceChars()).text()
                 + "\nDRAFT ANSWER:\n" + (draft == null ? "" : draft) + "\n";
     }
 }

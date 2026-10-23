@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import se.rightech.fakturummetsarkiv.grounding.SourceText;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -18,7 +19,6 @@ import java.util.Set;
 public class FollowUpGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(FollowUpGenerator.class);
-    private static final int MAX_SOURCE_CHARS = 6000;
     private static final int MAX_QUESTION_CHARS = 110;
     private static final List<String> UNANSWERED_MARKERS = List.of(
             "cannot find that information",
@@ -68,10 +68,12 @@ public class FollowUpGenerator {
 
     private final OllamaClient client;
     private final OllamaProperties properties;
+    private final RagProperties rag;
 
-    public FollowUpGenerator(OllamaClient client, OllamaProperties properties) {
+    public FollowUpGenerator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
         this.client = client;
         this.properties = properties;
+        this.rag = rag;
     }
 
     public List<String> generate(String question, String answer, List<Map<String, Object>> sources,
@@ -136,40 +138,14 @@ public class FollowUpGenerator {
         return false;
     }
 
-    private static String buildPrompt(String question, String answer, List<Map<String, Object>> sources,
-                                      boolean answered, String validationNote) {
+    private String buildPrompt(String question, String answer, List<Map<String, Object>> sources,
+                               boolean answered, String validationNote) {
         return "USER QUESTION:\n" + (question == null ? "" : question)
                 + "\n\nANSWER STATUS: " + (answered ? "ANSWERED" : "UNANSWERED")
                 + (validationNote == null || validationNote.isBlank()
                         ? "" : "\nVALIDATION NOTE:\n" + validationNote)
                 + "\n\nANSWER:\n" + (answer == null ? "" : answer)
-                + "\n\nSOURCES:\n" + sourceBlock(sources, MAX_SOURCE_CHARS) + "\n";
-    }
-
-    private static String sourceBlock(List<Map<String, Object>> sources, int maxChars) {
-        StringBuilder sb = new StringBuilder();
-        int budget = maxChars;
-        for (Map<String, Object> source : sources) {
-            if (budget <= 0) {
-                break;
-            }
-            StringBuilder header = new StringBuilder("<<<SOURCE: ")
-                    .append(SourceText.sanitize(str(source.get("title"), "Källa")));
-            Object page = source.get("page");
-            if (page != null) {
-                header.append(", page ").append(page);
-            }
-            header.append(">>>\n");
-            String block = header + SourceText.sanitize(source.get("text")) + "\n<<<END SOURCE>>>\n\n";
-            if (block.length() > budget) {
-                sb.append(block, 0, budget);
-                budget = 0;
-            } else {
-                sb.append(block);
-                budget -= block.length();
-            }
-        }
-        return sb.toString();
+                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, rag.maxSourceChars()).text() + "\n";
     }
 
     private static String str(Object value, String fallback) {

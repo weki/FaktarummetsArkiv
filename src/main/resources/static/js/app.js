@@ -263,7 +263,8 @@ const API = '/api/chat';
             item.className = 'source-item';
 
             const head = document.createElement('summary');
-            const title = source.title || source.name || source.source || 'Källa';
+            const title = (source.citationNumber ? '[' + source.citationNumber + '] ' : '')
+                + (source.title || source.name || source.source || 'Källa');
             const bits = [];
             if (source.collection) bits.push(source.collection);
             if (source.page !== undefined && source.page !== null) bits.push('sida ' + source.page);

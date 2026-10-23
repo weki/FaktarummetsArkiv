@@ -95,11 +95,14 @@ public StreamResult streamChat(String question, String sessionId,
             }
             int topK = validatedTopK(settings.topN());
             Double threshold = settings.similarityThreshold();
-            sources = retrievalService.retrieve(searchQuery, effectiveCollections, topK, threshold, effectiveDocumentIds);
+            List<Map<String, Object>> retrieved =
+                    retrievalService.retrieve(searchQuery, effectiveCollections, topK, threshold, effectiveDocumentIds);
+            SourceText.Block sourceBlock = SourceText.numberedBlock(retrieved, rag.maxSourceChars());
+            sources = sourceBlock.sources();
             if (onSources != null) {
                 onSources.accept(sources);
             }
-            systemPrompt = systemPrompt(sources);
+            systemPrompt = systemPrompt(sources, sourceBlock.text());
         } else {
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(false, question));
@@ -237,7 +240,7 @@ public StreamResult streamChat(String question, String sessionId,
         return sb.toString();
     }
 
-    private String systemPrompt(List<Map<String, Object>> sources) {
+    private String systemPrompt(List<Map<String, Object>> sources, String sourceBlock) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are an assistant that answers questions about the documents in Fakturummets arkiv.\n");
         sb.append("Always answer in English, regardless of the language of the question.\n");
@@ -251,38 +254,9 @@ public StreamResult streamChat(String question, String sessionId,
         if (sources == null || sources.isEmpty()) {
             sb.append("\nNO SOURCES FOUND.\n");
         } else {
-            sb.append("\nSOURCES:\n").append(sourceBlock(sources));
+            sb.append("\nSOURCES:\n").append(sourceBlock);
         }
         return sb.toString();
-    }
-
-    private String sourceBlock(List<Map<String, Object>> sources) {
-        StringBuilder sb = new StringBuilder();
-        int budget = rag.maxSourceChars();
-        int number = 1;
-        for (Map<String, Object> source : sources) {
-            if (budget <= 0) {
-                break;
-            }
-            String title = SourceText.sanitize(source.get("title"));
-            String text = SourceText.sanitize(source.get("text"));
-            Object page = source.get("page");
-            String header = "[SOURCE " + number++ + ": " + title
-                    + (page == null ? "" : ", page " + page) + "]";
-            String block = "<<<" + header + ">>>\n" + text + "\n<<<END SOURCE>>>\n\n";
-            if (block.length() > budget) {
-                sb.append(block, 0, budget);
-                budget = 0;
-            } else {
-                sb.append(block);
-                budget -= block.length();
-            }
-        }
-        return sb.toString();
-    }
-
-    private static String str(Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 
 }
