@@ -68,7 +68,8 @@ public StreamResult streamChat(String question, String sessionId,
         List<String> effectiveCollections = (collections != null && !collections.isEmpty()) ? collections : settings.collections();
         List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
         List<Map<String, String>> history = useHistory(settings)
-                ? trimHistory(sessionMemory.history(sessionId, historySize(settings)), rag.maxHistoryChars())
+                ? Citations.stripAssistantHistory(trimHistory(
+                        sessionMemory.history(sessionId, historySize(settings)), rag.maxHistoryChars()))
                 : List.of();
 
         String model = settings.chatModel() != null && !settings.chatModel().isBlank()
@@ -145,7 +146,7 @@ public StreamResult streamChat(String question, String sessionId,
             onFinal.accept(answer);
         }
         if (!answer.isBlank() && !isNoAnswer(answer)) {
-            sessionMemory.add(sessionId, question, answer, historySize(settings));
+            sessionMemory.add(sessionId, question, Citations.strip(answer), historySize(settings));
         }
         return new StreamResult(sources, answer, search);
     }
@@ -195,7 +196,7 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     public void correctLastAnswer(String sessionId, String answer) {
-        sessionMemory.replaceLastAssistant(sessionId, answer);
+        sessionMemory.replaceLastAssistant(sessionId, Citations.strip(answer));
     }
 
     private static boolean useHistory(WorkspaceSettings settings) {
