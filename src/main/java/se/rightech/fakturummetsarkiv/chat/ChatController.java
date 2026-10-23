@@ -140,7 +140,7 @@ public class ChatController {
                 }
                 if (validation != null && Boolean.FALSE.equals(validation.supported()) && answerRefiner != null) {
                     String refined = answerRefiner.refine(request.message(), collectedSources,
-                            result.answer(), settings.refineModel());
+                            result.answer(), settings.refineModel(), settings.answerLanguage());
                     if (refined != null && !refined.isBlank()
                             && !refined.trim().equals(result.answer().trim())) {
                         sendEvent(emitter, "refined", json(refined), MediaType.TEXT_PLAIN);

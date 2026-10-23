@@ -75,6 +75,24 @@ class AnswerRefinerTest {
     }
 
     @Test
+    void usesAnswerLanguageAndPreservesSupportedContent() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("Svar [1].");
+        AnswerRefiner refiner = new AnswerRefiner(client, props("gemma4:latest"), RAG);
+
+        refiner.refine("fraga", sources(), "Utkast [1].", "gemma4:latest", "sv");
+
+        org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(client).chat(anyString(), prompt.capture(), anyString(), anyDouble(), anyInt(),
+                anyBoolean());
+        assertThat(prompt.getValue())
+                .contains("Always answer in Swedish")
+                .contains("smallest necessary change")
+                .contains("Do not replace a partly supported answer with a refusal")
+                .contains("Keep every statement and citation [n]");
+    }
+
+    @Test
     void forwardsRefineThinkingSetting() {
         when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("svar");
