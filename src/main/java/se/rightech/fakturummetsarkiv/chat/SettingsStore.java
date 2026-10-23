@@ -1,9 +1,7 @@
 package se.rightech.fakturummetsarkiv.chat;
 
 import org.springframework.stereotype.Service;
-import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 import se.rightech.fakturummetsarkiv.rag.QdrantProperties;
-import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -14,54 +12,65 @@ import java.util.Set;
 public class SettingsStore {
 
     private final QdrantProperties qdrant;
-    private final OllamaProperties ollama;
-    private final RagProperties rag;
-    private final ChatProperties chat;
+    private final EffectiveSettings effective;
 
-    private volatile WorkspaceSettings current;
+    private volatile List<String> collections;
+    private volatile List<String> documentIds;
 
-    public SettingsStore(QdrantProperties qdrant, OllamaProperties ollama, RagProperties rag,
-                         ChatProperties chat) {
+    public SettingsStore(QdrantProperties qdrant, EffectiveSettings effective) {
         this.qdrant = qdrant;
-        this.ollama = ollama;
-        this.rag = rag;
-        this.chat = chat;
-        this.current = defaults();
-    }
-
-    private WorkspaceSettings defaults() {
-        return new WorkspaceSettings(
-                "chat",
-                ollama.model(),
-                ollama.validatorModel(),
-                ollama.validate(),
-                !ollama.gateModel().isBlank() || !"model".equalsIgnoreCase(rag.gateMode()),
-                true,
-                List.of(qdrant.collection()),
-                rag.similarityThreshold(),
-                qdrant.topK(),
-                chat.answerTemperature(),
-                rag.maxHistory(),
-                null,
-                ollama.embeddingModel(),
-                ollama.refineModel(),
-                ollama.gateModel(),
-                ollama.rewriteModel(),
-                chat.answerLanguage());
+        this.effective = effective;
+        this.collections = List.of(qdrant.collection());
     }
 
     public WorkspaceSettings get() {
-        return current;
+        return effective.workspace(collections, documentIds);
     }
 
     public synchronized WorkspaceSettings update(WorkspaceSettings incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Inga inställningar angivna");
         }
+        WorkspaceSettings current = get();
         WorkspaceSettings merged = merge(current, incoming);
         validate(merged);
-        current = merged;
-        return current;
+        apply(incoming);
+        if (incoming.collections() != null) {
+            collections = clean(incoming.collections());
+        }
+        if (incoming.documentIds() != null) {
+            documentIds = clean(incoming.documentIds());
+        }
+        return get();
+    }
+
+    private void apply(WorkspaceSettings update) {
+        set("chat.mode", update.chatMode());
+        set("ollama.model", update.chatModel());
+        set("ollama.validator-model", update.validatorModel());
+        set("chat.validate-grounding", update.validateGrounding());
+        set("chat.smart-search", update.smartSearch());
+        set("chat.rewrite-query", update.rewriteQuery());
+        set("rag.similarity-threshold", update.similarityThreshold());
+        set("qdrant.top-k", update.topN());
+        set("chat.answer-temperature", update.temperature());
+        set("rag.max-history", update.historySize());
+        set("ollama.embedding-model", update.embeddingModel());
+        set("ollama.refine-model", update.refineModel());
+        set("ollama.gate-model", update.gateModel());
+        set("ollama.rewrite-model", update.rewriteModel());
+        set("chat.answer-language", update.answerLanguage());
+    }
+
+    private void set(String key, Object value) {
+        if (value == null || (value instanceof String text && text.isBlank())) {
+            return;
+        }
+        if (String.valueOf(value).equals(String.valueOf(effective.base(key)))) {
+            effective.removeOverride(key);
+        } else {
+            effective.putOverride(key, value);
+        }
     }
 
     private static WorkspaceSettings merge(WorkspaceSettings base, WorkspaceSettings update) {

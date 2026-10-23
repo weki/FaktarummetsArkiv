@@ -65,9 +65,15 @@ class DocumentServiceTest {
         Chunker chunker = new Chunker(rag);
         ArchiveProperties archive = new ArchiveProperties("", uploadDir.toString());
 
+        se.rightech.fakturummetsarkiv.chat.ChatProperties chat =
+                new se.rightech.fakturummetsarkiv.chat.ChatProperties(0.1, true, "en");
+        se.rightech.fakturummetsarkiv.chat.EffectiveSettings effective =
+                new se.rightech.fakturummetsarkiv.chat.EffectiveSettings(ollama, qdrant, rag, chat,
+                        new se.rightech.fakturummetsarkiv.rag.HybridProperties(false, 50, 60),
+                        new se.rightech.fakturummetsarkiv.rag.RerankProperties(false, 25, "", 600));
         service = new DocumentService(llm, ollama, qdrant, qdrantClient, chunker,
                 new PdfTextExtractor(), new FileStore(archive),
-                new se.rightech.fakturummetsarkiv.chat.SettingsStore(qdrant, ollama, rag, new se.rightech.fakturummetsarkiv.chat.ChatProperties(0.1, true, "en")));
+                new se.rightech.fakturummetsarkiv.chat.SettingsStore(qdrant, effective));
 
         when(llm.embed(anyString(), anyList())).thenAnswer(invocation -> {
             List<String> inputs = invocation.getArgument(1);
