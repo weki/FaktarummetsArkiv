@@ -51,7 +51,8 @@ public class QueryRewriter {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT,
-                    buildPrompt(safeHistory, question, searchLanguage));
+                    buildPrompt(safeHistory, question, searchLanguage), 0.0, properties.chatNumCtx(),
+                    properties.rewriteThinking());
             String cleaned = clean(raw);
             if (cleaned.isEmpty() || cleaned.equalsIgnoreCase(question.trim())) {
                 return question;

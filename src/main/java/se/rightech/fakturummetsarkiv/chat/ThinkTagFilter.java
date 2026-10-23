@@ -12,6 +12,20 @@ public final class ThinkTagFilter {
     private static final String OPEN = "<think";
     private static final String CLOSE = "</think";
 
+    /** Tar bort kompletta och oavslutade think-block från ett färdigt (icke-strömmande) svar. */
+    public static String strip(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        String result = text.replaceAll("(?is)<think(?:\\s[^>]*)?>.*?</think\\s*>", "");
+        int open = result.toLowerCase(Locale.ROOT).lastIndexOf(OPEN);
+        if (open >= 0) {
+            result = result.substring(0, open);
+        }
+        result = result.replaceAll("(?is)</think\\s*>", "");
+        return result.trim();
+    }
+
     private final Consumer<String> visible;
     private final Consumer<String> thought;
     private final StringBuilder buffer = new StringBuilder();

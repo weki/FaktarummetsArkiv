@@ -60,7 +60,8 @@ public class AnswerRefiner {
             return null;
         }
         try {
-            String raw = client.chat(chosen, SYSTEM_PROMPT, buildPrompt(question, sources, draft));
+            String raw = client.chat(chosen, SYSTEM_PROMPT, buildPrompt(question, sources, draft),
+                    0.0, properties.chatNumCtx(), properties.refineThinking());
             String answer = raw == null ? "" : raw.trim();
             return answer.isEmpty() ? null : answer;
         } catch (Exception ex) {

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import se.rightech.fakturummetsarkiv.chat.ThinkTagFilter;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -53,14 +54,19 @@ public class OllamaClient {
     }
 
     public String chat(String model, String systemPrompt, String userPrompt) {
-        return chat(model, systemPrompt, userPrompt, 0.0);
+        return chat(model, systemPrompt, userPrompt, 0.0, chatNumCtx, false);
     }
 
     public String chat(String model, String systemPrompt, String userPrompt, double temperature) {
-        return chat(model, systemPrompt, userPrompt, temperature, chatNumCtx);
+        return chat(model, systemPrompt, userPrompt, temperature, chatNumCtx, false);
     }
 
     public String chat(String model, String systemPrompt, String userPrompt, double temperature, int numCtx) {
+        return chat(model, systemPrompt, userPrompt, temperature, numCtx, false);
+    }
+
+    public String chat(String model, String systemPrompt, String userPrompt, double temperature, int numCtx,
+                       boolean thinking) {
         List<Map<String, String>> messages = new ArrayList<>();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             messages.add(Map.of("role", "system", "content", systemPrompt));
@@ -72,6 +78,7 @@ public class OllamaClient {
         body.put("stream", false);
         body.put("messages", messages);
         body.put("options", Map.of("temperature", temperature, "num_ctx", numCtx));
+        body.put("think", thinking);
         body.put("keep_alive", KEEP_ALIVE);
 
         JsonNode node = restClient.post()
@@ -83,7 +90,7 @@ public class OllamaClient {
             return "";
         }
         JsonNode content = node.at("/message/content");
-        return content.isMissingNode() || content.isNull() ? "" : content.asString();
+        return content.isMissingNode() || content.isNull() ? "" : ThinkTagFilter.strip(content.asString());
     }
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature,

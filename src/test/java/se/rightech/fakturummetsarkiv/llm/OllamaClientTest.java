@@ -23,7 +23,7 @@ class OllamaClientTest {
 
     private final OllamaProperties properties = new OllamaProperties(
             BASE, "gemma4:latest", "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true,
-            "gemma4:latest", "", "", 16384, 4096);
+            "gemma4:latest", "", "", 16384, 4096, false, false, false, false, false, null);
     private final RestClient.Builder restClientBuilder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
     private final OllamaClient client = new OllamaClient(restClientBuilder.baseUrl(BASE).build());
@@ -33,13 +33,28 @@ class OllamaClientTest {
         server.expect(requestTo(BASE + "/api/chat"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("""
-                        {"model":"phi3.5:latest","stream":false,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384}}
+                        {"model":"phi3.5:latest","stream":false,"think":false,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384},"keep_alive":"1h"}
                         """))
                 .andRespond(withSuccess("""
                         {"model":"phi3.5:latest","message":{"role":"assistant","content":"svar"},"done":true}
                         """, MediaType.APPLICATION_JSON));
 
         assertThat(client.chat("phi3.5:latest", "sys", "hej")).isEqualTo("svar");
+        server.verify();
+    }
+
+    @Test
+    void sendsThinkingFlagAndStripsThinkFromNonStreamingAnswer() {
+        server.expect(requestTo(BASE + "/api/chat"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"model":"qwen3:8b","stream":false,"think":true,"messages":[{"role":"user","content":"hej"}],"options":{"temperature":0.0,"num_ctx":16384},"keep_alive":"1h"}
+                        """))
+                .andRespond(withSuccess("""
+                        {"model":"qwen3:8b","message":{"role":"assistant","content":"<think>hemlig</think>svar"},"done":true}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.chat("qwen3:8b", null, "hej", 0.0, 16384, true)).isEqualTo("svar");
         server.verify();
     }
 

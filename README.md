@@ -29,7 +29,17 @@ ollama pull phi3.5:latest
 - `phi3.5:latest` – sök-gate och omformulering av sökfrågor
 
 Modellerna kan bytas i `src/main/resources/application.properties` eller i inställningarna i
-webbgränssnittet.
+webbgränssnittet. Vid start loggas vilka distinkta modeller som används. Om fler än två är
+konfigurerade och `ollama.vram-gb` är satt under 14 loggas en varning.
+
+Vill du bara lasta två modeller (qwen3 + e5) finns profilen `two-models`, som använder qwen3 även
+för gate och rewrite:
+
+```bash
+SPRING_PROFILES_ACTIVE=two-models ./gradlew bootRun
+```
+
+Profilen är opt-in och ändrar inte standardkonfigurationen.
 
 ## Köra lokalt
 
@@ -127,13 +137,42 @@ t.ex. innan hybrid search eller reranking slås på.
 ## Svar och thinking
 
 `chat.answer-temperature=0.1` håller svaren faktainriktade; temperaturen kan också ändras per
-workspace i gränssnittet. `chat.thinking=true` skickar `think` till Ollama, så qwen3-modeller får
-resonera i `<think>`-taggen. Stäng av med `CHAT_THINKING=false` om modellen inte stöder det eller
-om svarstiden är viktigare än resonemanget.
+workspace i gränssnittet. `chat.thinking=true` skickar `think` till Ollama för själva svaret, så
+qwen3-modeller får resonera i `<think>`-taggen. Stäng av med `CHAT_THINKING=false` om modellen inte
+stöder det eller om svarstiden är viktigare än resonemanget.
 
-```bash
-CHAT_THINKING=false ./gradlew bootRun
+Thinking kan styras per roll. Standard är att bara svaret använder thinking:
+
+```properties
+chat.thinking=true
+ollama.validator-thinking=false
+ollama.refine-thinking=false
+ollama.gate-thinking=false
+ollama.rewrite-thinking=false
+ollama.followup-thinking=false
 ```
+
+Aktivera t.ex. gate-thinking med `ollama.gate-thinking=true`. Även om en modell skickar
+`<think>`-block trots att thinking är av strippas de bort innan svaret används.
+
+## Kontextbudget
+
+Både `ollama.chat-num-ctx` och `ollama.validator-num-ctx` är 8192 som default. Det räcker för
+`rag.max-source-chars=8000` (cirka 2 500 tokens) plus systemprompt, fråga, svar och thinking, men
+historiken måste begränsas. Därför trimmas historiken till `rag.max-history-chars=4000` tecken;
+äldsta meddelandet tas bort först. Om den uppskattade prompten ändå överstiger `num_ctx`, eller
+ligger nära gränsen med reserv för svar/thinking, loggas en varning vid den aktuella frågan.
+
+## Sökgate
+
+`rag.gate.mode` styr om sökgaten används:
+
+- `model` (default) – modellen avgör om sökning behövs
+- `rules` – sökning hoppas bara över för tydlig small talk på svenska eller engelska, högst fyra
+  ord och utan frågetecken; allt annat söker
+- `off` – söker alltid
+
+Vid osäkerhet söker systemet alltid. Uppföljningar som `och då?` räknas aldrig som small talk.
 
 ## Hybridsökning
 

@@ -37,8 +37,8 @@ class ChatServiceTest {
     private final SessionMemory sessionMemory = new SessionMemory();
 
     private final OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
-            "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "phi3.5:latest", "", 16384, 4096);
-    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
+            "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest", "phi3.5:latest", "", 16384, 4096, false, false, false, false, false, null);
+    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
 
     private final ChatService service = new ChatService(llm, ollama, rag, retrievalService,
             searchGate, queryRewriter, settingsStore, sessionMemory, new ChatProperties(0.1, true));
@@ -226,5 +226,32 @@ class ChatServiceTest {
                 thought -> { }, sources -> { }, token -> { }, plan -> { }))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("topN");
+    }
+
+    @Test
+    void trimsOldestHistoryFirstToStayWithinBudget() {
+        List<Map<String, String>> history = List.of(
+                Map.of("role", "user", "content", "a".repeat(100)),
+                Map.of("role", "assistant", "content", "b".repeat(100)),
+                Map.of("role", "user", "content", "ny"));
+
+        List<Map<String, String>> trimmed = ChatService.trimHistory(history, 150);
+
+        assertThat(trimmed).containsExactly(history.get(1), history.get(2));
+    }
+
+    @Test
+    void emptyHistoryBudgetRemovesEverything() {
+        List<Map<String, String>> history = List.of(
+                Map.of("role", "user", "content", "hej"));
+
+        assertThat(ChatService.trimHistory(history, 0)).isEmpty();
+    }
+
+    @Test
+    void estimatesPromptTokensConservatively() {
+        List<Map<String, String>> messages = List.of(Map.of("role", "user", "content", "x".repeat(300)));
+
+        assertThat(ChatService.estimateTokens(messages)).isGreaterThanOrEqualTo(100);
     }
 }

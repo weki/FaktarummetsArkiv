@@ -97,7 +97,8 @@ public class FollowUpGenerator {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT,
-                    buildPrompt(question, answer, sources, !unresolved, validationNote));
+                    buildPrompt(question, answer, sources, !unresolved, validationNote),
+                    0.0, properties.chatNumCtx(), properties.followupThinking());
             List<String> questions = parse(raw, max, question);
             if (questions.isEmpty() && unresolved) {
                 questions = fallbackLocators(question, sources, max);

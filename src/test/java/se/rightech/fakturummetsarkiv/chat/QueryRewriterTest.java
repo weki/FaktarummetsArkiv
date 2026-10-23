@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,7 +24,7 @@ class QueryRewriterTest {
     private static OllamaProperties props(String rewriteModel) {
         return new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "", rewriteModel, 16384, 4096);
+                "", rewriteModel, 16384, 4096, false, false, false, false, false, null);
     }
 
     private static List<Map<String, String>> history() {
@@ -32,7 +35,7 @@ class QueryRewriterTest {
 
     @Test
     void rewritesUsingHistory() {
-        when(client.chat(anyString(), anyString(), anyString()))
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("Hur aktiverar jag OPC UA på en server?");
         String result = new QueryRewriter(client, props("")).rewrite(
                 "hur aktiverar jag det på en server?", history(), "gemma4:latest");
@@ -41,13 +44,13 @@ class QueryRewriterTest {
 
     @Test
     void rewritesWithoutHistoryToTheSearchLanguage() {
-        when(client.chat(anyString(), anyString(), anyString())).thenReturn("OPC UA overview");
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean())).thenReturn("OPC UA overview");
         String result = new QueryRewriter(client, props("")).rewrite(
                 "vad är OPC UA?", List.of(), "gemma4:latest", "en");
         assertThat(result).isEqualTo("OPC UA overview");
 
         org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(client).chat(anyString(), anyString(), prompt.capture());
+        verify(client).chat(anyString(), anyString(), prompt.capture(), anyDouble(), anyInt(), anyBoolean());
         assertThat(prompt.getValue())
                 .contains("SEARCH LANGUAGE: en")
                 .contains("vad är OPC UA?");
@@ -55,7 +58,7 @@ class QueryRewriterTest {
 
     @Test
     void fallsBackToOriginalOnError() {
-        when(client.chat(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("nere"));
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean())).thenThrow(new RuntimeException("nere"));
         String result = new QueryRewriter(client, props("")).rewrite("hej där", history(), "gemma4:latest");
         assertThat(result).isEqualTo("hej där");
     }
@@ -71,5 +74,20 @@ class QueryRewriterTest {
     void cleansQuotesAndPreamble() {
         assertThat(QueryRewriter.clean("Standalone search query: \"OPC UA server aktivering?\"\n"))
                 .isEqualTo("OPC UA server aktivering?");
+    }
+
+    @Test
+    void forwardsRewriteThinkingSetting() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("OPC UA overview");
+        OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
+                "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
+                16384, 8192, false, false, false, true, false, null);
+
+        new QueryRewriter(client, thinking).rewrite("vad är OPC UA?", List.of(), "qwen3:8b");
+
+        org.mockito.ArgumentCaptor<Boolean> flag = org.mockito.ArgumentCaptor.forClass(Boolean.class);
+        verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), flag.capture());
+        assertThat(flag.getValue()).isTrue();
     }
 }

@@ -10,6 +10,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -20,7 +24,7 @@ class FollowUpGeneratorTest {
 
     private static OllamaProperties props(String refineModel) {
         return new OllamaProperties("http://localhost:11434", "deepseek-r1:14b",
-                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "", 16384, 4096);
+                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "", 16384, 4096, false, false, false, false, false, null);
     }
 
     private static List<Map<String, Object>> sources() {
@@ -29,7 +33,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void generatesCleanedQuestions() {
-        when(client.chat(eq("gemma4:latest"), any(), any())).thenReturn("""
+        when(client.chat(eq("gemma4:latest"), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("""
                 1. How does redundancy work?
                 - What are the security requirements
                 2. Which systems support OPC UA?
@@ -46,7 +50,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void refusesWhenModelSaysNone() {
-        when(client.chat(any(), any(), any())).thenReturn("NONE");
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("NONE");
         FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
 
         assertThat(generator.generate("Fraga", "svar", sources(), null, null, 3)).isEmpty();
@@ -62,7 +66,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void returnsEmptyOnError() {
-        when(client.chat(any(), any(), any())).thenThrow(new RuntimeException("nere"));
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenThrow(new RuntimeException("nere"));
         FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
 
         assertThat(generator.generate("Fraga", "svar", sources(), null, null, 3)).isEmpty();
@@ -70,7 +74,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void unansweredRefusalFallsBackToLocatorQuestion() {
-        when(client.chat(any(), any(), any())).thenReturn("NONE");
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("NONE");
         FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
 
         List<String> questions = generator.generate("Vad är redundant?",
@@ -81,7 +85,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void unansweredAnswerIsMarkedInPrompt() {
-        when(client.chat(any(), any(), any())).thenReturn("""
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("""
                 1. Which section of OPCUA_v15.pdf covers redundancy?
                 2. What does OPCUA_v15.pdf say about security?
                 """);
@@ -94,7 +98,7 @@ class FollowUpGeneratorTest {
                 "Which section of OPCUA_v15.pdf covers redundancy?",
                 "What does OPCUA_v15.pdf say about security?");
         org.mockito.ArgumentCaptor<String> prompt = org.mockito.ArgumentCaptor.forClass(String.class);
-        org.mockito.Mockito.verify(client).chat(eq("gemma4:latest"), any(), prompt.capture());
+        org.mockito.Mockito.verify(client).chat(eq("gemma4:latest"), any(), prompt.capture(), anyDouble(), anyInt(), anyBoolean());
         assertThat(prompt.getValue())
                 .contains("ANSWER STATUS: UNANSWERED")
                 .contains("Kunde inte hitta informationen.");
@@ -102,7 +106,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void truncatesLongQuestions() {
-        when(client.chat(any(), any(), any())).thenReturn(
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn(
                 "How does the redundancy mechanism in OPC UA handle failover between redundant servers in a "
                         + "multi-site deployment with high availability requirements?");
         FollowUpGenerator generator = new FollowUpGenerator(client, props("gemma4:latest"));
@@ -115,7 +119,7 @@ class FollowUpGeneratorTest {
 
     @Test
     void dropsDuplicateOfOriginalQuestion() {
-        when(client.chat(any(), any(), any())).thenReturn("""
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("""
                 How does redundancy work?
                 How does redundancy work
                 Which systems support OPC UA?
@@ -127,5 +131,21 @@ class FollowUpGeneratorTest {
 
         assertThat(questions).containsExactly(
                 "Which systems support OPC UA?");
+    }
+
+    @Test
+    void forwardsFollowUpThinkingSetting() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("How does redundancy work?");
+        OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
+                "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
+                16384, 8192, false, false, false, false, true, null);
+
+        new FollowUpGenerator(client, thinking).generate("Fraga", "svar", sources(), "qwen3:8b", "qwen3:8b", 1);
+
+        org.mockito.ArgumentCaptor<Boolean> flag = org.mockito.ArgumentCaptor.forClass(Boolean.class);
+        org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(),
+                flag.capture());
+        assertThat(flag.getValue()).isTrue();
     }
 }

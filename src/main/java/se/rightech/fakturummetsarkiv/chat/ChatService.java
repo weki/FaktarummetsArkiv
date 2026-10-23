@@ -1,5 +1,7 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -15,6 +17,9 @@ import java.util.function.Consumer;
 @Service
 public class ChatService {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+    private static final int OUTPUT_RESERVE_TOKENS = 2048;
+    private static final int CHARS_PER_TOKEN = 3;
     private static final String NO_ANSWER_MARKER = "I cannot find that information in the documents.";
 
     private final OllamaClient llm;
@@ -63,7 +68,7 @@ public StreamResult streamChat(String question, String sessionId,
         List<String> effectiveCollections = (collections != null && !collections.isEmpty()) ? collections : settings.collections();
         List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
         List<Map<String, String>> history = useHistory(settings)
-                ? sessionMemory.history(sessionId, historySize(settings))
+                ? trimHistory(sessionMemory.history(sessionId, historySize(settings)), rag.maxHistoryChars())
                 : List.of();
 
         String model = settings.chatModel() != null && !settings.chatModel().isBlank()
@@ -109,6 +114,7 @@ public StreamResult streamChat(String question, String sessionId,
         messages.add(Map.of("role", "user", "content", question));
 
         double temperature = validatedTemperature(settings.temperature());
+        warnIfContextRisk(model, messages);
 
         StringBuilder answerText = new StringBuilder();
         ThinkTagFilter thinkFilter = new ThinkTagFilter(
@@ -139,6 +145,50 @@ public StreamResult streamChat(String question, String sessionId,
             sessionMemory.add(sessionId, question, answer, historySize(settings));
         }
         return new StreamResult(sources, answer, search);
+    }
+
+    /** Trimmar äldsta historiken först så att prompten inte växer obegränsat. */
+    static List<Map<String, String>> trimHistory(List<Map<String, String>> history, int maxChars) {
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+        int budget = maxChars > 0 ? maxChars : 0;
+        List<Map<String, String>> trimmed = new ArrayList<>(history);
+        int used = trimmed.stream().mapToInt(ChatService::messageChars).sum();
+        while (!trimmed.isEmpty() && used > budget) {
+            used -= messageChars(trimmed.remove(0));
+        }
+        return List.copyOf(trimmed);
+    }
+
+    private static int messageChars(Map<String, String> message) {
+        String content = message.get("content");
+        return (content == null ? 0 : content.length()) + 20;
+    }
+
+    private void warnIfContextRisk(String model, List<Map<String, String>> messages) {
+        int numCtx = ollama.chatNumCtx();
+        if (numCtx <= 0) {
+            return;
+        }
+        int estimated = estimateTokens(messages);
+        if (estimated > numCtx) {
+            log.warn("Prompten för {} uppskattas till ~{} tokens och överstiger num_ctx {}; Ollama kan trunkera den",
+                    model, estimated, numCtx);
+        } else if (estimated + OUTPUT_RESERVE_TOKENS > numCtx) {
+            log.warn("Prompten för {} uppskattas till ~{} tokens; med reserv för svar/thinking ({}) ligger den "
+                    + "nära num_ctx {} och kan trunkeras", model, estimated, OUTPUT_RESERVE_TOKENS, numCtx);
+        }
+    }
+
+    static int estimateTokens(List<Map<String, String>> messages) {
+        int chars = 0;
+        if (messages != null) {
+            for (Map<String, String> message : messages) {
+                chars += messageChars(message);
+            }
+        }
+        return (int) Math.ceil(chars / (double) CHARS_PER_TOKEN);
     }
 
     public void correctLastAnswer(String sessionId, String answer) {

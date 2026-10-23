@@ -7,8 +7,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -23,8 +25,8 @@ class GroundingValidatorTest {
     private final OllamaClient client = mock(OllamaClient.class);
     private final OllamaProperties properties = new OllamaProperties(
             "http://localhost:11434", "gemma4:latest", "qllama/multilingual-e5-large",
-            java.time.Duration.ofSeconds(5), "phi3.5:latest", true, "", "", "", 16384, 4096);
-    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3);
+            java.time.Duration.ofSeconds(5), "phi3.5:latest", true, "", "", "", 16384, 4096, false, false, false, false, false, null);
+    private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
     private final GroundingValidator validator = new GroundingValidator(client, properties, rag);
 
     private static List<Map<String, Object>> sources() {
@@ -33,7 +35,7 @@ class GroundingValidatorTest {
 
     @Test
     void reportsSupported() {
-        when(client.chat(eq("phi3.5:latest"), any(), any(), anyDouble(), anyInt()))
+        when(client.chat(eq("phi3.5:latest"), any(), any(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("{\"supported\": true, \"reason\": \"ok\"}");
 
         GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
@@ -44,7 +46,7 @@ class GroundingValidatorTest {
 
     @Test
     void reportsUnsupportedWithSurroundingText() {
-        when(client.chat(any(), any(), any(), anyDouble(), anyInt()))
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("har ar svaret: {\"supported\": false, \"reason\": \"pastaende X saknas\"} klart");
 
         GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
@@ -55,7 +57,7 @@ class GroundingValidatorTest {
 
     @Test
     void handlesBrokenJson() {
-        when(client.chat(any(), any(), any(), anyDouble(), anyInt())).thenReturn("ingen json har inte");
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn("ingen json har inte");
 
         GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
 
@@ -65,7 +67,7 @@ class GroundingValidatorTest {
 
     @Test
     void prefersLastJsonObjectWhenModelEchoesFormat() {
-        when(client.chat(any(), any(), any(), anyDouble(), anyInt())).thenReturn(
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean())).thenReturn(
                 "{\"supported\": true, \"reason\": \"short explanation\"} "
                         + "{\"supported\": false, \"reason\": \"pastaende X saknas\"}");
 
@@ -77,7 +79,7 @@ class GroundingValidatorTest {
 
     @Test
     void acceptsStringBoolean() {
-        when(client.chat(any(), any(), any(), anyDouble(), anyInt()))
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("{\"supported\": \"true\", \"reason\": \"stammer\"}");
 
         GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
@@ -88,7 +90,7 @@ class GroundingValidatorTest {
 
     @Test
     void acceptsLooseKeyValueFormat() {
-        when(client.chat(any(), any(), any(), anyDouble(), anyInt()))
+        when(client.chat(any(), any(), any(), anyDouble(), anyInt(), anyBoolean()))
                 .thenReturn("supported: true, reason: 'det stammer'");
 
         GroundingResult result = validator.validate("fraga", sources(), "svar", MODEL, true);
@@ -116,5 +118,21 @@ class GroundingValidatorTest {
         GroundingResult result = validator.validate("fraga", List.of(), "svar", MODEL, true);
 
         assertThat(result.supported()).isNull();
+    }
+
+    @Test
+    void forwardsValidatorThinkingSetting() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("{\"supported\": true, \"reason\": \"ok\"}");
+        OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
+                "e5", java.time.Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
+                16384, 8192, true, false, false, false, false, null);
+
+        new GroundingValidator(client, thinking, rag).validate("fraga", sources(), "svar", "qwen3:8b", true);
+
+        org.mockito.ArgumentCaptor<Boolean> flag = org.mockito.ArgumentCaptor.forClass(Boolean.class);
+        org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(),
+                flag.capture());
+        assertThat(flag.getValue()).isTrue();
     }
 }

@@ -35,7 +35,7 @@ public class SettingsStore {
                 ollama.model(),
                 ollama.validatorModel(),
                 ollama.validate(),
-                !ollama.gateModel().isBlank(),
+                !ollama.gateModel().isBlank() || !"model".equalsIgnoreCase(rag.gateMode()),
                 true,
                 List.of(qdrant.collection()),
                 rag.similarityThreshold(),

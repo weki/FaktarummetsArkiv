@@ -73,4 +73,11 @@ class ThinkTagFilterTest {
         assertThat(visible.toString()).isEqualTo("Hej varlden");
         assertThat(thought.toString()).isEmpty();
     }
+
+    @Test
+    void stripRemovesCompleteAndUnclosedThinking() {
+        assertThat(ThinkTagFilter.strip("<think>hemlig</think>svar")).isEqualTo("svar");
+        assertThat(ThinkTagFilter.strip("fore<think>hemlig")).isEqualTo("fore");
+        assertThat(ThinkTagFilter.strip("<think type=\"x\">hemlig</think> efter")).isEqualTo("efter");
+    }
 }

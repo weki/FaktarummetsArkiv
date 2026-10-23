@@ -57,11 +57,11 @@ class DocumentServiceTest {
     void setUp() {
         OllamaProperties ollama = new OllamaProperties(
                 "http://localhost:11434", "chat", "embed-model", Duration.ofSeconds(30),
-                "validator", false, "", "", "", 16384, 4096);
+                "validator", false, "", "", "", 16384, 4096, false, false, false, false, false, null);
         QdrantProperties qdrant = new QdrantProperties(
                 "http://localhost:6333", "docs", 1024, "Cosine", 5,
                 Duration.ofSeconds(10), "query: ", "passage: ");
-        RagProperties rag = new RagProperties(20, 40, 10, 8000, "en", 0.3);
+        RagProperties rag = new RagProperties(20, 40, 10, 8000, "en", 0.3, 4000, "model");
         Chunker chunker = new Chunker(rag);
         ArchiveProperties archive = new ArchiveProperties("", uploadDir.toString());
 

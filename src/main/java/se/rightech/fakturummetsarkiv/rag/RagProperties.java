@@ -10,5 +10,7 @@ public record RagProperties(
         @DefaultValue("200") int chunkOverlap,
         @DefaultValue("8000") int maxSourceChars,
         @DefaultValue("en") String searchLanguage,
-        @DefaultValue("0.3") double similarityThreshold) {
+        @DefaultValue("0.3") double similarityThreshold,
+        @DefaultValue("4000") int maxHistoryChars,
+        @DefaultValue("model") String gateMode) {
 }

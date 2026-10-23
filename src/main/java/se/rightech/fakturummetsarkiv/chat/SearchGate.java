@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +24,8 @@ public class SearchGate {
             "hej", "hej hej", "hejdå", "hej då", "hallå", "tja", "god morgon", "god kväll",
             "hur mår du", "hur är läget", "hej hur mår du",
             "tack", "tack så mycket", "tusen tack", "tackar",
-            "thanks", "thank you", "thanks a lot", "hi", "hello", "bye", "goodbye");
+            "ok", "okej", "okay", "bra", "toppen", "nice", "great", "sure",
+            "thanks", "thank you", "thanks a lot", "hi", "hi there", "hello", "bye", "goodbye");
 
     public record Decision(boolean search, String query) {
     }
@@ -50,10 +52,12 @@ public class SearchGate {
 
     private final OllamaClient client;
     private final OllamaProperties properties;
+    private final RagProperties rag;
 
-    public SearchGate(OllamaClient client, OllamaProperties properties) {
+    public SearchGate(OllamaClient client, OllamaProperties properties, RagProperties rag) {
         this.client = client;
         this.properties = properties;
+        this.rag = rag;
     }
 
     public boolean enabled() {
@@ -81,6 +85,13 @@ public class SearchGate {
         if (question == null || question.isBlank()) {
             return new Decision(true, question);
         }
+        String mode = gateMode();
+        if ("off".equals(mode)) {
+            return new Decision(true, question);
+        }
+        if ("rules".equals(mode)) {
+            return new Decision(!isRuleSmallTalk(question), question);
+        }
         if (isSmallTalk(question)) {
             return new Decision(false, question);
         }
@@ -89,7 +100,8 @@ public class SearchGate {
         }
         try {
             String raw = client.chat(gateModel, SYSTEM_PROMPT,
-                    buildPrompt(question, history, searchLanguage)).trim();
+                    buildPrompt(question, history, searchLanguage), 0.0, properties.chatNumCtx(),
+                    properties.gateThinking()).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");
                 return new Decision(true, question);
@@ -117,12 +129,38 @@ public class SearchGate {
         return decide(question).search();
     }
 
+    private String gateMode() {
+        String mode = rag.gateMode() == null ? "model" : rag.gateMode().trim().toLowerCase(Locale.ROOT);
+        return switch (mode) {
+            case "model", "rules", "off" -> mode;
+            default -> {
+                log.warn("Okänt rag.gate.mode '{}', använder model", rag.gateMode());
+                yield "model";
+            }
+        };
+    }
+
+    /** Endast korta artighetsfraser utan frågetecken får hoppa över sökning i rules-läget. */
+    static boolean isRuleSmallTalk(String question) {
+        if (question == null || question.contains("?")) {
+            return false;
+        }
+        String normalized = normalize(question);
+        if (normalized.isEmpty() || normalized.split("\\s+").length > 4) {
+            return false;
+        }
+        return SMALL_TALK.contains(normalized);
+    }
+
     static boolean isSmallTalk(String question) {
-        String normalized = question.toLowerCase(Locale.ROOT)
+        return SMALL_TALK.contains(normalize(question));
+    }
+
+    private static String normalize(String question) {
+        return question.toLowerCase(Locale.ROOT)
                 .replaceAll("[\\p{Punct}]+", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
-        return SMALL_TALK.contains(normalized);
     }
 
     private static String buildPrompt(String question, List<Map<String, String>> history,

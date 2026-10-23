@@ -63,7 +63,7 @@ public class GroundingValidator {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT, buildUserPrompt(question, sources, answer),
-                    0.0, properties.validatorNumCtx());
+                    0.0, properties.validatorNumCtx(), properties.validatorThinking());
             return parse(raw);
         } catch (Exception ex) {
             return new GroundingResult(null, "Kunde inte verifiera: " + ex.getMessage());
