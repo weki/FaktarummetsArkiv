@@ -1,5 +1,6 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.PropertySource;
 import org.springframework.stereotype.Service;
@@ -16,13 +17,21 @@ public class SettingsService {
     private final EffectiveSettings effective;
     private final SettingsValidator validator;
     private final ConfigurableEnvironment environment;
+    private final SettingsFileStore fileStore;
 
-    public SettingsService(SettingsSchema schema, EffectiveSettings effective,
-                           SettingsValidator validator, ConfigurableEnvironment environment) {
+    @Autowired
+    public SettingsService(SettingsSchema schema, EffectiveSettings effective, SettingsValidator validator,
+                           ConfigurableEnvironment environment, SettingsFileStore fileStore) {
         this.schema = schema;
         this.effective = effective;
         this.validator = validator;
         this.environment = environment;
+        this.fileStore = fileStore;
+    }
+
+    SettingsService(SettingsSchema schema, EffectiveSettings effective,
+                    SettingsValidator validator, ConfigurableEnvironment environment) {
+        this(schema, effective, validator, environment, null);
     }
 
     public SettingsSnapshot snapshot() {
@@ -31,7 +40,7 @@ public class SettingsService {
             settings.add(view(definition));
         }
         return new SettingsSnapshot(effective.revision(), schema.groups(), settings,
-                Map.copyOf(effective.overrides()));
+                Map.copyOf(effective.overrides()), fileStore == null ? null : fileStore.path().toString());
     }
 
     public synchronized SettingsSnapshot update(Map<String, Object> values, Long expectedVersion) {
@@ -45,6 +54,7 @@ public class SettingsService {
                 merged.put(entry.getKey(), entry.getValue());
             }
         }
+        persist(merged);
         effective.replaceOverrides(merged);
         return snapshot();
     }
@@ -55,14 +65,24 @@ public class SettingsService {
         if (definition.readOnly()) {
             throw new ReadOnlySettingException(key);
         }
-        effective.removeOverride(key);
+        Map<String, Object> merged = new LinkedHashMap<>(effective.overrides());
+        merged.remove(key);
+        persist(merged);
+        effective.replaceOverrides(merged);
         return snapshot();
     }
 
     public synchronized SettingsSnapshot resetAll(Long expectedVersion) {
         checkVersion(expectedVersion);
+        persist(Map.of());
         effective.replaceOverrides(Map.of());
         return snapshot();
+    }
+
+    private void persist(Map<String, Object> overrides) {
+        if (fileStore != null) {
+            fileStore.save(overrides);
+        }
     }
 
     private void checkVersion(Long expectedVersion) {
@@ -122,7 +142,8 @@ public class SettingsService {
             long version,
             List<SettingsGroup> groups,
             List<SettingView> settings,
-            Map<String, Object> overrides) {
+            Map<String, Object> overrides,
+            String file) {
     }
 
     public record SettingView(
