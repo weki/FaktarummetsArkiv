@@ -4,11 +4,17 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import se.rightech.fakturummetsarkiv.chat.ChatProperties;
 import se.rightech.fakturummetsarkiv.chat.ChatService;
 import se.rightech.fakturummetsarkiv.chat.SettingsStore;
 import se.rightech.fakturummetsarkiv.chat.WorkspaceSettings;
 import se.rightech.fakturummetsarkiv.grounding.GroundingResult;
 import se.rightech.fakturummetsarkiv.grounding.GroundingValidator;
+import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.HybridProperties;
+import se.rightech.fakturummetsarkiv.rag.QdrantProperties;
+import se.rightech.fakturummetsarkiv.rag.RagProperties;
+import se.rightech.fakturummetsarkiv.rag.RerankProperties;
 import se.rightech.fakturummetsarkiv.rag.RetrievalService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -16,7 +22,13 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,6 +48,8 @@ class EvaluationHarnessTest {
 
     private static final int TOP_K = 5;
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final DateTimeFormatter STAMP =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault());
 
     @Autowired
     private RetrievalService retrievalService;
@@ -48,6 +62,24 @@ class EvaluationHarnessTest {
 
     @Autowired
     private SettingsStore settingsStore;
+
+    @Autowired
+    private OllamaProperties ollama;
+
+    @Autowired
+    private RagProperties rag;
+
+    @Autowired
+    private QdrantProperties qdrant;
+
+    @Autowired
+    private ChatProperties chat;
+
+    @Autowired
+    private HybridProperties hybrid;
+
+    @Autowired
+    private RerankProperties rerank;
 
     @Test
     void printsRetrievalAndAnswerMetricsAndWritesBaseline() throws IOException {
@@ -63,6 +95,7 @@ class EvaluationHarnessTest {
         RetrievalMetrics retrievalAll = new RetrievalMetrics();
         Map<String, AnswerMetrics> answersByLanguage = new TreeMap<>();
         AnswerMetrics answersAll = new AnswerMetrics();
+        List<Map<String, Object>> questionResults = new ArrayList<>();
 
         System.out.println();
         System.out.printf("%-22s %-4s %-6s %-7s %-7s %-7s %-7s %-7s %-7s%n",
@@ -116,7 +149,9 @@ class EvaluationHarnessTest {
                     .add(question, factRecall, citationRecall, citationPrecision, noAnswerCorrect, brier);
             answersAll.add(question, factRecall, citationRecall, citationPrecision, noAnswerCorrect, brier);
 
-
+            questionResults.add(questionResult(question, answer, answerSources, hits, rank,
+                    retrievalRecall, phrase, factRecall, citationRecall, citationPrecision,
+                    noAnswerCorrect, correct, validation, brier));
         }
 
         System.out.println();
@@ -138,6 +173,8 @@ class EvaluationHarnessTest {
         System.out.println();
         System.out.println("Note: questions.jsonl contains sample questions; replace them with your own archive.");
 
+        Path baseline = writeBaseline(settings, questionResults, retrievalAll, answersAll);
+        System.out.println("Baseline written to " + baseline);
     }
 
     private static void printRetrievalSummary(String language, RetrievalMetrics metrics) {
@@ -149,6 +186,103 @@ class EvaluationHarnessTest {
         System.out.printf("%-8s %-9d %-8.2f %-8.2f %-9.2f %-9.2f%n",
                 language, metrics.questions, metrics.factRecall(), metrics.citationRecall(),
                 metrics.citationPrecision(), metrics.noAnswerAccuracy());
+    }
+
+    private Map<String, Object> questionResult(EvalQuestion question, ChatService.StreamResult answer,
+                                               List<Map<String, Object>> answerSources,
+                                               List<Map<String, Object>> hits, int rank,
+                                               double retrievalRecall, double phrase,
+                                               double factRecall, double citationRecall,
+                                               double citationPrecision, boolean noAnswerCorrect,
+                                               boolean correct, GroundingResult validation, Double brier) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", question.id());
+        result.put("lang", question.lang());
+        result.put("question", question.question());
+        result.put("answer", answer.answer());
+        result.put("searched", answer.searched());
+        result.put("expectNoAnswer", question.expectNoAnswer());
+        result.put("noAnswerCorrect", noAnswerCorrect);
+        result.put("answerCorrect", correct);
+        result.put("retrievalRank", rank);
+        result.put("retrievalRecall", retrievalRecall);
+        result.put("phraseScore", phrase);
+        result.put("factRecall", factRecall);
+        result.put("missingFacts", EvalMetrics.missingFacts(answer.answer(), question.expectedFacts()));
+        result.put("citationRecall", citationRecall);
+        result.put("citationPrecision", citationPrecision);
+        result.put("missingCitations", EvalMetrics.missingCitations(answer.answer(), answerSources,
+                question.expectedCitations()));
+        result.put("citedDocuments", EvalMetrics.citedDocuments(answer.answer(), answerSources));
+        result.put("retrievedDocuments", hits.stream()
+                .map(hit -> String.valueOf(hit.getOrDefault("title", hit.getOrDefault("source", ""))))
+                .toList());
+        result.put("brier", brier);
+        result.put("notes", question.notes());
+        if (validation != null) {
+            Map<String, Object> check = new LinkedHashMap<>();
+            check.put("supported", validation.supported());
+            check.put("verdict", validation.verdict());
+            check.put("reason", validation.reason());
+            check.put("unsupportedClaims", validation.unsupportedClaims());
+            result.put("validation", check);
+        }
+        return result;
+    }
+
+    private Path writeBaseline(WorkspaceSettings settings, List<Map<String, Object>> results,
+                               RetrievalMetrics retrieval, AnswerMetrics answers) throws IOException {
+        Map<String, Object> baseline = new LinkedHashMap<>();
+        baseline.put("generatedAt", Instant.now().toString());
+        baseline.put("config", config(settings));
+        baseline.put("retrieval", Map.of(
+                "questions", retrieval.questions,
+                "recallAt5", retrieval.recall(),
+                "mrr", retrieval.mrr(),
+                "phrase", retrieval.phrase()));
+        baseline.put("answer", Map.of(
+                "questions", answers.questions,
+                "factRecall", answers.factRecall(),
+                "citationRecall", answers.citationRecall(),
+                "citationPrecision", answers.citationPrecision(),
+                "noAnswerAccuracy", answers.noAnswerAccuracy(),
+                "brier", answers.brier()));
+        baseline.put("questions", results);
+
+        Path directory = Path.of("eval");
+        Files.createDirectories(directory);
+        Path file = directory.resolve("baseline-" + STAMP.format(Instant.now()) + ".json");
+        Files.writeString(file, JSON.writeValueAsString(baseline), StandardCharsets.UTF_8);
+        return file;
+    }
+
+    private Map<String, Object> config(WorkspaceSettings settings) {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("chatModel", settings.chatModel());
+        config.put("validatorModel", settings.validatorModel());
+        config.put("refineModel", settings.refineModel());
+        config.put("gateModel", settings.gateModel());
+        config.put("rewriteModel", settings.rewriteModel());
+        config.put("embeddingModel", settings.embeddingModel());
+        config.put("answerLanguage", settings.answerLanguage());
+        config.put("temperature", settings.temperature());
+        config.put("topN", settings.topN());
+        config.put("threshold", settings.similarityThreshold());
+        config.put("historySize", settings.historySize());
+        config.put("maxSourceChars", rag.maxSourceChars());
+        config.put("maxHistoryChars", rag.maxHistoryChars());
+        config.put("chatNumCtx", ollama.chatNumCtx());
+        config.put("validatorNumCtx", ollama.validatorNumCtx());
+        config.put("gateNumCtx", ollama.gateNumCtx());
+        config.put("rewriteNumCtx", ollama.rewriteNumCtx());
+        config.put("chatThinking", chat.thinking());
+        config.put("gateMode", rag.gateMode());
+        config.put("hybridEnabled", hybrid.enabled());
+        config.put("rerankEnabled", rerank.enabled());
+        config.put("rerankModel", rerank.model());
+        config.put("collection", qdrant.collection());
+        config.put("vectorSize", qdrant.vectorSize());
+        return config;
     }
 
     private static int firstRelevantRank(List<Map<String, Object>> hits, EvalQuestion question) {

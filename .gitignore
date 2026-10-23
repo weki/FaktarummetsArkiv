@@ -7,6 +7,7 @@ build/
 
 ### Application runtime data ###
 archive/
+/eval/
 
 ### Lokal konfiguration (IP-adresser, hemligheter) ###
 application-local.properties
