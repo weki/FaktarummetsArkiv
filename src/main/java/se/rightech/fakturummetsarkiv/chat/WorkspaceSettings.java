@@ -23,7 +23,8 @@ public record WorkspaceSettings(
         String embeddingModel,
         String refineModel,
         String gateModel,
-        String rewriteModel) {
+        String rewriteModel,
+        String answerLanguage) {
 
     /** Bakåtkompatibel konstruktor utan de separata modellvalen. */
     public WorkspaceSettings(String chatMode, String chatModel, String validatorModel,
@@ -32,6 +33,18 @@ public record WorkspaceSettings(
                              Double temperature, Integer historySize, List<String> documentIds) {
         this(chatMode, chatModel, validatorModel, validateGrounding, smartSearch, rewriteQuery,
                 collections, similarityThreshold, topN, temperature, historySize, documentIds,
-                null, null, null, null);
+                null, null, null, null, null);
+    }
+
+    /** Bakåtkompatibel konstruktor utan språkval. */
+    public WorkspaceSettings(String chatMode, String chatModel, String validatorModel,
+                             Boolean validateGrounding, Boolean smartSearch, Boolean rewriteQuery,
+                             List<String> collections, Double similarityThreshold, Integer topN,
+                             Double temperature, Integer historySize, List<String> documentIds,
+                             String embeddingModel, String refineModel, String gateModel,
+                             String rewriteModel) {
+        this(chatMode, chatModel, validatorModel, validateGrounding, smartSearch, rewriteQuery,
+                collections, similarityThreshold, topN, temperature, historySize, documentIds,
+                embeddingModel, refineModel, gateModel, rewriteModel, null);
     }
 }

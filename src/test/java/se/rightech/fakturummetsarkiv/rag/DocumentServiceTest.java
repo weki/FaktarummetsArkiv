@@ -67,7 +67,7 @@ class DocumentServiceTest {
 
         service = new DocumentService(llm, ollama, qdrant, qdrantClient, chunker,
                 new PdfTextExtractor(), new FileStore(archive),
-                new se.rightech.fakturummetsarkiv.chat.SettingsStore(qdrant, ollama, rag, new se.rightech.fakturummetsarkiv.chat.ChatProperties(0.1, true)));
+                new se.rightech.fakturummetsarkiv.chat.SettingsStore(qdrant, ollama, rag, new se.rightech.fakturummetsarkiv.chat.ChatProperties(0.1, true, "en")));
 
         when(llm.embed(anyString(), anyList())).thenAnswer(invocation -> {
             List<String> inputs = invocation.getArgument(1);

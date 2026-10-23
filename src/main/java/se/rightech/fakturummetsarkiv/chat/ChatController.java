@@ -111,7 +111,11 @@ public class ChatController {
                                 MediaType.APPLICATION_JSON));
 
                 WorkspaceSettings settings = settingsStore.get();
-                sendEvent(emitter, "answerHtml", json(markdownRenderer.toHtml(result.answer())), MediaType.TEXT_PLAIN);
+                Set<Integer> sourceNumbers = sourceNumbers(collectedSources);
+                sendEvent(emitter, "answerHtml",
+                        json(markdownRenderer.toHtml(result.answer(), sourceNumbers)), MediaType.TEXT_PLAIN);
+                sendEvent(emitter, "sources", citingSources(collectedSources, result.answer()),
+                        MediaType.APPLICATION_JSON);
 
                 boolean validate = result.searched()
                         && (settings.validateGrounding() == null || settings.validateGrounding());

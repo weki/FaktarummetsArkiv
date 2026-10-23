@@ -46,7 +46,8 @@ public class SettingsStore {
                 ollama.embeddingModel(),
                 ollama.refineModel(),
                 ollama.gateModel(),
-                ollama.rewriteModel());
+                ollama.rewriteModel(),
+                chat.answerLanguage());
     }
 
     public WorkspaceSettings get() {
@@ -80,7 +81,8 @@ public class SettingsStore {
                 pick(update.embeddingModel(), base.embeddingModel()),
                 pick(update.refineModel(), base.refineModel()),
                 pick(update.gateModel(), base.gateModel()),
-                pick(update.rewriteModel(), base.rewriteModel()));
+                pick(update.rewriteModel(), base.rewriteModel()),
+                pick(update.answerLanguage(), base.answerLanguage()));
     }
 
     private static List<String> clean(List<String> collections) {
@@ -113,6 +115,9 @@ public class SettingsStore {
         Integer history = settings.historySize();
         if (history != null && (history < 0 || history > 100)) {
             throw new IllegalArgumentException("historySize måste vara mellan 0 och 100");
+        }
+        if (settings.answerLanguage() != null && !AnswerLanguage.valid(settings.answerLanguage())) {
+            throw new IllegalArgumentException("answerLanguage måste vara en, sv eller auto");
         }
         Set<String> models = new LinkedHashSet<>();
         addModel(models, settings.chatModel());

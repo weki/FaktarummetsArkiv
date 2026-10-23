@@ -41,7 +41,7 @@ class ChatServiceTest {
     private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
 
     private final ChatService service = new ChatService(llm, ollama, rag, retrievalService,
-            searchGate, queryRewriter, settingsStore, sessionMemory, new ChatProperties(0.1, true));
+            searchGate, queryRewriter, settingsStore, sessionMemory, new ChatProperties(0.1, true, "en"));
 
     @BeforeEach
     void defaultRewriteKeepsTheQuestion() {
@@ -246,6 +246,45 @@ class ChatServiceTest {
                 Map.of("role", "user", "content", "hej"));
 
         assertThat(ChatService.trimHistory(history, 0)).isEmpty();
+    }
+
+    @Test
+    void usesConfiguredAnswerLanguageAndLessRigidGroundingPrompt() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true,
+                List.of("docs"), null, 5, 0.0, 20, null,
+                null, null, null, null, "sv"));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
+                .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
+        respondWith("Svar [1].");
+
+        service.streamChat("fraga", "s1", List.of(), List.of(), token -> { }, thought -> { },
+                sources -> { }, token -> { }, plan -> { });
+
+        org.mockito.ArgumentCaptor<List<Map<String, String>>> messages =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(llm).chatStream(anyString(), messages.capture(), anyDouble(), anyBoolean(), any(), any());
+        String system = messages.getValue().getFirst().get("content");
+        assertThat(system)
+                .contains("Always answer in Swedish")
+                .contains("Use the SOURCES as your primary evidence")
+                .contains("Follow these rules in priority order")
+                .doesNotContain("Answer ONLY and STRICTLY");
+    }
+
+    @Test
+    void storesAssistantHistoryWithoutCitations() {
+        when(settingsStore.get()).thenReturn(new WorkspaceSettings(
+                "chat", "gemma4:latest", "phi3.5:latest", true, false, true,
+                List.of("docs"), null, 5, 0.0, 20, null));
+        when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
+        respondWith("Svar [1][2].");
+
+        service.streamChat("fraga", "s1", List.of(), List.of(), token -> { }, thought -> { },
+                sources -> { }, token -> { }, plan -> { });
+
+        assertThat(sessionMemory.history("s1", 20).get(1))
+                .containsEntry("content", "Svar.");
     }
 
     @Test
