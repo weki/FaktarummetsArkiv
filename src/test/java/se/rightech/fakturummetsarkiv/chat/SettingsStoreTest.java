@@ -18,7 +18,7 @@ class SettingsStoreTest {
                 Duration.ofSeconds(5), "query: ", "passage:");
         OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "phi3.5:latest", "", 16384, 4096, false, false, false, false, false, null);
+                "phi3.5:latest", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
         RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
         return new SettingsStore(qdrant, ollama, rag, new ChatProperties(0.1, true));
     }

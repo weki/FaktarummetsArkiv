@@ -18,6 +18,8 @@ public record OllamaProperties(
         @DefaultValue("") String rewriteModel,
         @DefaultValue("16384") int chatNumCtx,
         @DefaultValue("16384") int validatorNumCtx,
+        @DefaultValue("2048") int gateNumCtx,
+        @DefaultValue("2048") int rewriteNumCtx,
         @DefaultValue("false") boolean validatorThinking,
         @DefaultValue("false") boolean refineThinking,
         @DefaultValue("false") boolean gateThinking,

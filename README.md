@@ -41,6 +41,31 @@ SPRING_PROFILES_ACTIVE=two-models ./gradlew bootRun
 
 Profilen är opt-in och ändrar inte standardkonfigurationen.
 
+## VRAM och kontextfönster
+
+Chat och validator använder `ollama.chat-num-ctx=8192` respektive
+`ollama.validator-num-ctx=8192`. Gate och rewrite behöver bara korta prompter och har därför egna,
+mindre kontextfönster:
+
+```properties
+ollama.gate-num-ctx=2048
+ollama.rewrite-num-ctx=2048
+```
+
+Ett mindre `num_ctx` ger mindre KV-cache, särskilt för modeller utan GQA, och ska minska risken
+att gate och rewrite tränger ut chatmodellen ur VRAM. Modellnamn, prompts och indexerade data
+är oförändrade; ingen omindexering behövs. Vid start loggas model och `num_ctx` per roll.
+
+Verifiering kräver en maskin med Ollama och GPU. Jag har inte kunnat köra eller mäta VRAM i den här
+miljön. Gör så här hos dig:
+
+1. Starta appen och titta efter loggraderna `Rollkonfiguration gate` och
+   `Rollkonfiguration rewrite` – de ska visa `num_ctx=2048`.
+2. Ställ en fråga som kräver sökning och kör `ollama ps` före och efter.
+3. Kontrollera att phi3.5 visar context 2048 och att modellerna inte längre lastas om varje gång.
+4. Om modellerna fortfarande trängs ut, mät med `ollama ps` och justera kontextstorlekarna utifrån
+   mätningen i stället för att gissa.
+
 ## Köra lokalt
 
 Starta Qdrant om du inte redan har en instans:

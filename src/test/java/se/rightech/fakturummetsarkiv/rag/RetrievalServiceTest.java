@@ -29,7 +29,7 @@ class RetrievalServiceTest {
 
     private static final OllamaProperties OLLAMA = new OllamaProperties(
             "http://localhost:11434", "qwen3:8b", "qllama/multilingual-e5-large",
-            Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "phi3.5:latest", "", 16384, 4096, false, false, false, false, false, null);
+            Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "phi3.5:latest", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     private static final QdrantProperties QDRANT = new QdrantProperties(
             "http://localhost:6333", "docs", 1024, "Cosine", 5,
             Duration.ofSeconds(5), "query: ", "passage: ");

@@ -100,7 +100,7 @@ public class SearchGate {
         }
         try {
             String raw = client.chat(gateModel, SYSTEM_PROMPT,
-                    buildPrompt(question, history, searchLanguage), 0.0, properties.chatNumCtx(),
+                    buildPrompt(question, history, searchLanguage), 0.0, properties.gateNumCtx(),
                     properties.gateThinking()).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");

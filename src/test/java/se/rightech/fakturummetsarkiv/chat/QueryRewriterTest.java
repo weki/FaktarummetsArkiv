@@ -24,7 +24,7 @@ class QueryRewriterTest {
     private static OllamaProperties props(String rewriteModel) {
         return new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "", rewriteModel, 16384, 4096, false, false, false, false, false, null);
+                "", rewriteModel, 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     }
 
     private static List<Map<String, String>> history() {
@@ -82,12 +82,39 @@ class QueryRewriterTest {
                 .thenReturn("OPC UA overview");
         OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
                 "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
-                16384, 8192, false, false, false, true, false, null);
+                16384, 8192, 2048, 2048, false, false, false, true, false, null);
 
         new QueryRewriter(client, thinking).rewrite("vad är OPC UA?", List.of(), "qwen3:8b");
 
         org.mockito.ArgumentCaptor<Boolean> flag = org.mockito.ArgumentCaptor.forClass(Boolean.class);
         verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), flag.capture());
         assertThat(flag.getValue()).isTrue();
+    }
+
+    @Test
+    void usesDedicatedRewriteContextSize() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("OPC UA overview");
+
+        new QueryRewriter(client, props("")).rewrite("vad är OPC UA?", List.of(), "gemma4:latest");
+
+        org.mockito.ArgumentCaptor<Integer> numCtx = org.mockito.ArgumentCaptor.forClass(Integer.class);
+        verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), numCtx.capture(),
+                anyBoolean());
+        assertThat(numCtx.getValue()).isEqualTo(2048);
+    }
+
+    @Test
+    void longestAllowedPromptFitsRewriteContext() {
+        List<Map<String, String>> history = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            history.add(Map.of("role", i % 2 == 0 ? "user" : "assistant", "content", "x".repeat(600)));
+        }
+        String question = "q".repeat(500);
+        int numCtx = props("").rewriteNumCtx();
+        String prompt = QueryRewriter.fullPrompt(history, question, "en");
+
+        int estimatedTokens = (prompt.length() + 2) / 3;
+        assertThat(estimatedTokens).isLessThan(numCtx - 256);
     }
 }

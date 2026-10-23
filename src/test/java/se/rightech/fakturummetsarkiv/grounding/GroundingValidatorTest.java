@@ -25,7 +25,7 @@ class GroundingValidatorTest {
     private final OllamaClient client = mock(OllamaClient.class);
     private final OllamaProperties properties = new OllamaProperties(
             "http://localhost:11434", "gemma4:latest", "qllama/multilingual-e5-large",
-            java.time.Duration.ofSeconds(5), "phi3.5:latest", true, "", "", "", 16384, 4096, false, false, false, false, false, null);
+            java.time.Duration.ofSeconds(5), "phi3.5:latest", true, "", "", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     private final RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
     private final GroundingValidator validator = new GroundingValidator(client, properties, rag);
 
@@ -126,7 +126,7 @@ class GroundingValidatorTest {
                 .thenReturn("{\"supported\": true, \"reason\": \"ok\"}");
         OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
                 "e5", java.time.Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
-                16384, 8192, true, false, false, false, false, null);
+                16384, 8192, 2048, 2048, true, false, false, false, false, null);
 
         new GroundingValidator(client, thinking, rag).validate("fraga", sources(), "svar", "qwen3:8b", true);
 
@@ -134,5 +134,18 @@ class GroundingValidatorTest {
         org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(),
                 flag.capture());
         assertThat(flag.getValue()).isTrue();
+    }
+
+    @Test
+    void usesValidatorContextSize() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("{\"supported\": true, \"reason\": \"ok\"}");
+
+        validator.validate("fraga", sources(), "svar", MODEL, true);
+
+        org.mockito.ArgumentCaptor<Integer> numCtx = org.mockito.ArgumentCaptor.forClass(Integer.class);
+        org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(),
+                numCtx.capture(), anyBoolean());
+        assertThat(numCtx.getValue()).isEqualTo(4096);
     }
 }

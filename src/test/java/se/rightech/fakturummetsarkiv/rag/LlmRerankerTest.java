@@ -20,7 +20,7 @@ class LlmRerankerTest {
 
     private static final OllamaProperties OLLAMA = new OllamaProperties(
             "http://localhost:11434", "qwen3:8b", "e5", Duration.ofSeconds(5),
-            "qwen3:8b", true, "qwen3:8b", "phi3.5:latest", "", 16384, 4096, false, false, false, false, false, null);
+            "qwen3:8b", true, "qwen3:8b", "phi3.5:latest", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
 
     private static final RerankProperties PROPS = new RerankProperties(true, 25, "rerank-model", 600);
 

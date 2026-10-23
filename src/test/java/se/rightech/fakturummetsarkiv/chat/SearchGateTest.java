@@ -31,7 +31,7 @@ class SearchGateTest {
     private static OllamaProperties props(String gateModel) {
         return new OllamaProperties("http://localhost:11434", "gemma4:latest",
                 "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                gateModel, "", 16384, 4096, false, false, false, false, false, null);
+                gateModel, "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     }
 
     @Test
@@ -179,7 +179,7 @@ class SearchGateTest {
                 .thenReturn("OPC UA overview");
         OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
                 "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
-                16384, 8192, false, false, true, false, false, null);
+                16384, 8192, 2048, 2048, false, false, true, false, false, null);
 
         new SearchGate(client, thinking, rag()).decide("vad är OPC UA?");
 
@@ -187,5 +187,18 @@ class SearchGateTest {
         org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(),
                 flag.capture());
         assertThat(flag.getValue()).isTrue();
+    }
+
+    @Test
+    void usesDedicatedGateContextSize() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("OPC UA overview");
+
+        new SearchGate(client, props("phi3.5:latest"), rag()).decide("vad är OPC UA?");
+
+        org.mockito.ArgumentCaptor<Integer> numCtx = org.mockito.ArgumentCaptor.forClass(Integer.class);
+        org.mockito.Mockito.verify(client).chat(anyString(), anyString(), anyString(), anyDouble(),
+                numCtx.capture(), anyBoolean());
+        assertThat(numCtx.getValue()).isEqualTo(2048);
     }
 }

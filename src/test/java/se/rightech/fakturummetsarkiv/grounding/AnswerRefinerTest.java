@@ -26,7 +26,7 @@ class AnswerRefinerTest {
 
     private static OllamaProperties props(String refineModel) {
         return new OllamaProperties("http://localhost:11434", "deepseek-r1:14b",
-                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "", 16384, 4096, false, false, false, false, false, null);
+                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, refineModel, "", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
     }
 
     private static List<Map<String, Object>> sources() {
@@ -80,7 +80,7 @@ class AnswerRefinerTest {
                 .thenReturn("svar");
         OllamaProperties thinking = new OllamaProperties("http://localhost:11434", "qwen3:8b",
                 "e5", Duration.ofSeconds(5), "qwen3:8b", true, "qwen3:8b", "qwen3:8b", "qwen3:8b",
-                16384, 8192, false, true, false, false, false, null);
+                16384, 8192, 2048, 2048, false, true, false, false, false, null);
 
         new AnswerRefiner(client, thinking, RAG).refine("fraga", sources(), "utkast");
 

@@ -51,7 +51,7 @@ public class QueryRewriter {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT,
-                    buildPrompt(safeHistory, question, searchLanguage), 0.0, properties.chatNumCtx(),
+                    buildPrompt(safeHistory, question, searchLanguage), 0.0, properties.rewriteNumCtx(),
                     properties.rewriteThinking());
             String cleaned = clean(raw);
             if (cleaned.isEmpty() || cleaned.equalsIgnoreCase(question.trim())) {
@@ -76,6 +76,11 @@ public class QueryRewriter {
 
     static String buildPrompt(List<Map<String, String>> history, String question) {
         return buildPrompt(history, question, "en");
+    }
+
+    /** Full prompt inklusive systemprompt, används för att verifiera kontextbudgeten. */
+    static String fullPrompt(List<Map<String, String>> history, String question, String searchLanguage) {
+        return SYSTEM_PROMPT + "\n\n" + buildPrompt(history, question, searchLanguage);
     }
 
     static String buildPrompt(List<Map<String, String>> history, String question, String searchLanguage) {
