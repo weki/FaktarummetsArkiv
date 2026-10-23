@@ -176,6 +176,18 @@
                 </label>
             </div>
             <div class="settings-row">
+                <label>Svarspråk
+                    <select name="answerLanguage">
+                        <option value="en">English (standard)</option>
+                        <option value="sv">Svenska</option>
+                        <option value="auto">Samma som frågan</option>
+                    </select>
+                </label>
+                <label>Historik (antal meddelanden)
+                    <input name="historySize" type="number" min="0" max="100" step="1">
+                </label>
+            </div>
+            <div class="settings-row">
                 <label>Antal källor (topN)
                     <input name="topN" type="number" min="1" max="50" step="1">
                 </label>
@@ -183,9 +195,6 @@
                     <input name="similarityThreshold" type="number" min="0" max="1" step="0.05">
                 </label>
             </div>
-            <label>Historik (antal meddelanden)
-                <input name="historySize" type="number" min="0" max="100" step="1">
-            </label>
             <div class="modal-actions">
                 <span id="settingsStatus" class="status"></span>
                 <button id="settingsSave" type="submit">Spara</button>

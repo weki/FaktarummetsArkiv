@@ -738,7 +738,8 @@ const API = '/api/chat';
             embeddingModel: text('embeddingModel'),
             refineModel: text('refineModel'),
             gateModel: text('gateModel'),
-            rewriteModel: text('rewriteModel')
+            rewriteModel: text('rewriteModel'),
+            answerLanguage: text('answerLanguage')
         };
 
         try {
