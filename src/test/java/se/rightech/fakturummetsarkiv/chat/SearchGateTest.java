@@ -49,6 +49,14 @@ class SearchGateTest {
     }
 
     @Test
+    void skipsUnlistedGreetingWhenModelSaysDirect() {
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean())).thenReturn("DIRECT");
+
+        assertThat(new SearchGate(client, props("phi3.5:latest"), rag()).needsSearch("God dag"))
+                .isFalse();
+    }
+
+    @Test
     void defaultsToSearchWhenGateDisabled() {
         assertThat(new SearchGate(client, props(""), rag()).needsSearch("vad är OPC UA?")).isTrue();
     }

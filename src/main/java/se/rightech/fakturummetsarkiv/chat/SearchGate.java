@@ -108,8 +108,8 @@ public class SearchGate {
             }
             String first = raw.split("\\s+", 2)[0].replaceAll("[^A-Za-z]", "").toUpperCase(Locale.ROOT);
             if ("DIRECT".equals(first)) {
-                // Endast tydlig small talk får hoppa över sökning.
-                return new Decision(true, question);
+                // Modellen får bara hoppa över sökning för korta sociala fraser, inte för frågor.
+                return new Decision(!isDirectCandidate(question), question);
             }
             String query = raw.replaceAll("\\s+", " ").trim();
             if (query.length() > 200) {
@@ -154,6 +154,15 @@ public class SearchGate {
 
     static boolean isSmallTalk(String question) {
         return SMALL_TALK.contains(normalize(question));
+    }
+
+    /** Kort social fras utan frågetecken, t.ex. en hälsning som inte finns i listan. */
+    static boolean isDirectCandidate(String question) {
+        if (question == null || question.contains("?")) {
+            return false;
+        }
+        String normalized = normalize(question);
+        return !normalized.isEmpty() && normalized.split("\\s+").length <= 4;
     }
 
     private static String normalize(String question) {
