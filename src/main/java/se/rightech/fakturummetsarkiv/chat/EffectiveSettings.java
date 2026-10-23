@@ -1,7 +1,10 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.rag.ArchiveProperties;
 import se.rightech.fakturummetsarkiv.rag.HybridProperties;
 import se.rightech.fakturummetsarkiv.rag.QdrantProperties;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
@@ -10,7 +13,9 @@ import se.rightech.fakturummetsarkiv.rag.RerankProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Effektiva värden: UI-override om det finns, annars deploymentens konfiguration.
@@ -25,17 +30,29 @@ public class EffectiveSettings {
     private final ChatProperties chat;
     private final HybridProperties hybrid;
     private final RerankProperties rerank;
+    private final ArchiveProperties archive;
+    private final Environment environment;
 
     private final Map<String, Object> overrides = new ConcurrentHashMap<>();
+    private final AtomicLong revision = new AtomicLong();
 
+    @Autowired
     public EffectiveSettings(OllamaProperties ollama, QdrantProperties qdrant, RagProperties rag,
-                             ChatProperties chat, HybridProperties hybrid, RerankProperties rerank) {
+                             ChatProperties chat, HybridProperties hybrid, RerankProperties rerank,
+                             ArchiveProperties archive, Environment environment) {
         this.ollama = ollama;
         this.qdrant = qdrant;
         this.rag = rag;
         this.chat = chat;
         this.hybrid = hybrid;
         this.rerank = rerank;
+        this.archive = archive;
+        this.environment = environment;
+    }
+
+    public EffectiveSettings(OllamaProperties ollama, QdrantProperties qdrant, RagProperties rag,
+                             ChatProperties chat, HybridProperties hybrid, RerankProperties rerank) {
+        this(ollama, qdrant, rag, chat, hybrid, rerank, new ArchiveProperties("", "archive"), null);
     }
 
     public Object value(String key) {
@@ -87,14 +104,19 @@ public class EffectiveSettings {
             case "ollama.followup-thinking" -> ollama.followupThinking();
             case "ollama.vram-gb" -> ollama.vramGb();
             case "ollama.base-url" -> ollama.baseUrl();
-            case "ollama.timeout" -> ollama.timeout();
+            case "ollama.timeout" -> duration(ollama.timeout());
             case "qdrant.base-url" -> qdrant.baseUrl();
             case "qdrant.collection" -> qdrant.collection();
             case "qdrant.vector-size" -> qdrant.vectorSize();
             case "qdrant.distance" -> qdrant.distance();
-            case "qdrant.timeout" -> qdrant.timeout();
+            case "qdrant.timeout" -> duration(qdrant.timeout());
             case "qdrant.query-prefix" -> qdrant.queryPrefix();
             case "qdrant.passage-prefix" -> qdrant.passagePrefix();
+            case "archive.upload-dir" -> archive.uploadDir();
+            case "archive.pdf-roots" -> archive.pdfRoots();
+            case "spring.servlet.multipart.max-file-size", "spring.servlet.multipart.max-request-size",
+                 "server.tomcat.max-swallow-size", "spring.codec.max-in-memory-size" ->
+                    environment == null ? null : environment.getProperty(key);
             default -> throw new IllegalArgumentException("Okänd inställning: " + key);
         };
     }
@@ -153,16 +175,22 @@ public class EffectiveSettings {
         return Map.copyOf(overrides);
     }
 
+    public long revision() {
+        return revision.get();
+    }
+
     public void putOverride(String key, Object value) {
         if (value == null) {
             overrides.remove(key);
         } else {
             overrides.put(key, value);
         }
+        revision.incrementAndGet();
     }
 
     public void removeOverride(String key) {
         overrides.remove(key);
+        revision.incrementAndGet();
     }
 
     public void replaceOverrides(Map<String, Object> values) {
@@ -170,6 +198,18 @@ public class EffectiveSettings {
         if (values != null) {
             values.forEach(this::putOverride);
         }
+        revision.incrementAndGet();
+    }
+
+    private static String duration(Duration value) {
+        if (value == null) {
+            return null;
+        }
+        long millis = value.toMillis();
+        if (millis % 1000 == 0) {
+            return (millis / 1000) + "s";
+        }
+        return millis + "ms";
     }
 
     Map<String, Object> snapshotOverrides() {
