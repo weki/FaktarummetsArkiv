@@ -23,8 +23,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -127,7 +130,8 @@ public class ChatController {
                 CompletableFuture<List<String>> followUpsFuture = CompletableFuture.supplyAsync(
                         () -> followUpGenerator.generate(
                                 request.message(), result.answer(), collectedSources,
-                                settings.chatModel(), settings.refineModel(), 3),
+                                settings.chatModel(), settings.refineModel(), 3, null, null,
+                                settings.answerLanguage()),
                         streamExecutor);
 
                 GroundingResult validation = validationFuture.join();
@@ -141,7 +145,9 @@ public class ChatController {
                             && !refined.trim().equals(result.answer().trim())) {
                         sendEvent(emitter, "refined", json(refined), MediaType.TEXT_PLAIN);
                         sendEvent(emitter, "answerHtml",
-                                json(markdownRenderer.toHtml(refined)), MediaType.TEXT_PLAIN);
+                                json(markdownRenderer.toHtml(refined, sourceNumbers)), MediaType.TEXT_PLAIN);
+                        sendEvent(emitter, "sources", citingSources(collectedSources, refined),
+                                MediaType.APPLICATION_JSON);
                         chatService.correctLastAnswer(request.sessionId(), refined);
                     }
                 }
@@ -158,6 +164,30 @@ public class ChatController {
             }
         });
         return emitter;
+    }
+
+    private static Set<Integer> sourceNumbers(List<Map<String, Object>> sources) {
+        Set<Integer> numbers = new LinkedHashSet<>();
+        for (Map<String, Object> source : sources) {
+            Object number = source.get("citationNumber");
+            if (number instanceof Number value) {
+                numbers.add(value.intValue());
+            }
+        }
+        return numbers;
+    }
+
+    private static List<Map<String, Object>> citingSources(List<Map<String, Object>> sources, String answer) {
+        Set<Integer> cited = Citations.citedNumbers(answer);
+        List<Map<String, Object>> result = new ArrayList<>(sources.size());
+        for (Map<String, Object> source : sources) {
+            Map<String, Object> copy = new LinkedHashMap<>(source);
+            Object number = source.get("citationNumber");
+            boolean isCited = number instanceof Number value && cited.contains(value.intValue());
+            copy.put("cited", isCited);
+            result.add(copy);
+        }
+        return result;
     }
 
     private void sendEvent(SseEmitter emitter, String name, Object data, MediaType type) {

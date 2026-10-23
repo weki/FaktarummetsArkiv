@@ -315,6 +315,13 @@
             color: var(--muted);
         }
         .answer.md a { color: var(--accent); }
+        .answer.md a.citation {
+            text-decoration: none;
+            border-radius: 4px;
+            padding: 0 2px;
+            background: rgba(92, 155, 255, .14);
+        }
+        .answer.md a.citation:hover { background: rgba(92, 155, 255, .28); }
         .answer.md table { border-collapse: collapse; margin: .6em 0; width: 100%; font-size: .92em; }
         .answer.md th, .answer.md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
         .answer.md th { background: var(--panel-2); font-weight: 600; }
@@ -339,6 +346,14 @@
         .sources > summary::-webkit-details-marker { display: none; }
         .sources > summary::before { content: '📚'; font-size: 12px; }
         .sources > summary:hover { border-color: var(--border-strong); color: var(--text); }
+        .sources-uncited { margin-top: 6px; }
+        .sources-uncited > summary {
+            cursor: pointer;
+            padding: 7px 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .sources-uncited > summary:hover { color: var(--text); }
         .sources-query {
             margin-top: 8px;
             padding: 6px 10px;

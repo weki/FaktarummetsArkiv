@@ -41,6 +41,12 @@ class CitationsTest {
     }
 
     @Test
+    void findsCitedNumbersOutsideCode() {
+        assertThat(Citations.citedNumbers("A [1] B [3, 4] C `x[9]` D ```\n[7]\n``` [2]"))
+                .containsExactly(1, 3, 4, 2);
+    }
+
+    @Test
     void handlesNullAndEmptyText() {
         assertThat(Citations.strip(null)).isNull();
         assertThat(Citations.strip("")).isEmpty();

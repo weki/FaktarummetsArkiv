@@ -42,6 +42,22 @@ class MarkdownRendererTest {
     }
 
     @Test
+    void linksKnownCitationsOnly() {
+        String html = markdown.toHtml("Claim [1] and [9].", java.util.Set.of(1));
+
+        assertThat(html).contains("class=\"citation\" data-source-number=\"1\" href=\"#source-1\">[1]</a>");
+        assertThat(html).contains("[9]").doesNotContain("href=\"#source-9\"");
+    }
+
+    @Test
+    void doesNotLinkCitationsInsideCode() {
+        String html = markdown.toHtml("`arr[1]` and [1].", java.util.Set.of(1));
+
+        assertThat(html).contains("<code>arr[1]</code>");
+        assertThat(html).contains("class=\"citation\"").doesNotContain("<code><a");
+    }
+
+    @Test
     void blankReturnsEmpty() {
         assertThat(markdown.toHtml(null)).isEmpty();
         assertThat(markdown.toHtml("   ")).isEmpty();

@@ -1,8 +1,10 @@
 package se.rightech.fakturummetsarkiv.chat;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,6 +14,7 @@ public final class Citations {
     private static final Pattern CODE = Pattern.compile("```.*?```|`[^`\\n]*`", Pattern.DOTALL);
     private static final Pattern MARKER = Pattern.compile(
             "[ \\t]*\\[\\s*\\d+(?:\\s*[,;]\\s*\\d+|\\s*[-–]\\s*\\d+)*\\s*\\]");
+    private static final Pattern NUMBERS = Pattern.compile("\\d+");
 
     private Citations() {
     }
@@ -32,6 +35,22 @@ public final class Citations {
         return out.toString();
     }
 
+    /** Numeriska källhänvisningar som faktiskt förekommer i texten, utanför kodblock. */
+    public static Set<Integer> citedNumbers(String text) {
+        Set<Integer> numbers = new LinkedHashSet<>();
+        if (text == null || text.isEmpty()) {
+            return numbers;
+        }
+        Matcher matcher = CODE.matcher(text);
+        int last = 0;
+        while (matcher.find()) {
+            collectNumbers(text.substring(last, matcher.start()), numbers);
+            last = matcher.end();
+        }
+        collectNumbers(text.substring(last), numbers);
+        return numbers;
+    }
+
     static List<Map<String, String>> stripAssistantHistory(List<Map<String, String>> history) {
         if (history == null || history.isEmpty()) {
             return List.of();
@@ -46,6 +65,16 @@ public final class Citations {
             }
         }
         return List.copyOf(cleaned);
+    }
+
+    private static void collectNumbers(String text, Set<Integer> numbers) {
+        Matcher marker = MARKER.matcher(text);
+        while (marker.find()) {
+            Matcher number = NUMBERS.matcher(marker.group());
+            while (number.find()) {
+                numbers.add(Integer.parseInt(number.group()));
+            }
+        }
     }
 
     private static String stripPlain(String text) {

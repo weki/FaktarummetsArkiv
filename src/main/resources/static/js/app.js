@@ -247,10 +247,15 @@ const API = '/api/chat';
 
     function appendSources(container, sources, searchQuery) {
         if (!sources || !sources.length) return;
+        const hasFlags = sources.some(source => Object.prototype.hasOwnProperty.call(source, 'cited'));
+        const cited = hasFlags ? sources.filter(source => source.cited === true) : sources.slice();
+        const uncited = hasFlags ? sources.filter(source => source.cited !== true) : [];
         const details = document.createElement('details');
         details.className = 'sources';
         const summary = document.createElement('summary');
-        summary.textContent = 'Källor (' + sources.length + ')';
+        summary.textContent = cited.length
+            ? 'Källor (' + cited.length + ')'
+            : 'Inga källor citerades i svaret';
         details.appendChild(summary);
         if (searchQuery) {
             const query = document.createElement('div');
@@ -258,56 +263,75 @@ const API = '/api/chat';
             query.textContent = 'Sökfråga: ' + searchQuery;
             details.appendChild(query);
         }
-        for (const source of sources) {
-            const item = document.createElement('details');
-            item.className = 'source-item';
-
-            const head = document.createElement('summary');
-            const title = (source.citationNumber ? '[' + source.citationNumber + '] ' : '')
-                + (source.title || source.name || source.source || 'Källa');
-            const bits = [];
-            if (source.collection) bits.push(source.collection);
-            if (source.page !== undefined && source.page !== null) bits.push('sida ' + source.page);
-            if (typeof source.score === 'number') bits.push(source.score.toFixed(2));
-            head.textContent = title + (bits.length ? ' · ' + bits.join(' · ') : '');
-            item.appendChild(head);
-
-            const body = document.createElement('div');
-            body.className = 'source-text';
-            body.textContent = source.text || source.content || '';
-            item.appendChild(body);
-
-            const ref = {
-                title: title,
-                meta: bits.join(' · '),
-                documentId: source.documentId,
-                text: source.text || source.content || ''
-            };
-            const pdf = docPdfUrl(ref);
-            const download = docDownloadUrl(ref);
-            if (pdf || download) {
-                const actions = document.createElement('div');
-                actions.className = 'source-actions';
-                if (pdf || ref.documentId) {
-                    const view = document.createElement('button');
-                    view.type = 'button';
-                    view.className = 'link-btn';
-                    view.textContent = 'Visa';
-                    view.addEventListener('click', () => openDocumentPopup(ref));
-                    actions.appendChild(view);
-                }
-                if (download) {
-                    const link = document.createElement('a');
-                    link.href = download;
-                    link.textContent = 'Ladda ner';
-                    actions.appendChild(link);
-                }
-                item.appendChild(actions);
+        for (const source of cited) {
+            appendSourceItem(details, source);
+        }
+        if (uncited.length) {
+            const rest = document.createElement('details');
+            rest.className = 'sources-uncited';
+            const restSummary = document.createElement('summary');
+            restSummary.textContent = 'Övriga hämtade källor (' + uncited.length + ')';
+            rest.appendChild(restSummary);
+            for (const source of uncited) {
+                appendSourceItem(rest, source);
             }
-
-            details.appendChild(item);
+            details.appendChild(rest);
         }
         container.appendChild(details);
+    }
+
+    function appendSourceItem(parent, source) {
+        const item = document.createElement('details');
+        item.className = 'source-item';
+        if (source.citationNumber) {
+            item.dataset.sourceNumber = String(source.citationNumber);
+            item.id = 'source-' + source.citationNumber;
+        }
+
+        const head = document.createElement('summary');
+        const title = (source.citationNumber ? '[' + source.citationNumber + '] ' : '')
+            + (source.title || source.name || source.source || 'Källa');
+        const bits = [];
+        if (source.collection) bits.push(source.collection);
+        if (source.page !== undefined && source.page !== null) bits.push('sida ' + source.page);
+        if (typeof source.score === 'number') bits.push(source.score.toFixed(2));
+        head.textContent = title + (bits.length ? ' · ' + bits.join(' · ') : '');
+        item.appendChild(head);
+
+        const body = document.createElement('div');
+        body.className = 'source-text';
+        body.textContent = source.text || source.content || '';
+        item.appendChild(body);
+
+        const ref = {
+            title: title,
+            meta: bits.join(' · '),
+            documentId: source.documentId,
+            text: source.text || source.content || ''
+        };
+        const pdf = docPdfUrl(ref);
+        const download = docDownloadUrl(ref);
+        if (pdf || download) {
+            const actions = document.createElement('div');
+            actions.className = 'source-actions';
+            if (pdf || ref.documentId) {
+                const view = document.createElement('button');
+                view.type = 'button';
+                view.className = 'link-btn';
+                view.textContent = 'Visa';
+                view.addEventListener('click', () => openDocumentPopup(ref));
+                actions.appendChild(view);
+            }
+            if (download) {
+                const link = document.createElement('a');
+                link.href = download;
+                link.textContent = 'Ladda ner';
+                actions.appendChild(link);
+            }
+            item.appendChild(actions);
+        }
+
+        parent.appendChild(item);
     }
 
     function appendRefinedNote(container) {
@@ -627,6 +651,24 @@ const API = '/api/chat';
     docOverlay.addEventListener('click', (event) => {
         if (event.target === docOverlay) closeDocumentPopup();
     });
+    document.addEventListener('click', (event) => {
+        const link = event.target.closest('a.citation');
+        if (!link) return;
+        const message = link.closest('.msg');
+        const number = link.dataset.sourceNumber;
+        const target = message && number
+            ? message.querySelector('.source-item[data-source-number="' + number + '"]')
+            : null;
+        if (!target) return;
+        event.preventDefault();
+        let node = target;
+        while (node && node !== message) {
+            if (node.tagName === 'DETAILS') node.open = true;
+            node = node.parentElement;
+        }
+        target.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    });
+
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !docOverlay.classList.contains('hidden')) closeDocumentPopup();
     });
