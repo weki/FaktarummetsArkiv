@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Inställningar – Fakturummets Arkiv</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body class="settings-page">
+<header class="settings-topbar">
+    <div class="settings-heading">
+        <a class="settings-btn settings-back" href="/">← Tillbaka</a>
+        <div>
+            <h1>Inställningar</h1>
+            <p>Alla värden som styr arkivet, med källa och när ändringen slår igenom.</p>
+        </div>
+    </div>
+    <div class="settings-head-actions">
+        <span id="settingsStatus" class="status" role="status"></span>
+        <button id="resetAllBtn" type="button" class="settings-btn">Återställ alla</button>
+        <button id="saveBtn" type="button" disabled>Spara ändringar</button>
+    </div>
+</header>
+
+<div class="settings-shell">
+    <aside class="settings-sidebar">
+        <label class="settings-search">
+            <span>Sök inställning</span>
+            <input id="settingsSearch" type="search" placeholder="t.ex. modell, chunk, Qdrant" autocomplete="off">
+        </label>
+        <nav id="settingsNav" aria-label="Inställningsgrupper"></nav>
+        <div class="settings-file">
+            <span>Överridningar sparas i</span>
+            <code id="settingsFile">settings.json</code>
+            <span id="settingsVersion"></span>
+        </div>
+    </aside>
+    <main id="settingsContent" class="settings-content" aria-live="polite">
+        <p class="settings-loading">Läser in inställningar…</p>
+    </main>
+</div>
+
+<template id="groupTemplate">
+    <section class="settings-group">
+        <div class="settings-group-head">
+            <h2></h2>
+            <p></p>
+        </div>
+        <div class="settings-rows"></div>
+    </section>
+</template>
+
+<script src="/js/settings.js"></script>
+</body>
+</html>

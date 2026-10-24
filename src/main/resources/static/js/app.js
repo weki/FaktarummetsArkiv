@@ -8,11 +8,6 @@ const API = '/api/chat';
     const newThreadBtn = document.getElementById('newThreadBtn');
     const threadList = document.getElementById('threadList');
     const settingsBtn = document.getElementById('settingsBtn');
-    const settingsOverlay = document.getElementById('settingsOverlay');
-    const settingsClose = document.getElementById('settingsClose');
-    const settingsForm = document.getElementById('settingsForm');
-    const settingsStatus = document.getElementById('settingsStatus');
-    const settingsSave = document.getElementById('settingsSave');
     const collectionList = document.getElementById('collectionList');
     const documentsBtn = document.getElementById('documentsBtn');
     const documentsPage = document.getElementById('documentsPage');
@@ -540,25 +535,6 @@ const API = '/api/chat';
 
     newThreadBtn.addEventListener('click', () => createThread());
 
-    function setSettingsStatus(text, cls) {
-        settingsStatus.textContent = text;
-        settingsStatus.className = 'status' + (cls ? ' ' + cls : '');
-    }
-
-    let ollamaModels = null;
-
-    async function loadOllamaModels() {
-        if (ollamaModels) return ollamaModels;
-        try {
-            const res = await fetch(API + '/models');
-            const data = await res.json().catch(() => null);
-            ollamaModels = Array.isArray(data) ? data : [];
-        } catch (error) {
-            ollamaModels = [];
-        }
-        return ollamaModels;
-    }
-
     let qdrantCollections = null;
 
     async function loadCollections(force) {
@@ -584,20 +560,6 @@ const API = '/api/chat';
             knownTags = [];
         }
         return knownTags;
-    }
-
-    function fillModelSelect(select, models, current) {
-        if (!select) return;
-        const names = new Set(models || []);
-        if (current) names.add(current);
-        select.innerHTML = '';
-        for (const name of names) {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            select.appendChild(option);
-        }
-        if (current) select.value = current;
     }
 
     function renderCollections(available, selected) {
@@ -631,38 +593,7 @@ const API = '/api/chat';
         }
     }
 
-    async function openSettings() {
-        setSettingsStatus('Laddar...', '');
-        settingsOverlay.classList.remove('hidden');
-        try {
-            const [res, models] = await Promise.all([fetch(API + '/settings'), loadOllamaModels()]);
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-            for (const [key, value] of Object.entries(data)) {
-                const field = settingsForm.elements.namedItem(key);
-                if (!field || value === null || value === undefined) continue;
-                if (field.type === 'checkbox') field.checked = value === true;
-                else field.value = value;
-            }
-            fillModelSelect(settingsForm.elements.namedItem('chatModel'), models, data.chatModel);
-            fillModelSelect(settingsForm.elements.namedItem('validatorModel'), models, data.validatorModel);
-            fillModelSelect(settingsForm.elements.namedItem('embeddingModel'), models, data.embeddingModel);
-            fillModelSelect(settingsForm.elements.namedItem('refineModel'), models, data.refineModel);
-            fillModelSelect(settingsForm.elements.namedItem('gateModel'), models, data.gateModel);
-            fillModelSelect(settingsForm.elements.namedItem('rewriteModel'), models, data.rewriteModel);
-            if (!models.length) setSettingsStatus('Kunde inte hämta modeller från Ollama', 'err');
-            else setSettingsStatus('', '');
-        } catch (error) {
-            setSettingsStatus('Kunde inte hämta: ' + error.message, 'err');
-        }
-    }
-
-    function closeSettings() {
-        settingsOverlay.classList.add('hidden');
-    }
-
-    settingsBtn.addEventListener('click', openSettings);
-    settingsClose.addEventListener('click', closeSettings);
+    settingsBtn.addEventListener('click', () => { window.location.href = '/settings.html'; });
     docModalClose.addEventListener('click', closeDocumentPopup);
     docOverlay.addEventListener('click', (event) => {
         if (event.target === docOverlay) closeDocumentPopup();
@@ -688,13 +619,9 @@ const API = '/api/chat';
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !docOverlay.classList.contains('hidden')) closeDocumentPopup();
     });
-    settingsOverlay.addEventListener('click', (event) => {
-        if (event.target === settingsOverlay) closeSettings();
-    });
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
-        if (!settingsOverlay.classList.contains('hidden')) closeSettings();
-        else if (!documentsPage.classList.contains('hidden')) closeDocuments();
+        if (!documentsPage.classList.contains('hidden')) closeDocuments();
         else if (!threadDocOverlay.classList.contains('hidden')) closeThreadDocSelector();
     });
 
@@ -708,55 +635,6 @@ const API = '/api/chat';
     threadDocSearch.addEventListener('input', renderThreadDocList);
     threadDocFilterCollection.addEventListener('change', renderThreadDocList);
     threadDocSave.addEventListener('click', saveThreadDocSelection);
-
-    settingsForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        settingsSave.disabled = true;
-        setSettingsStatus('Sparar...', '');
-
-        const text = (name) => {
-            const value = settingsForm.elements.namedItem(name).value.trim();
-            return value === '' ? null : value;
-        };
-        const number = (name) => {
-            const value = settingsForm.elements.namedItem(name).value.trim();
-            return value === '' ? null : Number(value);
-        };
-        const checked = (name) => settingsForm.elements.namedItem(name).checked;
-
-        const payload = {
-            chatMode: text('chatMode'),
-            chatModel: text('chatModel'),
-            validatorModel: text('validatorModel'),
-            validateGrounding: checked('validateGrounding'),
-            smartSearch: checked('smartSearch'),
-            rewriteQuery: checked('rewriteQuery'),
-            similarityThreshold: number('similarityThreshold'),
-            topN: number('topN'),
-            temperature: number('temperature'),
-            historySize: number('historySize'),
-            embeddingModel: text('embeddingModel'),
-            refineModel: text('refineModel'),
-            gateModel: text('gateModel'),
-            rewriteModel: text('rewriteModel'),
-            answerLanguage: text('answerLanguage')
-        };
-
-        try {
-            const res = await fetch(API + '/settings', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-            setSettingsStatus('Sparat', 'ok');
-        } catch (error) {
-            setSettingsStatus('Fel: ' + error.message, 'err');
-        } finally {
-            settingsSave.disabled = false;
-        }
-    });
 
     function setDocumentsStatus(text, cls) {
         documentsStatus.textContent = text;
