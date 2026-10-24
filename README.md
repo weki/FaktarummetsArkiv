@@ -5,7 +5,8 @@ Lokal RAG-tjänst för frågor mot ett dokumentarkiv. PDF:er och textfiler index
 genereras av en lokal chattmodell. Allt kan köras utan molntjänster.
 
 Tjänsten innehåller ett webbgränssnitt, dokumentuppladdning, källhänvisningar, validering av
-svar, följdfrågor, hybridsökning och LLM-baserad reranking (de två sista är opt-in).
+svar, följdfrågor, en schemabaserad inställningssida, hybridsökning och LLM-baserad reranking (de
+två sista är opt-in).
 
 ## Krav
 
@@ -114,6 +115,51 @@ docker compose up --build
 Ollama körs normalt på värden. Compose pekar appen mot
 `http://host.docker.internal:11434`; sätt `OLLAMA_BASE_URL` om Ollama finns någon annanstans.
 Originalfiler hamnar i `./archive` och Qdrants data i volymen `qdrant-data`.
+
+## Inställningar
+
+Öppna <http://localhost:8080/settings.html> eller klicka på **Inställningar**. Sidan genereras från
+en central schemafil i koden och visar effektivt värde, standardvärde, källa
+(`Standard`, `Miljö`, `Fil` eller `UI`), när ändringen slår igenom och vilka värden som är
+skrivskyddade.
+
+Ändringar från sidan sparas som överridningar i `settings.json`. Filen ligger som standard bredvid
+arkivet (t.ex. `./settings.json`) och kan flyttas med `settings.file`:
+
+```properties
+settings.file=/srv/fakturum/settings.json
+```
+
+Filen innehåller bara överridningar, inte alla standardvärden:
+
+```json
+{
+  "version": 1,
+  "overrides": {
+    "ollama.model": "qwen3:8b",
+    "rag.rerank.enabled": true
+  }
+}
+```
+
+Prioritetsordning är `UI-override > application-local.properties > miljövariabler >
+application.properties`. En tom fil eller ingen fil betyder att appen beter sig precis som den
+konfiguration som redan finns. Skrivningen är atomisk, och en fil som inte kan läsas flyttas till
+`settings.json.bad` i stället för att appen startar med halva värden. `settings.json` är
+gitignorerad eftersom den kan innehålla lokal driftkonfiguration.
+
+Värden som kräver omstart (`RESTART`) och infrastruktur (Ollama/Qdrant-adresser, timeouts,
+vektordimension, distansmått, prefix, arkivsökvägar och Spring/Tomcat-gränser) visas men kan bara
+ändras i konfigurationen. Hemliga värden ska aldrig läggas i `settings.json`.
+
+Vid modellbyte gäller max tre olika modeller samtidigt, inklusive `rag.rerank.model`. Ett byte av
+embeddingmodell eller vektordimension kräver omindexering; sidan varnar men startar aldrig någon
+omindexering. Chunkstorlek och överlapp påverkar nya dokument direkt, medan gamla dokument måste
+indexeras om för att få den nya chunkningen.
+
+Skrivningar till inställnings-API:t tillåts bara från serverns egen dator och kräver headern
+`X-Requested-With: FakturummetsArkiv`. Läsning fungerar även från andra datorer i nätverket. Det
+finns ingen inloggning; exponera inte appen mot untrusted nätverk.
 
 ## Tester
 

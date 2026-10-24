@@ -8,6 +8,9 @@ build/
 ### Application runtime data ###
 archive/
 /eval/
+settings.json
+settings.json.bad
+settings.json.tmp
 
 ### Lokal konfiguration (IP-adresser, hemligheter) ###
 application-local.properties
