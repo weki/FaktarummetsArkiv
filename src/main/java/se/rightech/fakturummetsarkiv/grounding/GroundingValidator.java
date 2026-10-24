@@ -1,8 +1,10 @@
 package se.rightech.fakturummetsarkiv.grounding;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.chat.EffectiveSettings;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -46,11 +48,19 @@ public class GroundingValidator {
     private final OllamaClient client;
     private final OllamaProperties properties;
     private final RagProperties rag;
+    private final EffectiveSettings effective;
 
-    public GroundingValidator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+    @Autowired
+    public GroundingValidator(OllamaClient client, OllamaProperties properties, RagProperties rag,
+            EffectiveSettings effective) {
         this.client = client;
         this.properties = properties;
         this.rag = rag;
+        this.effective = effective;
+    }
+
+    public GroundingValidator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+        this(client, properties, rag, EffectiveSettings.baseline(properties, rag));
     }
 
     public GroundingResult validate(String question, List<Map<String, Object>> sources, String answer,
@@ -70,7 +80,7 @@ public class GroundingValidator {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT, buildUserPrompt(question, sources, answer),
-                    0.0, properties.validatorNumCtx(), properties.validatorThinking());
+                    0.0, effective.integer("ollama.validator-num-ctx"), effective.bool("ollama.validator-thinking"));
             return parse(raw);
         } catch (Exception ex) {
             return new GroundingResult(null, "Kunde inte verifiera: " + ex.getMessage());
@@ -79,7 +89,7 @@ public class GroundingValidator {
 
     private String buildUserPrompt(String question, List<Map<String, Object>> sources, String answer) {
         return "QUESTION:\n" + (question == null ? "" : question)
-                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, rag.maxSourceChars()).text()
+                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, effective.integer("rag.max-source-chars")).text()
                 + "\nDRAFT ANSWER:\n" + answer + "\n";
     }
 

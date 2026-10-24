@@ -2,7 +2,9 @@ package se.rightech.fakturummetsarkiv.rag;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import se.rightech.fakturummetsarkiv.chat.EffectiveSettings;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
 
@@ -32,11 +34,20 @@ public class LlmReranker implements Reranker {
     private final OllamaClient client;
     private final OllamaProperties ollama;
     private final RerankProperties properties;
+    private final EffectiveSettings effective;
 
-    public LlmReranker(OllamaClient client, OllamaProperties ollama, RerankProperties properties) {
+    @Autowired
+    public LlmReranker(OllamaClient client, OllamaProperties ollama, RerankProperties properties,
+                       EffectiveSettings effective) {
         this.client = client;
         this.ollama = ollama;
         this.properties = properties;
+        this.effective = effective;
+    }
+
+    public LlmReranker(OllamaClient client, OllamaProperties ollama, RerankProperties properties) {
+        this(client, ollama, properties, EffectiveSettings.baseline(ollama,
+                new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model")));
     }
 
     @Override
@@ -44,8 +55,8 @@ public class LlmReranker implements Reranker {
         if (candidates == null || candidates.size() <= 1 || query == null || query.isBlank()) {
             return candidates == null ? List.of() : candidates;
         }
-        String model = properties.model() != null && !properties.model().isBlank()
-                ? properties.model() : ollama.model();
+        String model = effective.string("rag.rerank.model") != null && !effective.string("rag.rerank.model").isBlank()
+                ? effective.string("rag.rerank.model") : effective.string("ollama.model");
         if (model == null || model.isBlank()) {
             return candidates;
         }
@@ -64,7 +75,7 @@ public class LlmReranker implements Reranker {
     }
 
     String buildPrompt(String query, List<Map<String, Object>> candidates) {
-        int maxChars = Math.max(80, properties.maxChars());
+        int maxChars = Math.max(80, effective.integer("rag.rerank.max-chars"));
         StringBuilder sb = new StringBuilder();
         sb.append("QUESTION:\n").append(query).append("\n\nPASSAGES:\n");
         for (int i = 0; i < candidates.size(); i++) {

@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -29,10 +30,18 @@ public class QueryRewriter {
 
     private final OllamaClient client;
     private final OllamaProperties properties;
+    private final EffectiveSettings effective;
 
-    public QueryRewriter(OllamaClient client, OllamaProperties properties) {
+    @Autowired
+    public QueryRewriter(OllamaClient client, OllamaProperties properties, EffectiveSettings effective) {
         this.client = client;
         this.properties = properties;
+        this.effective = effective;
+    }
+
+    public QueryRewriter(OllamaClient client, OllamaProperties properties) {
+        this(client, properties, EffectiveSettings.baseline(properties, new se.rightech.fakturummetsarkiv.rag.RagProperties(
+                20, 1200, 200, 8000, "en", 0.3, 4000, "model")));
     }
 
     public String rewrite(String question, List<Map<String, String>> history, String chatModel) {
@@ -51,8 +60,8 @@ public class QueryRewriter {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT,
-                    buildPrompt(safeHistory, question, searchLanguage), 0.0, properties.rewriteNumCtx(),
-                    properties.rewriteThinking());
+                    buildPrompt(safeHistory, question, searchLanguage), 0.0, effective.integer("ollama.rewrite-num-ctx"),
+                    effective.bool("ollama.rewrite-thinking"));
             String cleaned = clean(raw);
             if (cleaned.isEmpty() || cleaned.equalsIgnoreCase(question.trim())) {
                 return question;
@@ -68,10 +77,10 @@ public class QueryRewriter {
         if (model != null && !model.isBlank()) {
             return model;
         }
-        if (properties.rewriteModel() != null && !properties.rewriteModel().isBlank()) {
-            return properties.rewriteModel();
+        if (effective.string("ollama.rewrite-model") != null && !effective.string("ollama.rewrite-model").isBlank()) {
+            return effective.string("ollama.rewrite-model");
         }
-        return properties.model() == null ? "" : properties.model();
+        return effective.string("ollama.model") == null ? "" : effective.string("ollama.model");
     }
 
     static String buildPrompt(List<Map<String, String>> history, String question) {

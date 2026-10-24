@@ -1,6 +1,9 @@
 package se.rightech.fakturummetsarkiv.rag;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import se.rightech.fakturummetsarkiv.chat.EffectiveSettings;
+import se.rightech.fakturummetsarkiv.chat.ChatProperties;
 import se.rightech.fakturummetsarkiv.chat.SettingsStore;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -22,10 +25,12 @@ public class RetrievalService {
     private final HybridProperties hybrid;
     private final Reranker reranker;
     private final RerankProperties rerank;
+    private final EffectiveSettings effective;
 
+    @Autowired
     public RetrievalService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
                             QdrantClient qdrantClient, SettingsStore settingsStore, HybridProperties hybrid,
-                            Reranker reranker, RerankProperties rerank) {
+                            Reranker reranker, RerankProperties rerank, EffectiveSettings effective) {
         this.llm = llm;
         this.ollama = ollama;
         this.qdrant = qdrant;
@@ -34,6 +39,16 @@ public class RetrievalService {
         this.hybrid = hybrid;
         this.reranker = reranker;
         this.rerank = rerank;
+        this.effective = effective;
+    }
+
+    public RetrievalService(OllamaClient llm, OllamaProperties ollama, QdrantProperties qdrant,
+                            QdrantClient qdrantClient, SettingsStore settingsStore, HybridProperties hybrid,
+                            Reranker reranker, RerankProperties rerank) {
+        this(llm, ollama, qdrant, qdrantClient, settingsStore, hybrid, reranker, rerank,
+                new EffectiveSettings(ollama, qdrant,
+                        new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model"),
+                        new ChatProperties(0.1, true, "en"), hybrid, rerank));
     }
 
     public List<Map<String, Object>> retrieve(String query, List<String> collections, int topK, Double scoreThreshold) {
@@ -44,7 +59,7 @@ public class RetrievalService {
                                           List<String> documentIds) {
         String model = settingsStore.get().embeddingModel();
         if (model == null || model.isBlank()) {
-            model = ollama.embeddingModel();
+            model = effective.string("ollama.embedding-model");
         }
         if (model == null || model.isBlank() || query == null || query.isBlank()) {
             return List.of();
@@ -60,7 +75,7 @@ public class RetrievalService {
         }
 
         List<Map<String, Object>> sources;
-        if (hybrid.enabled()) {
+        if (effective.bool("rag.hybrid.enabled")) {
             sources = hybridSearch(query, vector, targets, topK, scoreThreshold, documentIds);
         } else {
             sources = denseSearch(vector, targets, topK, scoreThreshold, documentIds);
@@ -74,8 +89,8 @@ public class RetrievalService {
                 deduped.add(source);
             }
         }
-        if (rerank.enabled() && deduped.size() > 1) {
-            int candidates = Math.max(topK, rerank.candidates());
+        if (effective.bool("rag.rerank.enabled") && deduped.size() > 1) {
+            int candidates = Math.max(topK, effective.integer("rag.rerank.candidates"));
             List<Map<String, Object>> shortlist = deduped.size() > candidates
                     ? deduped.subList(0, candidates) : deduped;
             List<Map<String, Object>> reranked = reranker.rerank(query, shortlist, topK);
@@ -111,13 +126,13 @@ public class RetrievalService {
                     scoreThreshold, documentIds);
             for (int i = 0; i < dense.size(); i++) {
                 QdrantClient.ScoredPoint hit = dense.get(i);
-                addFused(fused, hit, collection, 1.0 / (hybrid.rrfK() + i + 1));
+                addFused(fused, hit, collection, 1.0 / (effective.integer("rag.hybrid.rrf-k") + i + 1));
             }
             List<QdrantClient.ScoredPoint> keyword = qdrantClient.keywordSearch(collection, query,
-                    hybrid.keywordLimit(), documentIds);
+                    effective.integer("rag.hybrid.keyword-limit"), documentIds);
             for (int i = 0; i < keyword.size(); i++) {
                 QdrantClient.ScoredPoint hit = keyword.get(i);
-                addFused(fused, hit, collection, 1.0 / (hybrid.rrfK() + i + 1));
+                addFused(fused, hit, collection, 1.0 / (effective.integer("rag.hybrid.rrf-k") + i + 1));
             }
         }
 

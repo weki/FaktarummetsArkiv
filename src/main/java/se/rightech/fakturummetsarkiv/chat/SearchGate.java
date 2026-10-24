@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -53,15 +54,23 @@ public class SearchGate {
     private final OllamaClient client;
     private final OllamaProperties properties;
     private final RagProperties rag;
+    private final EffectiveSettings effective;
 
-    public SearchGate(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+    @Autowired
+    public SearchGate(OllamaClient client, OllamaProperties properties, RagProperties rag,
+                      EffectiveSettings effective) {
         this.client = client;
         this.properties = properties;
         this.rag = rag;
+        this.effective = effective;
+    }
+
+    public SearchGate(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+        this(client, properties, rag, EffectiveSettings.baseline(properties, rag));
     }
 
     public boolean enabled() {
-        return enabled(properties.gateModel());
+        return enabled(effective.string("ollama.gate-model"));
     }
 
     public boolean enabled(String gateModel) {
@@ -69,7 +78,7 @@ public class SearchGate {
     }
 
     public Decision decide(String question) {
-        return decide(question, List.of(), properties.gateModel());
+        return decide(question, List.of(), effective.string("ollama.gate-model"));
     }
 
     public Decision decide(String question, String gateModel) {
@@ -77,7 +86,7 @@ public class SearchGate {
     }
 
     public Decision decide(String question, List<Map<String, String>> history, String gateModel) {
-        return decide(question, history, gateModel, "en");
+        return decide(question, history, gateModel, effective.string("rag.search-language"));
     }
 
     public Decision decide(String question, List<Map<String, String>> history, String gateModel,
@@ -100,8 +109,8 @@ public class SearchGate {
         }
         try {
             String raw = client.chat(gateModel, SYSTEM_PROMPT,
-                    buildPrompt(question, history, searchLanguage), 0.0, properties.gateNumCtx(),
-                    properties.gateThinking()).trim();
+                    buildPrompt(question, history, searchLanguage), 0.0, effective.integer("ollama.gate-num-ctx"),
+                    effective.bool("ollama.gate-thinking")).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");
                 return new Decision(true, question);
@@ -130,11 +139,11 @@ public class SearchGate {
     }
 
     private String gateMode() {
-        String mode = rag.gateMode() == null ? "model" : rag.gateMode().trim().toLowerCase(Locale.ROOT);
+        String mode = effective.string("rag.gate.mode") == null ? "model" : effective.string("rag.gate.mode").trim().toLowerCase(Locale.ROOT);
         return switch (mode) {
             case "model", "rules", "off" -> mode;
             default -> {
-                log.warn("Okänt rag.gate.mode '{}', använder model", rag.gateMode());
+                log.warn("Okänt rag.gate.mode '{}', använder model", effective.string("rag.gate.mode"));
                 yield "model";
             }
         };

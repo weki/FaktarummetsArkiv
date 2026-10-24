@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -31,12 +32,13 @@ public class ChatService {
     private final SettingsStore settingsStore;
     private final SessionMemory sessionMemory;
     private final ChatProperties chat;
+    private final EffectiveSettings effective;
 
+    @Autowired
     public ChatService(OllamaClient llm, OllamaProperties ollama, RagProperties rag,
                        RetrievalService retrievalService, SearchGate searchGate,
-                       QueryRewriter queryRewriter,
-                       SettingsStore settingsStore, SessionMemory sessionMemory,
-                       ChatProperties chat) {
+                       QueryRewriter queryRewriter, SettingsStore settingsStore,
+                       SessionMemory sessionMemory, ChatProperties chat, EffectiveSettings effective) {
         this.llm = llm;
         this.ollama = ollama;
         this.rag = rag;
@@ -46,6 +48,16 @@ public class ChatService {
         this.settingsStore = settingsStore;
         this.sessionMemory = sessionMemory;
         this.chat = chat;
+        this.effective = effective;
+    }
+
+    public ChatService(OllamaClient llm, OllamaProperties ollama, RagProperties rag,
+                       RetrievalService retrievalService, SearchGate searchGate,
+                       QueryRewriter queryRewriter,
+                       SettingsStore settingsStore, SessionMemory sessionMemory,
+                       ChatProperties chat) {
+        this(llm, ollama, rag, retrievalService, searchGate, queryRewriter, settingsStore, sessionMemory, chat,
+                EffectiveSettings.baseline(ollama, rag, chat));
     }
 
     public record StreamResult(List<Map<String, Object>> sources, String answer, boolean searched) {
@@ -69,15 +81,15 @@ public StreamResult streamChat(String question, String sessionId,
         List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
         List<Map<String, String>> history = useHistory(settings)
                 ? Citations.stripAssistantHistory(trimHistory(
-                        sessionMemory.history(sessionId, historySize(settings)), rag.maxHistoryChars()))
+                        sessionMemory.history(sessionId, historySize(settings)), effective.integer("rag.max-history-chars")))
                 : List.of();
 
         String model = settings.chatModel() != null && !settings.chatModel().isBlank()
-                ? settings.chatModel() : ollama.model();
+                ? settings.chatModel() : effective.string("ollama.model");
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
         SearchGate.Decision gate = smart
-                ? searchGate.decide(question, history, settings.gateModel(), rag.searchLanguage())
+                ? searchGate.decide(question, history, settings.gateModel(), effective.string("rag.search-language"))
                 : new SearchGate.Decision(true, question);
         boolean search = gate.search();
 
@@ -89,7 +101,7 @@ public StreamResult streamChat(String question, String sessionId,
                     && searchQuery.equalsIgnoreCase(question.trim())) {
                 String rewriteModel = settings.rewriteModel() != null && !settings.rewriteModel().isBlank()
                         ? settings.rewriteModel() : model;
-                searchQuery = queryRewriter.rewrite(question, history, rewriteModel, rag.searchLanguage());
+                searchQuery = queryRewriter.rewrite(question, history, rewriteModel, effective.string("rag.search-language"));
             }
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(true, searchQuery));
@@ -98,7 +110,7 @@ public StreamResult streamChat(String question, String sessionId,
             Double threshold = settings.similarityThreshold();
             List<Map<String, Object>> retrieved =
                     retrievalService.retrieve(searchQuery, effectiveCollections, topK, threshold, effectiveDocumentIds);
-            SourceText.Block sourceBlock = SourceText.numberedBlock(retrieved, rag.maxSourceChars());
+            SourceText.Block sourceBlock = SourceText.numberedBlock(retrieved, effective.integer("rag.max-source-chars"));
             sources = sourceBlock.sources();
             if (onSources != null) {
                 onSources.accept(sources);
@@ -133,7 +145,8 @@ public StreamResult streamChat(String question, String sessionId,
                         onThought.accept(thought);
                     }
                 });
-        llm.chatStream(model, messages, temperature, chat.thinking(), thinkFilter::accept,
+        llm.chatStream(model, messages, temperature, effective.integer("ollama.chat-num-ctx"),
+                effective.bool("chat.thinking"), thinkFilter::accept,
                 thought -> {
                     if (thought != null && !thought.isEmpty() && onThought != null) {
                         onThought.accept(thought);
@@ -171,7 +184,7 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     private void warnIfContextRisk(String model, List<Map<String, String>> messages) {
-        int numCtx = ollama.chatNumCtx();
+        int numCtx = effective.integer("ollama.chat-num-ctx");
         if (numCtx <= 0) {
             return;
         }
@@ -204,7 +217,7 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     private int historySize(WorkspaceSettings settings) {
-        int size = settings.historySize() != null ? settings.historySize() : rag.maxHistory();
+        int size = settings.historySize() != null ? settings.historySize() : effective.integer("rag.max-history");
         if (size < 0 || size > 100) {
             throw new IllegalArgumentException("historySize måste vara mellan 0 och 100");
         }

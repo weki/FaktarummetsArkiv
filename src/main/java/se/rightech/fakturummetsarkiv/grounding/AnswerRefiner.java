@@ -2,10 +2,12 @@ package se.rightech.fakturummetsarkiv.grounding;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.chat.AnswerLanguage;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
+import se.rightech.fakturummetsarkiv.chat.EffectiveSettings;
 import se.rightech.fakturummetsarkiv.rag.RagProperties;
 
 import java.util.List;
@@ -36,15 +38,23 @@ public class AnswerRefiner {
     private final OllamaClient client;
     private final OllamaProperties properties;
     private final RagProperties rag;
+    private final EffectiveSettings effective;
 
-    public AnswerRefiner(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+    @Autowired
+    public AnswerRefiner(OllamaClient client, OllamaProperties properties, RagProperties rag,
+            EffectiveSettings effective) {
         this.client = client;
         this.properties = properties;
         this.rag = rag;
+        this.effective = effective;
+    }
+
+    public AnswerRefiner(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+        this(client, properties, rag, EffectiveSettings.baseline(properties, rag));
     }
 
     public boolean enabled() {
-        return enabled(properties.refineModel());
+        return enabled(effective.string("ollama.refine-model"));
     }
 
     public boolean enabled(String model) {
@@ -56,7 +66,7 @@ public class AnswerRefiner {
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft) {
-        return refine(question, sources, draft, properties.refineModel());
+        return refine(question, sources, draft, effective.string("ollama.refine-model"));
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft, String model) {
@@ -65,14 +75,14 @@ public class AnswerRefiner {
 
     public String refine(String question, List<Map<String, Object>> sources, String draft, String model,
                          String answerLanguage) {
-        String chosen = model != null && !model.isBlank() ? model : properties.refineModel();
+        String chosen = model != null && !model.isBlank() ? model : effective.string("ollama.refine-model");
         if (!enabled(chosen) || sources == null || sources.isEmpty()) {
             return null;
         }
         try {
             String systemPrompt = SYSTEM_PROMPT.formatted(AnswerLanguage.answerInstruction(answerLanguage));
             String raw = client.chat(chosen, systemPrompt, buildPrompt(question, sources, draft),
-                    0.0, properties.chatNumCtx(), properties.refineThinking());
+                    0.0, effective.integer("ollama.chat-num-ctx"), effective.bool("ollama.refine-thinking"));
             String answer = raw == null ? "" : raw.trim();
             return answer.isEmpty() ? null : answer;
         } catch (Exception ex) {
@@ -83,7 +93,7 @@ public class AnswerRefiner {
 
     private String buildPrompt(String question, List<Map<String, Object>> sources, String draft) {
         return "QUESTION:\n" + (question == null ? "" : question)
-                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, rag.maxSourceChars()).text()
+                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, effective.integer("rag.max-source-chars")).text()
                 + "\nDRAFT ANSWER:\n" + (draft == null ? "" : draft) + "\n";
     }
 }

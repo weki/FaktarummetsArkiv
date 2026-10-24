@@ -1,6 +1,8 @@
 package se.rightech.fakturummetsarkiv.rag;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import se.rightech.fakturummetsarkiv.chat.EffectiveSettings;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,9 +11,22 @@ import java.util.List;
 public class Chunker {
 
     private final RagProperties properties;
+    private final EffectiveSettings effective;
+
+    @Autowired
+    public Chunker(RagProperties properties, EffectiveSettings effective) {
+        this.properties = properties;
+        this.effective = effective;
+    }
 
     public Chunker(RagProperties properties) {
-        this.properties = properties;
+        this(properties, EffectiveSettings.baseline(nullSafeOllama(), properties));
+    }
+
+    private static se.rightech.fakturummetsarkiv.llm.OllamaProperties nullSafeOllama() {
+        return new se.rightech.fakturummetsarkiv.llm.OllamaProperties("http://localhost:11434", "model",
+                "embedding", java.time.Duration.ofSeconds(30), "validator", true, "", "", "",
+                8192, 4096, 2048, 2048, false, false, false, false, false, null);
     }
 
     public record Chunk(int index, String text, int start) {
@@ -22,8 +37,8 @@ public class Chunker {
         if (normalized.isEmpty()) {
             return List.of();
         }
-        int size = Math.max(1, properties.chunkSize());
-        int overlap = Math.max(0, Math.min(properties.chunkOverlap(), size - 1));
+        int size = Math.max(1, effective.integer("rag.chunk-size"));
+        int overlap = Math.max(0, Math.min(effective.integer("rag.chunk-overlap"), size - 1));
         List<Chunk> chunks = new ArrayList<>();
         int start = 0;
         int index = 0;

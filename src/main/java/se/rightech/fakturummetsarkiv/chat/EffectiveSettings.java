@@ -55,6 +55,18 @@ public class EffectiveSettings {
         this(ollama, qdrant, rag, chat, hybrid, rerank, new ArchiveProperties("", "archive"), null);
     }
 
+
+    public static EffectiveSettings baseline(OllamaProperties ollama, RagProperties rag) {
+        return baseline(ollama, rag, new ChatProperties(0.1, true, "en"));
+    }
+
+    public static EffectiveSettings baseline(OllamaProperties ollama, RagProperties rag, ChatProperties chat) {
+        QdrantProperties qdrant = new QdrantProperties("http://localhost:6333", "docs", 1024, "Cosine", 5,
+                Duration.ofSeconds(10), "query: ", "passage: ");
+        return new EffectiveSettings(ollama, qdrant, rag, chat, new HybridProperties(false, 50, 60),
+                new RerankProperties(false, 25, "", 600));
+    }
+
     public Object value(String key) {
         if (overrides.containsKey(key)) {
             return overrides.get(key);

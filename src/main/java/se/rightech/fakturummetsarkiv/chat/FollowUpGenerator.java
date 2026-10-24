@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.llm.OllamaClient;
 import se.rightech.fakturummetsarkiv.llm.OllamaProperties;
@@ -69,11 +70,19 @@ public class FollowUpGenerator {
     private final OllamaClient client;
     private final OllamaProperties properties;
     private final RagProperties rag;
+    private final EffectiveSettings effective;
 
-    public FollowUpGenerator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+    @Autowired
+    public FollowUpGenerator(OllamaClient client, OllamaProperties properties, RagProperties rag,
+                             EffectiveSettings effective) {
         this.client = client;
         this.properties = properties;
         this.rag = rag;
+        this.effective = effective;
+    }
+
+    public FollowUpGenerator(OllamaClient client, OllamaProperties properties, RagProperties rag) {
+        this(client, properties, rag, EffectiveSettings.baseline(properties, rag));
     }
 
     public List<String> generate(String question, String answer, List<Map<String, Object>> sources,
@@ -107,7 +116,7 @@ public class FollowUpGenerator {
             String systemPrompt = SYSTEM_PROMPT.formatted(AnswerLanguage.followUpInstruction(answerLanguage));
             String raw = client.chat(model, systemPrompt,
                     buildPrompt(question, answer, sources, !unresolved, validationNote),
-                    0.0, properties.chatNumCtx(), properties.followupThinking());
+                    0.0, effective.integer("ollama.chat-num-ctx"), effective.bool("ollama.followup-thinking"));
             List<String> questions = parse(raw, max, question);
             if (questions.isEmpty() && unresolved) {
                 questions = fallbackLocators(question, sources, max);
@@ -126,10 +135,10 @@ public class FollowUpGenerator {
         if (chatModel != null && !chatModel.isBlank()) {
             return chatModel;
         }
-        if (properties.refineModel() != null && !properties.refineModel().isBlank()) {
-            return properties.refineModel();
+        if (effective.string("ollama.refine-model") != null && !effective.string("ollama.refine-model").isBlank()) {
+            return effective.string("ollama.refine-model");
         }
-        return properties.model() == null ? "" : properties.model();
+        return effective.string("ollama.model") == null ? "" : effective.string("ollama.model");
     }
 
     private static boolean looksUnanswered(String answer) {
@@ -152,7 +161,7 @@ public class FollowUpGenerator {
                 + (validationNote == null || validationNote.isBlank()
                         ? "" : "\nVALIDATION NOTE:\n" + validationNote)
                 + "\n\nANSWER:\n" + (answer == null ? "" : answer)
-                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, rag.maxSourceChars()).text() + "\n";
+                + "\n\nSOURCES:\n" + SourceText.numberedBlock(sources, effective.integer("rag.max-source-chars")).text() + "\n";
     }
 
     private static String str(Object value, String fallback) {

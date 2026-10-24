@@ -52,12 +52,12 @@ class ChatServiceTest {
     @SuppressWarnings("unchecked")
     private void respondWith(String... tokens) {
         doAnswer(invocation -> {
-            Consumer<String> onToken = invocation.getArgument(4);
+            Consumer<String> onToken = invocation.getArgument(5);
             for (String token : tokens) {
                 onToken.accept(token);
             }
             return null;
-        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyBoolean(), any(), any());
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyInt(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -97,15 +97,15 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<String> onContent = invocation.getArgument(4);
+            Consumer<String> onContent = invocation.getArgument(5);
             @SuppressWarnings("unchecked")
-            Consumer<String> onThought = invocation.getArgument(5);
+            Consumer<String> onThought = invocation.getArgument(6);
             onThought.accept("Thinking Process:\n1. Scan the sources.");
             onContent.accept("The answer is 4.");
             onThought.accept(" Final review done.");
             onContent.accept(" Done.");
             return null;
-        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyBoolean(), any(), any());
+        }).when(llm).chatStream(anyString(), any(), anyDouble(), anyInt(), anyBoolean(), any(), any());
 
         List<String> content = new ArrayList<>();
         List<String> thoughts = new ArrayList<>();
@@ -263,7 +263,7 @@ class ChatServiceTest {
 
         org.mockito.ArgumentCaptor<List<Map<String, String>>> messages =
                 org.mockito.ArgumentCaptor.forClass(List.class);
-        org.mockito.Mockito.verify(llm).chatStream(anyString(), messages.capture(), anyDouble(), anyBoolean(), any(), any());
+        org.mockito.Mockito.verify(llm).chatStream(anyString(), messages.capture(), anyDouble(), anyInt(), anyBoolean(), any(), any());
         String system = messages.getValue().getFirst().get("content");
         assertThat(system)
                 .contains("Always answer in Swedish")
