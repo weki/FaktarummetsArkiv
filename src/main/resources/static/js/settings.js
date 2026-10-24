@@ -347,7 +347,7 @@
         try {
             const response = await fetch(API, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
                 body: JSON.stringify({values, expectedVersion: snapshot.version})
             });
             const body = await response.json().catch(() => ({}));
@@ -383,7 +383,7 @@
         try {
             const response = await fetch(`${API}/${encodeURIComponent(setting.key)}`, {
                 method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
                 body: JSON.stringify({expectedVersion: snapshot.version})
             });
             const body = await response.json().catch(() => ({}));
@@ -409,7 +409,7 @@
         try {
             const response = await fetch(`${API}/reset`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
                 body: JSON.stringify({expectedVersion: snapshot.version})
             });
             const body = await response.json().catch(() => ({}));

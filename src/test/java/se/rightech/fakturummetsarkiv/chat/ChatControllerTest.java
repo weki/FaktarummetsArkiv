@@ -11,7 +11,7 @@ class ChatControllerTest {
 
     @Test
     void doesNotLeakInternalErrorDetails() {
-        ChatController controller = new ChatController(null, null, null, null, null, null, null);
+        ChatController controller = new ChatController(null, null, null, null, null, null, null, null);
 
         Map<String, String> response = controller.handleUnavailable(
                 new RestClientException("internt fel: http://hemlig-host:11434"));

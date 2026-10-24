@@ -1282,7 +1282,7 @@ const API = '/api/chat';
         try {
             const res = await fetch(API + '/settings', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
                 body: JSON.stringify({collections: collections})
             });
             const data = await res.json().catch(() => ({}));

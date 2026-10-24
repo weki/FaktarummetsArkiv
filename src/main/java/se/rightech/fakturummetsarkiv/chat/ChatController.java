@@ -2,6 +2,7 @@ package se.rightech.fakturummetsarkiv.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -42,6 +43,7 @@ public class ChatController {
 
     private final ChatService chatService;
     private final SettingsStore settingsStore;
+    private final SettingsAccessGuard settingsAccessGuard;
     private final GroundingValidator groundingValidator;
     private final AnswerRefiner answerRefiner;
     private final FollowUpGenerator followUpGenerator;
@@ -49,12 +51,13 @@ public class ChatController {
     private final OllamaClient ollamaClient;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
-    public ChatController(ChatService chatService, SettingsStore settingsStore,
+    public ChatController(ChatService chatService, SettingsStore settingsStore, SettingsAccessGuard settingsAccessGuard,
                           GroundingValidator groundingValidator, AnswerRefiner answerRefiner,
                           FollowUpGenerator followUpGenerator,
                           MarkdownRenderer markdownRenderer, OllamaClient ollamaClient) {
         this.chatService = chatService;
         this.settingsStore = settingsStore;
+        this.settingsAccessGuard = settingsAccessGuard;
         this.groundingValidator = groundingValidator;
         this.answerRefiner = answerRefiner;
         this.followUpGenerator = followUpGenerator;
@@ -87,7 +90,9 @@ public class ChatController {
     }
 
     @PostMapping("/settings")
-    public WorkspaceSettings updateSettings(@RequestBody WorkspaceSettings settings) {
+    public WorkspaceSettings updateSettings(@RequestBody WorkspaceSettings settings,
+                                            HttpServletRequest request) {
+        settingsAccessGuard.requireWriteAccess(request);
         return settingsStore.update(settings);
     }
 
@@ -204,6 +209,12 @@ public class ChatController {
         } catch (Exception ex) {
             return "\"\"";
         }
+    }
+
+    @ExceptionHandler(SettingsAccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Map<String, String> handleForbidden(SettingsAccessDeniedException ex) {
+        return Map.of("error", ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

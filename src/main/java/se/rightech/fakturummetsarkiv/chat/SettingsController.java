@@ -1,5 +1,6 @@
 package se.rightech.fakturummetsarkiv.chat;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,9 +19,11 @@ import java.util.Map;
 public class SettingsController {
 
     private final SettingsService settingsService;
+    private final SettingsAccessGuard accessGuard;
 
-    public SettingsController(SettingsService settingsService) {
+    public SettingsController(SettingsService settingsService, SettingsAccessGuard accessGuard) {
         this.settingsService = settingsService;
+        this.accessGuard = accessGuard;
     }
 
     @GetMapping
@@ -29,7 +32,9 @@ public class SettingsController {
     }
 
     @PostMapping
-    public SettingsService.SettingsSnapshot update(@RequestBody SettingsUpdateRequest request) {
+    public SettingsService.SettingsSnapshot update(@RequestBody SettingsUpdateRequest request,
+                                                   HttpServletRequest httpRequest) {
+        accessGuard.requireWriteAccess(httpRequest);
         if (request == null || request.values() == null) {
             throw new SettingsValidationException(null, "Inga inställningar angivna");
         }
@@ -38,12 +43,16 @@ public class SettingsController {
 
     @DeleteMapping("/{key}")
     public SettingsService.SettingsSnapshot reset(@PathVariable String key,
-                                                  @RequestBody(required = false) VersionRequest request) {
+                                                  @RequestBody(required = false) VersionRequest request,
+                                                  HttpServletRequest httpRequest) {
+        accessGuard.requireWriteAccess(httpRequest);
         return settingsService.reset(key, request == null ? null : request.expectedVersion());
     }
 
     @PostMapping("/reset")
-    public SettingsService.SettingsSnapshot resetAll(@RequestBody(required = false) VersionRequest request) {
+    public SettingsService.SettingsSnapshot resetAll(@RequestBody(required = false) VersionRequest request,
+                                                      HttpServletRequest httpRequest) {
+        accessGuard.requireWriteAccess(httpRequest);
         return settingsService.resetAll(request == null ? null : request.expectedVersion());
     }
 
@@ -51,6 +60,11 @@ public class SettingsController {
     public ResponseEntity<Map<String, Object>> readOnly(ReadOnlySettingException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", exception.getMessage(), "field", exception.field()));
+    }
+
+    @ExceptionHandler(SettingsAccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> denied(SettingsAccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", exception.getMessage()));
     }
 
     @ExceptionHandler(SettingsValidationException.class)
