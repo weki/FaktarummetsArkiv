@@ -33,7 +33,6 @@ public class SettingsFileStore {
     public SettingsFileStore(ArchiveProperties archive, EffectiveSettings effective, SettingsSchema schema,
                              SettingsValidator validator, @Value("${settings.file:}") String configuredPath) {
         this(resolvePath(archive, configuredPath), effective, schema, validator);
-        load();
     }
 
     SettingsFileStore(Path path, EffectiveSettings effective, SettingsSchema schema,
