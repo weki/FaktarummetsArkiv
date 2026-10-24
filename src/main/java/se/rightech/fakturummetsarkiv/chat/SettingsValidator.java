@@ -35,6 +35,7 @@ public class SettingsValidator {
             normalized.put(definition.key(), convert(definition, entry.getValue()));
         }
         validateModelBudget(normalized);
+        validateChunking(normalized);
         return normalized;
     }
 
@@ -125,6 +126,19 @@ public class SettingsValidator {
         if (models.size() > 3) {
             throw new SettingsValidationException("ollama.model",
                     "Max 3 olika modeller får användas samtidigt (valda: " + String.join(", ", models) + ")");
+        }
+    }
+
+    private void validateChunking(Map<String, Object> patch) {
+        int size = patch.containsKey("rag.chunk-size") && patch.get("rag.chunk-size") != null
+                ? Integer.parseInt(String.valueOf(patch.get("rag.chunk-size")))
+                : effective.integer("rag.chunk-size");
+        int overlap = patch.containsKey("rag.chunk-overlap") && patch.get("rag.chunk-overlap") != null
+                ? Integer.parseInt(String.valueOf(patch.get("rag.chunk-overlap")))
+                : effective.integer("rag.chunk-overlap");
+        if (overlap >= size) {
+            throw new SettingsValidationException("rag.chunk-overlap",
+                    "Chunköverlapp måste vara mindre än chunkstorleken");
         }
     }
 

@@ -82,6 +82,13 @@ class SettingsServiceTest {
     }
 
     @Test
+    void rejectsChunkOverlapThatIsNotSmallerThanChunkSize() {
+        assertThatThrownBy(() -> service.update(Map.of("rag.chunk-overlap", 1200), null))
+                .isInstanceOf(SettingsValidationException.class)
+                .hasMessageContaining("mindre än chunkstorleken");
+    }
+
+    @Test
     void rejectsAFourthDistinctModel() {
         assertThatThrownBy(() -> service.update(Map.of("rag.rerank.model", "fourth-model"), null))
                 .isInstanceOf(SettingsValidationException.class)
