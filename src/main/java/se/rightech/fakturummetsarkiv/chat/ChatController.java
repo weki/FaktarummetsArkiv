@@ -89,6 +89,15 @@ public class ChatController {
         return ollamaClient.listModels();
     }
 
+    @PostMapping("/ollama/reset")
+    public OllamaClient.ResetResult resetOllama(HttpServletRequest request) {
+        settingsAccessGuard.requireWriteAccess(request);
+        OllamaClient.ResetResult result = ollamaClient.reset();
+        log.info("Ollama återställd: {} anrop avbrutna, urladdade {}, misslyckades {}",
+                result.cancelledRequests(), result.unloadedModels(), result.failedModels());
+        return result;
+    }
+
     @PostMapping("/settings")
     public WorkspaceSettings updateSettings(@RequestBody WorkspaceSettings settings,
                                             HttpServletRequest request) {
@@ -99,75 +108,81 @@ public class ChatController {
     @PostMapping("/stream")
     public SseEmitter chatStream(@RequestBody ChatRequest request) {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
-        streamExecutor.execute(() -> {
+        OllamaClient.Scope scope = ollamaClient.openScope();
+        Runnable stopOllama = () -> ollamaClient.cancelScope(scope, "Avbrutet: klienten kopplade ner");
+        emitter.onError(error -> stopOllama.run());
+        emitter.onTimeout(stopOllama);
+        streamExecutor.execute(ollamaClient.within(scope, () -> {
             List<Map<String, Object>> collectedSources = new ArrayList<>();
             try {
                 ChatService.StreamResult result = chatService.streamChat(
                         request.message(), request.sessionId(),
                         request.collections(), request.documentIds(),
-                        content -> sendEvent(emitter, "content", json(content), MediaType.TEXT_PLAIN),
-                        thought -> sendEvent(emitter, "thought", json(thought), MediaType.TEXT_PLAIN),
+                        content -> sendEvent(emitter, scope, "content", json(content), MediaType.TEXT_PLAIN),
+                        thought -> sendEvent(emitter, scope, "thought", json(thought), MediaType.TEXT_PLAIN),
                         sources -> {
                             collectedSources.clear();
                             collectedSources.addAll(sources);
-                            sendEvent(emitter, "sources", sources, MediaType.APPLICATION_JSON);
+                            sendEvent(emitter, scope, "sources", sources, MediaType.APPLICATION_JSON);
                         },
-                        text -> sendEvent(emitter, "final", json(text), MediaType.TEXT_PLAIN),
-                        plan -> sendEvent(emitter, "search", Map.of(
+                        text -> sendEvent(emitter, scope, "final", json(text), MediaType.TEXT_PLAIN),
+                        plan -> sendEvent(emitter, scope, "search", Map.of(
                                 "needed", plan.needed(),
                                 "query", plan.query() == null ? "" : plan.query()),
                                 MediaType.APPLICATION_JSON));
 
                 WorkspaceSettings settings = settingsStore.get();
                 Set<Integer> sourceNumbers = sourceNumbers(collectedSources);
-                sendEvent(emitter, "answerHtml",
+                sendEvent(emitter, scope, "answerHtml",
                         json(markdownRenderer.toHtml(result.answer(), sourceNumbers)), MediaType.TEXT_PLAIN);
-                sendEvent(emitter, "sources", citingSources(collectedSources, result.answer()),
+                sendEvent(emitter, scope, "sources", citingSources(collectedSources, result.answer()),
                         MediaType.APPLICATION_JSON);
 
                 boolean validate = result.searched()
                         && (settings.validateGrounding() == null || settings.validateGrounding());
                 CompletableFuture<GroundingResult> validationFuture = validate
-                        ? CompletableFuture.supplyAsync(() -> groundingValidator.validate(
+                        ? CompletableFuture.supplyAsync(ollamaClient.within(scope, () -> groundingValidator.validate(
                                 request.message(), collectedSources, result.answer(),
-                                settings.validatorModel(), true), streamExecutor)
+                                settings.validatorModel(), true)), streamExecutor)
                         : CompletableFuture.completedFuture(null);
                 CompletableFuture<List<String>> followUpsFuture = CompletableFuture.supplyAsync(
-                        () -> followUpGenerator.generate(
+                        ollamaClient.within(scope, () -> followUpGenerator.generate(
                                 request.message(), result.answer(), collectedSources,
                                 settings.chatModel(), settings.refineModel(), 3, null, null,
-                                settings.answerLanguage()),
+                                settings.answerLanguage())),
                         streamExecutor);
 
                 GroundingResult validation = validationFuture.join();
                 if (validation != null) {
-                    sendEvent(emitter, "validation", validation, MediaType.APPLICATION_JSON);
+                    sendEvent(emitter, scope, "validation", validation, MediaType.APPLICATION_JSON);
                 }
                 if (validation != null && Boolean.FALSE.equals(validation.supported()) && answerRefiner != null) {
                     String refined = answerRefiner.refine(request.message(), collectedSources,
                             result.answer(), settings.refineModel(), settings.answerLanguage());
                     if (refined != null && !refined.isBlank()
                             && !refined.trim().equals(result.answer().trim())) {
-                        sendEvent(emitter, "refined", json(refined), MediaType.TEXT_PLAIN);
-                        sendEvent(emitter, "answerHtml",
+                        sendEvent(emitter, scope, "refined", json(refined), MediaType.TEXT_PLAIN);
+                        sendEvent(emitter, scope, "answerHtml",
                                 json(markdownRenderer.toHtml(refined, sourceNumbers)), MediaType.TEXT_PLAIN);
-                        sendEvent(emitter, "sources", citingSources(collectedSources, refined),
+                        sendEvent(emitter, scope, "sources", citingSources(collectedSources, refined),
                                 MediaType.APPLICATION_JSON);
                         chatService.correctLastAnswer(request.sessionId(), refined);
                     }
                 }
                 List<String> followUps = followUpsFuture.join();
-                sendEvent(emitter, "followups", followUps, MediaType.APPLICATION_JSON);
-                sendEvent(emitter, "done", "ok", MediaType.TEXT_PLAIN);
+                sendEvent(emitter, scope, "followups", followUps, MediaType.APPLICATION_JSON);
+                sendEvent(emitter, scope, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();
             } catch (Exception ex) {
                 log.warn("Chat-strömmen misslyckades", ex);
-                sendEvent(emitter, "error",
+                sendEvent(emitter, scope, "error",
                         Map.of("message", "Kunde inte slutföra svaret. Försök igen."),
                         MediaType.APPLICATION_JSON);
                 emitter.complete();
+            } finally {
+                ollamaClient.closeScope(scope);
             }
-        });
+        }));
         return emitter;
     }
 
@@ -195,10 +210,15 @@ public class ChatController {
         return result;
     }
 
-    private void sendEvent(SseEmitter emitter, String name, Object data, MediaType type) {
+    private void sendEvent(SseEmitter emitter, OllamaClient.Scope scope, String name, Object data, MediaType type) {
+        if (scope.isCancelled()) {
+            return;
+        }
         try {
             emitter.send(SseEmitter.event().name(name).data(data, type));
         } catch (IOException | IllegalStateException ex) {
+            // The browser is gone; stop generating for it.
+            ollamaClient.cancelScope(scope, "Avbrutet: klienten kopplade ner");
             emitter.completeWithError(ex);
         }
     }

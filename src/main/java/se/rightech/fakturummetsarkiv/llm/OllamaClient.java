@@ -1,9 +1,11 @@
 package se.rightech.fakturummetsarkiv.llm;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import se.rightech.fakturummetsarkiv.chat.ThinkTagFilter;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -11,12 +13,22 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 @Component
 public class OllamaClient {
@@ -26,31 +38,254 @@ public class OllamaClient {
     private static final String KEEP_ALIVE = "1h";
     private static final int DEFAULT_NUM_CTX = 16384;
 
+    private static final Duration RESET_TIMEOUT = Duration.ofSeconds(15);
+    private static final ScheduledExecutorService WATCHDOG = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "ollama-watchdog");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private final RestClient restClient;
     private final int chatNumCtx;
+    private final Duration idleTimeout;
+    private final Set<ActiveCall> activeCalls = ConcurrentHashMap.newKeySet();
+    private final Set<Scope> openScopes = ConcurrentHashMap.newKeySet();
+    private static final ThreadLocal<Scope> CURRENT_SCOPE = new ThreadLocal<>();
 
     @Autowired
     public OllamaClient(OllamaProperties properties) {
-        this(createRestClient(properties), properties.chatNumCtx());
+        this(createRestClient(properties), properties.chatNumCtx(), properties.timeout());
     }
 
     OllamaClient(RestClient restClient) {
-        this(restClient, DEFAULT_NUM_CTX);
+        this(restClient, DEFAULT_NUM_CTX, null);
     }
 
     OllamaClient(RestClient restClient, int chatNumCtx) {
-        this.restClient = restClient;
-        this.chatNumCtx = chatNumCtx > 0 ? chatNumCtx : DEFAULT_NUM_CTX;
+        this(restClient, chatNumCtx, null);
     }
 
+    OllamaClient(RestClient restClient, int chatNumCtx, Duration idleTimeout) {
+        this.restClient = restClient;
+        this.chatNumCtx = chatNumCtx > 0 ? chatNumCtx : DEFAULT_NUM_CTX;
+        this.idleTimeout = idleTimeout;
+    }
+
+    // The JDK client aborts on thread interrupt, both while waiting for headers and while
+    // reading the body, which is what lets reset() and the idle watchdog cancel a hung call.
+    // Its own read timeout covers the whole response, so streams use the watchdog instead.
     private static RestClient createRestClient(OllamaProperties properties) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(properties.timeout());
-        requestFactory.setReadTimeout(properties.timeout());
+        HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(properties.timeout())
+                .build();
         return RestClient.builder()
                 .baseUrl(properties.baseUrl())
-                .requestFactory(requestFactory)
+                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
                 .build();
+    }
+
+    /**
+     * Groups the Ollama calls made for one chat request. Once cancelled, every later call in the
+     * scope fails immediately, so fallbacks in the pipeline cannot start new generations after a
+     * reset or after the browser has gone away.
+     */
+    public static final class Scope {
+        private volatile String cancelReason;
+
+        public boolean isCancelled() {
+            return cancelReason != null;
+        }
+    }
+
+    public Scope openScope() {
+        Scope scope = new Scope();
+        openScopes.add(scope);
+        return scope;
+    }
+
+    public void closeScope(Scope scope) {
+        openScopes.remove(scope);
+    }
+
+    public void cancelScope(Scope scope, String reason) {
+        if (scope.cancelReason == null) {
+            scope.cancelReason = reason;
+        }
+        for (ActiveCall call : List.copyOf(activeCalls)) {
+            if (call.scope == scope) {
+                call.cancel(reason);
+            }
+        }
+    }
+
+    public Runnable within(Scope scope, Runnable task) {
+        return () -> within(scope, () -> {
+            task.run();
+            return null;
+        }).get();
+    }
+
+    public <T> Supplier<T> within(Scope scope, Supplier<T> task) {
+        return () -> {
+            Scope previous = CURRENT_SCOPE.get();
+            CURRENT_SCOPE.set(scope);
+            try {
+                return task.get();
+            } finally {
+                if (previous == null) {
+                    CURRENT_SCOPE.remove();
+                } else {
+                    CURRENT_SCOPE.set(previous);
+                }
+            }
+        };
+    }
+
+    private static final class ActiveCall {
+        private final Thread thread = Thread.currentThread();
+        private final Scope scope = CURRENT_SCOPE.get();
+        private volatile long lastActivity = System.nanoTime();
+        private boolean done;
+        private String cancelReason;
+
+        void touch() {
+            lastActivity = System.nanoTime();
+        }
+
+        synchronized boolean cancel(String reason) {
+            if (done || cancelReason != null) {
+                return false;
+            }
+            cancelReason = reason;
+            thread.interrupt();
+            return true;
+        }
+
+        void cancelIfIdle(Duration timeout) {
+            if (System.nanoTime() - lastActivity > timeout.toNanos()) {
+                cancel("Ollama svarade inte inom " + timeout.toSeconds() + " s");
+            }
+        }
+
+        synchronized String finish() {
+            done = true;
+            // Clear an interrupt we delivered so it does not leak into the pooled thread's next task.
+            if (cancelReason != null) {
+                Thread.interrupted();
+            }
+            return cancelReason;
+        }
+    }
+
+    private <T> T call(Duration timeout, Function<ActiveCall, T> body) {
+        ActiveCall call = new ActiveCall();
+        activeCalls.add(call);
+        // Checked after registering so a concurrent reset either sees this call or we see its flag.
+        if (call.scope != null && call.scope.cancelReason != null) {
+            activeCalls.remove(call);
+            throw new ResourceAccessException(call.scope.cancelReason);
+        }
+        ScheduledFuture<?> watchdog = null;
+        if (timeout != null) {
+            long checkMs = Math.max(200, Math.min(1000, timeout.toMillis() / 4));
+            watchdog = WATCHDOG.scheduleWithFixedDelay(() -> call.cancelIfIdle(timeout),
+                    checkMs, checkMs, TimeUnit.MILLISECONDS);
+        }
+        try {
+            return body.apply(call);
+        } catch (RestClientException ex) {
+            String reason = call.finish();
+            throw reason != null ? new ResourceAccessException(reason) : ex;
+        } finally {
+            if (watchdog != null) {
+                watchdog.cancel(false);
+            }
+            activeCalls.remove(call);
+            call.finish();
+        }
+    }
+
+    private <T> T call(Supplier<T> body) {
+        return call(idleTimeout, ignored -> body.get());
+    }
+
+    /** Cancels every in-flight request to Ollama and returns how many were cancelled. */
+    public int cancelActiveCalls() {
+        for (Scope scope : List.copyOf(openScopes)) {
+            if (scope.cancelReason == null) {
+                scope.cancelReason = "Avbrutet: Ollama återställdes";
+            }
+        }
+        int cancelled = 0;
+        for (ActiveCall call : List.copyOf(activeCalls)) {
+            if (call.cancel("Avbrutet: Ollama återställdes")) {
+                cancelled++;
+            }
+        }
+        return cancelled;
+    }
+
+    public record ResetResult(int cancelledRequests, List<String> unloadedModels, List<String> failedModels) {
+    }
+
+    /**
+     * Cancels in-flight requests and unloads every model Ollama has in memory, so the next
+     * request starts from a freshly loaded model. Does not restart the Ollama process itself.
+     */
+    public ResetResult reset() {
+        int cancelled = cancelActiveCalls();
+        List<String> loaded = call(RESET_TIMEOUT, ignored -> runningModels());
+        List<String> unloaded = new ArrayList<>();
+        List<String> failed = new ArrayList<>();
+        for (String model : loaded) {
+            if (unload(model)) {
+                unloaded.add(model);
+            } else {
+                failed.add(model);
+            }
+        }
+        return new ResetResult(cancelled, unloaded, failed);
+    }
+
+    private List<String> runningModels() {
+        JsonNode node = restClient.get()
+                .uri("/api/ps")
+                .retrieve()
+                .body(JsonNode.class);
+        List<String> models = new ArrayList<>();
+        JsonNode entries = node == null ? null : node.get("models");
+        if (entries == null || !entries.isArray()) {
+            return models;
+        }
+        for (JsonNode entry : entries) {
+            JsonNode name = entry.get("name");
+            if (name != null && !name.isNull() && !name.asString().isBlank()) {
+                models.add(name.asString());
+            }
+        }
+        return models;
+    }
+
+    private boolean unload(String model) {
+        // Embedding-only models reject /api/generate, so fall back to /api/embed.
+        for (String uri : List.of("/api/generate", "/api/embed")) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("model", model);
+            if (uri.equals("/api/embed")) {
+                body.put("input", "");
+            } else {
+                body.put("stream", false);
+            }
+            body.put("keep_alive", 0);
+            try {
+                call(RESET_TIMEOUT, ignored -> restClient.post().uri(uri).body(body).retrieve().toBodilessEntity());
+                return true;
+            } catch (RestClientException ex) {
+                // try the next endpoint
+            }
+        }
+        return false;
     }
 
     public String chat(String model, String systemPrompt, String userPrompt) {
@@ -81,11 +316,11 @@ public class OllamaClient {
         body.put("think", thinking);
         body.put("keep_alive", KEEP_ALIVE);
 
-        JsonNode node = restClient.post()
+        JsonNode node = call(() -> restClient.post()
                 .uri("/api/chat")
                 .body(body)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
         if (node == null) {
             return "";
         }
@@ -118,7 +353,7 @@ public class OllamaClient {
         body.put("think", thinking);
         body.put("keep_alive", KEEP_ALIVE);
 
-        restClient.post()
+        call(idleTimeout, call -> restClient.post()
                 .uri("/api/chat")
                 .body(body)
                 .exchange((clientRequest, clientResponse) -> {
@@ -129,6 +364,7 @@ public class OllamaClient {
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
+                            call.touch();
                             if (line.isBlank()) {
                                 continue;
                             }
@@ -154,7 +390,7 @@ public class OllamaClient {
                         }
                     }
                     return null;
-                });
+                }));
     }
 
     public void chatStream(String model, List<Map<String, String>> messages, double temperature,
@@ -168,11 +404,11 @@ public class OllamaClient {
         body.put("input", inputs);
         body.put("keep_alive", KEEP_ALIVE);
 
-        JsonNode node = restClient.post()
+        JsonNode node = call(() -> restClient.post()
                 .uri("/api/embed")
                 .body(body)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
         List<double[]> result = new ArrayList<>();
         if (node == null) {
             return result;
@@ -200,10 +436,10 @@ public class OllamaClient {
     }
 
     public List<String> listModels() {
-        JsonNode node = restClient.get()
+        JsonNode node = call(() -> restClient.get()
                 .uri("/api/tags")
                 .retrieve()
-                .body(JsonNode.class);
+                .body(JsonNode.class));
         List<String> models = new ArrayList<>();
         if (node == null) {
             return models;

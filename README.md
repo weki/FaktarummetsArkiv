@@ -161,6 +161,17 @@ Skrivningar till inställnings-API:t tillåts bara från serverns egen dator och
 `X-Requested-With: FakturummetsArkiv`. Läsning fungerar även från andra datorer i nätverket. Det
 finns ingen inloggning; exponera inte appen mot untrusted nätverk.
 
+### Återställ Ollama
+
+Knappen **Återställ** bredvid modellstatusen i sidomenyn (`POST /api/chat/ollama/reset`) avbryter
+alla pågående anrop från appen till Ollama och laddar ur alla modeller som Ollama har i minnet
+(`keep_alive: 0`), så att nästa fråga laddar dem på nytt. Själva Ollama-processen startas inte om;
+hänger den helt måste den startas om på värden. Endpointen har samma begränsning som
+inställningsskrivningar (bara från serverns egen dator, med headern ovan).
+
+`ollama.timeout` gäller som tid utan svar: ett anrop avbryts om Ollama inte skickat något på så
+lång tid. Strömmade svar kan alltså pågå längre så länge tokens fortsätter komma.
+
 ## Tester
 
 ```bash

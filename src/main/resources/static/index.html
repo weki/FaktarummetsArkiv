@@ -9,21 +9,111 @@
 
 </head>
 <body>
-<aside>
-    <h1>Fakturummets Arkiv</h1>
-    <p>Lokalt RAG via Ollama + Qdrant (utan AnythingLLM).</p>
-    <button id="newThreadBtn" type="button">+ Ny tråd</button>
-    <button id="documentsBtn" type="button" class="settings-btn">Dokument</button>
-    <button id="settingsBtn" type="button" class="settings-btn">Inställningar</button>
+<div id="app" class="app-shell">
+<nav class="sidebar" aria-label="Trådar">
+    <div class="brand">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#18233b" stroke="#35476b"/><path d="M9 11l7-3 7 3-7 3-7-3zM9 16l7 3 7-3M9 21l7 3 7-3" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+            <h1>Fakturummets Arkiv</h1>
+            <div class="brand-sub">Lokalt dokumentarkiv</div>
+        </div>
+    </div>
+    <div class="sidebar-actions">
+        <button id="newThreadBtn" type="button" class="primary-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Ny tråd
+        </button>
+        <div class="thread-search">
+            <label for="threadSearch" class="sr-only">Sök trådar</label>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="threadSearch" type="search" placeholder="Sök trådar" autocomplete="off">
+            <kbd>Ctrl K</kbd>
+        </div>
+    </div>
     <div id="threadList" class="thread-list"></div>
-</aside>
-<main>
-    <div id="messages"></div>
-    <form id="chatForm" class="chat">
-        <input id="question" placeholder="Skriv din fråga..." autocomplete="off" autofocus>
-        <button id="sendBtn" type="submit">Skicka</button>
-    </form>
+    <div class="sidebar-foot">
+        <button id="documentsBtn" type="button" class="nav-link">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>
+            Dokument
+        </button>
+        <a href="/settings.html" class="nav-link">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+            Inställningar
+        </a>
+        <div class="model-row">
+            <div id="modelStatus" class="model-status" role="status">
+                <span class="dot"></span>
+                <span id="modelStatusText">Kontrollerar modeller…</span>
+            </div>
+            <button id="resetOllamaBtn" type="button" class="reset-ollama-btn" title="Återställ Ollama: avbryt pågående svar och ladda om modellerna">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 019-9 9 9 0 016.4 2.6L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9 9 0 01-6.4-2.6L3 16M3 21v-5h5"/></svg>
+                Återställ
+            </button>
+        </div>
+    </div>
+</nav>
+
+<main class="chat-main">
+    <header class="chat-head">
+        <h2 id="threadTitle">Ny tråd</h2>
+        <button id="threadScopeBtn" type="button" class="scope-chip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+            <span id="threadScopeLabel">Alla dokument</span>
+        </button>
+        <button id="exportBtn" type="button" class="icon-square" aria-label="Exportera tråd som Markdown" title="Exportera tråd som Markdown">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>
+        </button>
+        <button id="sourcesToggle" type="button" class="icon-square hidden" aria-label="Visa källpanelen" title="Visa källpanelen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+        </button>
+    </header>
+
+    <div id="messages" role="log" aria-label="Konversation">
+        <div id="messagesInner" class="messages-inner"></div>
+    </div>
+
+    <div class="composer-wrap">
+        <form id="chatForm" class="composer">
+            <label for="question" class="sr-only">Din fråga</label>
+            <textarea id="question" rows="2" placeholder="Ställ en fråga om dokumenten…" autocomplete="off" autofocus></textarea>
+            <button id="sendBtn" type="submit" class="send-btn">
+                Skicka
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
+        </form>
+        <div class="composer-hints">
+            <span><kbd>Enter</kbd> skickar</span>
+            <span><kbd>Shift</kbd>+<kbd>Enter</kbd> ny rad</span>
+            <span><kbd>/</kbd> fokus</span>
+            <span><kbd>?</kbd> genvägar</span>
+        </div>
+    </div>
 </main>
+
+<aside id="sourcePanel" class="source-panel" aria-label="Källor">
+    <header class="source-head">
+        <h2>Källor</h2>
+        <span id="sourceCount" class="source-count"></span>
+        <button id="sourcePanelClose" type="button" class="icon-square" aria-label="Stäng källpanelen" title="Stäng källpanelen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+    </header>
+    <div id="sourceBody" class="source-body"></div>
+</aside>
+</div>
+
+<dialog id="shortcutsDialog" class="shortcuts">
+    <h2>Kortkommandon</h2>
+    <dl>
+        <dt><kbd>Enter</kbd></dt><dd>Skicka frågan</dd>
+        <dt><kbd>Shift</kbd>+<kbd>Enter</kbd></dt><dd>Ny rad</dd>
+        <dt><kbd>/</kbd></dt><dd>Fokusera frågefältet</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>K</kbd></dt><dd>Sök trådar</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Stäng dialog eller panel</dd>
+        <dt><kbd>?</kbd></dt><dd>Visa denna lista</dd>
+    </dl>
+    <form method="dialog"><button type="submit" class="primary-btn">Stäng</button></form>
+</dialog>
 
 <div id="documentsPage" class="page hidden">
     <div class="page-inner">

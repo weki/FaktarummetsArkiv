@@ -1,13 +1,27 @@
 const API = '/api/chat';
     const DOC_API = '/api/documents';
 
+    const app = document.getElementById('app');
     const messages = document.getElementById('messages');
+    const messagesInner = document.getElementById('messagesInner');
     const chatForm = document.getElementById('chatForm');
     const questionInput = document.getElementById('question');
     const sendBtn = document.getElementById('sendBtn');
     const newThreadBtn = document.getElementById('newThreadBtn');
     const threadList = document.getElementById('threadList');
-    const settingsBtn = document.getElementById('settingsBtn');
+    const threadSearch = document.getElementById('threadSearch');
+    const threadTitleEl = document.getElementById('threadTitle');
+    const threadScopeBtn = document.getElementById('threadScopeBtn');
+    const threadScopeLabel = document.getElementById('threadScopeLabel');
+    const exportBtn = document.getElementById('exportBtn');
+    const sourcesToggle = document.getElementById('sourcesToggle');
+    const sourcePanelClose = document.getElementById('sourcePanelClose');
+    const sourceCount = document.getElementById('sourceCount');
+    const sourceBody = document.getElementById('sourceBody');
+    const modelStatus = document.getElementById('modelStatus');
+    const modelStatusText = document.getElementById('modelStatusText');
+    const resetOllamaBtn = document.getElementById('resetOllamaBtn');
+    const shortcutsDialog = document.getElementById('shortcutsDialog');
     const collectionList = document.getElementById('collectionList');
     const documentsBtn = document.getElementById('documentsBtn');
     const documentsPage = document.getElementById('documentsPage');
@@ -62,9 +76,50 @@ const API = '/api/chat';
     let threadDocTargetId = null;
 
     const STORAGE_KEY = 'fakturummets_arkiv_rag_threads';
+    const PANEL_KEY = 'source_panel_open';
+
+    const ICONS = {
+        check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+        warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
+        info: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16v.5"/>',
+        cross: '<path d="M6 6l12 12M18 6L6 18"/>',
+        chevron: '<path d="M6 9l6 6 6-6"/>',
+        copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/>',
+        retry: '<path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/>',
+        thumb: '<path d="M7 11v9H4v-9zM7 11l4-8a2 2 0 012 2v4h6a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/>',
+        download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
+        external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+        spinner: '<path d="M12 3a9 9 0 109 9"/>'
+    };
+
+    function icon(name, size, extraClass) {
+        const span = document.createElement('span');
+        span.className = 'icon' + (extraClass ? ' ' + extraClass : '');
+        span.setAttribute('aria-hidden', 'true');
+        span.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" '
+            + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            + ICONS[name] + '</svg>';
+        return span;
+    }
+
+    function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = text;
+        return node;
+    }
 
     let threads = loadThreads();
-    let activeId = threads.length ? threads[0].id : null;
+    let activeId = threads.length ? sortedThreads()[0].id : null;
+    let streaming = false;
+    let liveDraft = null;
+    let streamAbort = null;
+    const panel = {
+        messageIndex: null,
+        sourceNumber: null,
+        showUncited: false,
+        open: localStorage.getItem(PANEL_KEY) !== 'false'
+    };
 
     function loadThreads() {
         try {
@@ -88,25 +143,61 @@ const API = '/api/chat';
 
     function threadTitle(thread) {
         const firstUser = thread.messages.find(m => m.role === 'user');
-        if (!firstUser) return 'Ny tråd';
-        return firstUser.text.length > 34 ? firstUser.text.slice(0, 34) + '…' : firstUser.text;
+        return firstUser ? firstUser.text : 'Ny tråd';
+    }
+
+    function sortedThreads() {
+        return threads.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+
+    function touchThread(thread) {
+        thread.updatedAt = Date.now();
+    }
+
+    function scopeLabel(thread) {
+        const docs = (thread && thread.documentIds) ? thread.documentIds.length : 0;
+        const cols = (thread && thread.collections) ? thread.collections.length : 0;
+        if (docs) return docs + (docs === 1 ? ' dokument valt' : ' dokument valda');
+        if (cols) return cols + (cols === 1 ? ' kollektion' : ' kollektioner');
+        return 'alla dokument';
+    }
+
+    function isToday(ts) {
+        return ts && new Date(ts).toDateString() === new Date().toDateString();
+    }
+
+    function formatThreadTime(ts) {
+        if (!ts) return '';
+        const date = new Date(ts);
+        if (isToday(ts)) return date.toLocaleTimeString('sv-SE', {hour: '2-digit', minute: '2-digit'});
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) return 'Igår';
+        return date.toLocaleDateString('sv-SE', {day: 'numeric', month: 'short'}).replace(/\.$/, '');
+    }
+
+    function formatSeconds(ms) {
+        return (ms / 1000).toLocaleString('sv-SE', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' s';
+    }
+
+    function formatScore(score) {
+        return score.toLocaleString('sv-SE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
 
     function createThread() {
-        const thread = {id: crypto.randomUUID(), messages: [], collections: [], documentIds: []};
+        const now = Date.now();
+        const thread = {id: crypto.randomUUID(), messages: [], collections: [], documentIds: [], createdAt: now, updatedAt: now};
         threads.unshift(thread);
         activeId = thread.id;
         saveThreads();
-        renderThreadList();
-        renderMessages();
+        renderAll();
         questionInput.focus();
         return thread;
     }
 
     function selectThread(id) {
         activeId = id;
-        renderThreadList();
-        renderMessages();
+        renderAll();
         questionInput.focus();
     }
 
@@ -117,7 +208,7 @@ const API = '/api/chat';
 
         threads = threads.filter(t => t.id !== id);
         if (activeId === id) {
-            activeId = threads.length ? threads[0].id : null;
+            activeId = threads.length ? sortedThreads()[0].id : null;
         }
         saveThreads();
 
@@ -125,302 +216,769 @@ const API = '/api/chat';
             createThread();
             return;
         }
-        renderThreadList();
-        renderMessages();
+        renderAll();
         questionInput.focus();
+    }
+
+    function renderAll() {
+        resetPanelSelection();
+        renderThreadList();
+        renderChatHeader();
+        renderMessages();
+        renderSourcePanel();
     }
 
     function renderThreadList() {
         threadList.innerHTML = '';
-        for (const thread of threads) {
-            const row = document.createElement('div');
-            row.className = 'thread-row';
-
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'thread-item' + (thread.id === activeId ? ' active' : '');
-            btn.textContent = threadTitle(thread);
-            btn.title = threadTitle(thread);
-            btn.addEventListener('click', () => selectThread(thread.id));
-
-            const docBtn = document.createElement('button');
-            docBtn.type = 'button';
-            docBtn.className = 'thread-doc-btn';
-            docBtn.title = 'Välj dokument för denna tråd';
-            docBtn.innerHTML = '📄';
-            const hasDocSelection = (thread.collections && thread.collections.length) || (thread.documentIds && thread.documentIds.length);
-            if (hasDocSelection) docBtn.classList.add('has-selection');
-            docBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openThreadDocSelector(thread.id);
-            });
-
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'thread-delete';
-            del.textContent = '×';
-            del.title = 'Ta bort tråd';
-            del.addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteThread(thread.id);
-            });
-
-            row.appendChild(btn);
-            row.appendChild(docBtn);
-            row.appendChild(del);
-            threadList.appendChild(row);
+        const term = threadSearch.value.trim().toLowerCase();
+        const visible = sortedThreads().filter(thread => !term
+            || thread.messages.some(m => (m.text || '').toLowerCase().includes(term))
+            || threadTitle(thread).toLowerCase().includes(term));
+        if (!visible.length) {
+            threadList.appendChild(el('div', 'thread-empty', 'Inga trådar matchar sökningen.'));
+            return;
         }
+        const groups = [
+            {label: 'Idag', items: visible.filter(t => isToday(t.updatedAt))},
+            {label: 'Tidigare', items: visible.filter(t => !isToday(t.updatedAt))}
+        ];
+        for (const group of groups) {
+            if (!group.items.length) continue;
+            threadList.appendChild(el('div', 'thread-group', group.label));
+            const list = el('ul', 'thread-ul');
+            for (const thread of group.items) {
+                const item = el('li', 'thread-row');
+                const btn = el('button', 'thread-item');
+                btn.type = 'button';
+                if (thread.id === activeId) btn.setAttribute('aria-current', 'true');
+                btn.title = threadTitle(thread);
+                btn.appendChild(el('span', 'thread-name', threadTitle(thread)));
+                const time = formatThreadTime(thread.updatedAt);
+                btn.appendChild(el('span', 'thread-meta', (time ? time + ' · ' : '') + scopeLabel(thread)));
+                btn.addEventListener('click', () => selectThread(thread.id));
+
+                const del = el('button', 'thread-delete');
+                del.type = 'button';
+                del.title = 'Ta bort tråd';
+                del.setAttribute('aria-label', 'Ta bort tråden ' + threadTitle(thread));
+                del.appendChild(icon('cross', 14));
+                del.addEventListener('click', () => deleteThread(thread.id));
+
+                item.appendChild(btn);
+                item.appendChild(del);
+                list.appendChild(item);
+            }
+            threadList.appendChild(list);
+        }
+    }
+
+    function renderChatHeader() {
+        const thread = activeThread();
+        const title = thread ? threadTitle(thread) : 'Ny tråd';
+        threadTitleEl.textContent = title;
+        threadTitleEl.title = title;
+        const scope = scopeLabel(thread);
+        threadScopeLabel.textContent = scope.charAt(0).toUpperCase() + scope.slice(1);
+        threadScopeBtn.classList.toggle('has-selection', scope !== 'alla dokument');
+        exportBtn.disabled = !thread || !thread.messages.length;
+        document.title = (thread && thread.messages.length ? title + ' – ' : '') + 'Fakturummets Arkiv';
+    }
+
+    function isNearBottom() {
+        return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 160;
+    }
+
+    function scrollToBottom(force) {
+        if (force || isNearBottom()) messages.scrollTop = messages.scrollHeight;
     }
 
     function renderMessages() {
-        messages.innerHTML = '';
+        messagesInner.innerHTML = '';
         const thread = activeThread();
         if (!thread || !thread.messages.length) {
-            const div = document.createElement('div');
-            div.className = 'msg assistant';
-            div.textContent = 'Hej! Ställ en fråga. Svaren bygger på dokumenten i ditt lokala arkiv.';
-            messages.appendChild(div);
+            const empty = el('div', 'empty-state');
+            empty.appendChild(el('h3', null, 'Vad vill du veta?'));
+            empty.appendChild(el('p', null, 'Svaren bygger på dokumenten i ditt lokala arkiv. '
+                + 'Varje påstående kontrolleras mot källorna och du kan granska utdragen i panelen till höger.'));
+            messagesInner.appendChild(empty);
             return;
         }
-        for (const m of thread.messages) {
-            renderMessage(m);
-        }
-        messages.scrollTop = messages.scrollHeight;
+        thread.messages.forEach((m, index) => {
+            messagesInner.appendChild(m.role === 'assistant' ? renderAssistant(m, index) : renderUser(m));
+        });
+        scrollToBottom(true);
     }
 
-    function renderMessage(m) {
-        if (m.role === 'assistant') {
-            const ui = buildAssistantLayout();
-            const direct = m.searched === false;
-            if (direct) {
-                ui.progress.setDirect();
-                ui.progress.finish();
-            } else {
-                ui.progress.finish();
+    function renderUser(m) {
+        return el('div', 'msg user', m.text);
+    }
+
+    function renderError(text) {
+        messagesInner.appendChild(el('div', 'msg error', text));
+        scrollToBottom(true);
+    }
+
+    function splitSources(sources) {
+        const list = Array.isArray(sources) ? sources : [];
+        const hasFlags = list.some(source => Object.prototype.hasOwnProperty.call(source, 'cited'));
+        return {
+            all: list,
+            cited: hasFlags ? list.filter(source => source.cited === true) : list.slice(),
+            uncited: hasFlags ? list.filter(source => source.cited !== true) : []
+        };
+    }
+
+    function sourceNumber(source, index) {
+        return source.citationNumber || index + 1;
+    }
+
+    function verdictInfo(m) {
+        const v = m.validation;
+        if (m.searched === false) return {cls: 'neutral', icon: 'info', label: 'Direkt svar utan sökning'};
+        if (!v) return {cls: 'neutral', icon: 'info', label: 'Ej verifierat'};
+        if (v.verdict === 'SUPPORTED' || (!v.verdict && v.supported === true)) {
+            return {cls: 'ok', icon: 'check', label: 'Verifierat mot källorna'};
+        }
+        if (v.verdict === 'PARTIALLY_SUPPORTED') return {cls: 'warn', icon: 'warn', label: 'Delvis verifierat'};
+        if (v.verdict === 'NOT_ENOUGH_INFO') return {cls: 'info', icon: 'info', label: 'Källorna räcker inte för att verifiera'};
+        if (v.refused === true) return {cls: 'info', icon: 'info', label: 'Inget svar i källorna'};
+        if (v.verdict === 'UNSUPPORTED' || v.supported === false) return {cls: 'bad', icon: 'warn', label: 'Ej styrkt av källorna'};
+        return {cls: 'neutral', icon: 'info', label: 'Ej verifierat'};
+    }
+
+    function verdictBadge(info) {
+        const badge = el('span', 'verdict ' + info.cls);
+        badge.appendChild(icon(info.icon, 14));
+        badge.appendChild(document.createTextNode(info.label));
+        return badge;
+    }
+
+    function controlText(m) {
+        const v = m.validation;
+        if (!v) return 'Ingen verifiering';
+        const claims = Array.isArray(v.unsupportedClaims) ? v.unsupportedClaims.length : 0;
+        if (v.verdict === 'SUPPORTED' || (!v.verdict && v.supported === true)) return 'Alla påståenden stöds av källorna';
+        if (v.verdict === 'PARTIALLY_SUPPORTED') {
+            return claims ? claims + (claims === 1 ? ' påstående' : ' påståenden') + ' kunde inte styrkas' : 'Delvis styrkt av källorna';
+        }
+        if (v.verdict === 'NOT_ENOUGH_INFO') return 'Källorna räcker inte för att verifiera svaret';
+        if (v.refused === true) return 'Modellen hittade inget svar i källorna';
+        return 'Svaret stöds inte av källorna' + (v.reason ? ': ' + v.reason : '');
+    }
+
+    function buildDetails(rows) {
+        const box = el('div', 'turn-details');
+        for (const row of rows) {
+            if (!row.value) continue;
+            box.appendChild(el('div', 'detail-label', row.label));
+            box.appendChild(el('div', 'detail-value' + (row.cls ? ' ' + row.cls : ''), row.value));
+        }
+        return box;
+    }
+
+    function detailRows(m) {
+        const split = splitSources(m.sources);
+        const search = m.searched === false
+            ? 'Ingen sökning behövdes'
+            : split.all.length + (split.all.length === 1 ? ' träff' : ' träffar') + ' · ' + split.cited.length + ' ingick i svaret';
+        return [
+            {label: 'Sökfråga', value: m.searchQuery, cls: 'mono'},
+            {label: 'Sökning', value: search},
+            {label: 'Kontroll', value: m.searched === false ? null : controlText(m)},
+            {label: 'Svar', value: m.refined ? 'Omformulerat för att grundas i källorna' : null},
+            {label: 'Tankar', value: m.thoughts, cls: 'thought-text'}
+        ];
+    }
+
+    function buildStatusRow(index) {
+        const row = el('div', 'turn-status');
+        const badgeSlot = el('span', 'verdict-slot');
+        const sourcesBtn = el('button', 'status-link');
+        sourcesBtn.type = 'button';
+        sourcesBtn.addEventListener('click', () => showPanelFor(index, null));
+        const time = el('span', 'status-meta');
+        const toggle = el('button', 'details-toggle', 'Detaljer');
+        toggle.type = 'button';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.appendChild(icon('chevron', 14));
+        row.appendChild(badgeSlot);
+        row.appendChild(sourcesBtn);
+        row.appendChild(time);
+        row.appendChild(toggle);
+        return {row, badgeSlot, sourcesBtn, time, toggle};
+    }
+
+    function wireDetailsToggle(toggle, details, open) {
+        details.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.addEventListener('click', () => {
+            details.hidden = !details.hidden;
+            toggle.setAttribute('aria-expanded', String(!details.hidden));
+        });
+    }
+
+    function setSourcesLabel(status, m) {
+        const split = splitSources(m.sources);
+        if (m.searched === false || !split.all.length) {
+            status.sourcesBtn.textContent = m.searched === false ? '' : 'Inga källor hittades';
+            status.sourcesBtn.disabled = true;
+            status.sourcesBtn.hidden = m.searched === false;
+            return;
+        }
+        status.sourcesBtn.hidden = false;
+        status.sourcesBtn.disabled = false;
+        status.sourcesBtn.textContent = split.cited.length + ' av ' + split.all.length + ' källor ingick';
+    }
+
+    function decorateCitations(answer, index) {
+        answer.querySelectorAll('a.citation').forEach(link => {
+            const number = link.dataset.sourceNumber;
+            link.textContent = number;
+            link.setAttribute('role', 'button');
+            link.setAttribute('aria-label', 'Källa ' + number);
+            link.dataset.messageIndex = String(index);
+        });
+        markActiveCitations();
+    }
+
+    function markActiveCitations() {
+        document.querySelectorAll('a.citation').forEach(link => {
+            const active = String(panel.messageIndex) === link.dataset.messageIndex
+                && String(panel.sourceNumber) === link.dataset.sourceNumber;
+            link.classList.toggle('active', active);
+        });
+    }
+
+    function markUnsupported(answer, claims) {
+        if (!Array.isArray(claims)) return;
+        for (const raw of claims) {
+            const claim = (raw || '').trim().replace(/^["”“']+|["”“']+$/g, '');
+            if (claim.length < 8) continue;
+            const walker = document.createTreeWalker(answer, NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                const at = node.nodeValue.indexOf(claim);
+                if (at === -1) continue;
+                const range = document.createRange();
+                range.setStart(node, at);
+                range.setEnd(node, at + claim.length);
+                const mark = el('span', 'unsupported-mark');
+                mark.title = 'Kunde inte styrkas mot källorna';
+                range.surroundContents(mark);
+                break;
             }
-            ui.thoughtsBox.open = false;
-            if (m.thoughts) ui.thoughts.textContent = m.thoughts;
-            if (m.html) {
-                ui.answer.classList.add('md');
-                ui.answer.innerHTML = m.html;
-            } else {
-                ui.answer.textContent = m.text || '';
-            }
-            showFinalAnswer(ui);
-            if (direct) {
-                if (ui.judge) ui.judge.remove();
-                if (!m.thoughts && ui.thoughtsBox) ui.thoughtsBox.remove();
-            } else if (m.validation) {
-                completeJudge(ui, m.validation);
-            } else {
-                ui.judge.classList.remove('waiting');
-                if (ui.judgeStatus) ui.judgeStatus.textContent = 'Ingen verifiering';
-            }
-            if (m.refined) appendRefinedNote(ui.div);
-            if (m.sources) appendSources(ui.div, m.sources, m.searchQuery);
-            if (m.originalText) appendOriginalAnswer(ui.div, m.originalText);
-            if (m.followUps) appendFollowUps(ui.div, m.followUps);
-            messages.appendChild(ui.div);
+        }
+    }
+
+    function fillAnswer(answer, m, index) {
+        if (m.html) {
+            answer.classList.add('md');
+            answer.innerHTML = m.html;
+            decorateCitations(answer, index);
         } else {
-            const div = document.createElement('div');
-            div.className = 'msg ' + m.role;
-            div.textContent = m.text;
-            messages.appendChild(div);
+            answer.classList.remove('md');
+            answer.textContent = m.text || '';
         }
     }
 
-    function addMessage(text, role, sources) {
+    function renderAssistant(m, index, detailsOpen) {
+        const turn = el('div', 'turn');
+        turn.dataset.index = String(index);
+
+        const status = buildStatusRow(index);
+        status.badgeSlot.appendChild(verdictBadge(verdictInfo(m)));
+        setSourcesLabel(status, m);
+        status.time.textContent = m.durationMs ? formatSeconds(m.durationMs) : '';
+        turn.appendChild(status.row);
+
+        const details = buildDetails(detailRows(m));
+        wireDetailsToggle(status.toggle, details, !!detailsOpen);
+        turn.appendChild(details);
+
+        const card = el('div', 'answer-card');
+        const answer = el('div', 'answer');
+        fillAnswer(answer, m, index);
+        card.appendChild(answer);
+        const v = m.validation;
+        if (v && Array.isArray(v.unsupportedClaims) && v.unsupportedClaims.length) {
+            markUnsupported(answer, v.unsupportedClaims);
+            const box = el('div', 'claims-box');
+            box.appendChild(el('strong', null, 'Kunde inte styrkas mot källorna:'));
+            const list = el('ul');
+            for (const claim of v.unsupportedClaims) list.appendChild(el('li', null, '”' + claim + '”'));
+            box.appendChild(list);
+            card.appendChild(box);
+        } else if (v && v.supported === false && v.reason && v.verdict !== 'NOT_ENOUGH_INFO') {
+            const box = el('div', 'claims-box');
+            box.appendChild(el('strong', null, 'Varför: '));
+            box.appendChild(document.createTextNode(v.reason));
+            card.appendChild(box);
+        }
+        if (m.originalText) {
+            const original = el('details', 'original-answer');
+            original.appendChild(el('summary', null, 'Ursprungligt svar (innan omformulering)'));
+            original.appendChild(el('div', 'original-text', m.originalText));
+            card.appendChild(original);
+        }
+        turn.appendChild(card);
+
+        turn.appendChild(buildActions(m, index));
+        if (m.followUps && m.followUps.length) turn.appendChild(buildFollowUps(m.followUps));
+        return turn;
+    }
+
+    function actionButton(iconName, label, onClick, iconOnly) {
+        const btn = el('button', iconOnly ? 'action-btn icon-only' : 'action-btn');
+        btn.type = 'button';
+        btn.appendChild(icon(iconName, 14, iconName === 'thumb' && label === 'Dåligt svar' ? 'flip' : ''));
+        if (iconOnly) {
+            btn.setAttribute('aria-label', label);
+            btn.title = label;
+        } else {
+            btn.appendChild(el('span', null, label));
+        }
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    async function copyText(text, btn) {
+        const label = btn.querySelector('span:not(.icon)');
+        const original = label ? label.textContent : null;
+        let ok = true;
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (error) {
+            ok = false;
+        }
+        if (label) label.textContent = ok ? 'Kopierat' : 'Kunde inte kopiera';
+        btn.title = ok ? 'Kopierat' : 'Kunde inte kopiera';
+        setTimeout(() => {
+            if (label) label.textContent = original;
+            btn.title = btn.getAttribute('aria-label') || '';
+        }, 1500);
+    }
+
+    function buildActions(m, index) {
+        const row = el('div', 'turn-actions');
+        const copy = actionButton('copy', 'Kopiera', () => copyText(m.text || '', copy));
+        const retry = actionButton('retry', 'Generera om', () => regenerate(index));
+        retry.classList.add('regen-btn');
+        retry.disabled = streaming;
+        const up = actionButton('thumb', 'Bra svar', () => setFeedback(index, 'up'), true);
+        const down = actionButton('thumb', 'Dåligt svar', () => setFeedback(index, 'down'), true);
+        up.setAttribute('aria-pressed', String(m.feedback === 'up'));
+        down.setAttribute('aria-pressed', String(m.feedback === 'down'));
+        row.appendChild(copy);
+        row.appendChild(retry);
+        row.appendChild(up);
+        row.appendChild(down);
+        return row;
+    }
+
+    function buildFollowUps(questions) {
+        const wrap = el('div', 'followups');
+        for (const q of questions) {
+            const btn = el('button', 'followup-btn', q);
+            btn.type = 'button';
+            btn.addEventListener('click', () => sendQuestion(q));
+            wrap.appendChild(btn);
+        }
+        return wrap;
+    }
+
+    function replaceTurn(index) {
         const thread = activeThread();
-        if (thread && role !== 'error') {
-            thread.messages.push({role, text, sources});
+        const current = messagesInner.querySelector('.turn[data-index="' + index + '"]');
+        if (!thread || !current) return;
+        const details = current.querySelector('.turn-details');
+        current.replaceWith(renderAssistant(thread.messages[index], index, details && !details.hidden));
+    }
+
+    function setFeedback(index, value) {
+        const thread = activeThread();
+        const m = thread && thread.messages[index];
+        if (!m) return;
+        m.feedback = m.feedback === value ? null : value;
+        saveThreads();
+        replaceTurn(index);
+    }
+
+    function regenerate(index) {
+        const thread = activeThread();
+        if (!thread || streaming) return;
+        let q = index - 1;
+        while (q >= 0 && thread.messages[q].role !== 'user') q--;
+        if (q < 0) return;
+        const question = thread.messages[q].text;
+        if (index === thread.messages.length - 1) {
+            thread.messages.splice(q, index - q + 1);
             saveThreads();
-            renderThreadList();
+            resetPanelSelection();
+            renderMessages();
         }
-        renderMessage({role, text, sources});
-        messages.scrollTop = messages.scrollHeight;
+        sendQuestion(question);
     }
 
-    function appendSources(container, sources, searchQuery) {
-        if (!sources || !sources.length) return;
-        const hasFlags = sources.some(source => Object.prototype.hasOwnProperty.call(source, 'cited'));
-        const cited = hasFlags ? sources.filter(source => source.cited === true) : sources.slice();
-        const uncited = hasFlags ? sources.filter(source => source.cited !== true) : [];
-        const details = document.createElement('details');
-        details.className = 'sources';
-        const summary = document.createElement('summary');
-        summary.textContent = cited.length
-            ? 'Källor (' + cited.length + ')'
-            : 'Inga källor citerades i svaret';
-        details.appendChild(summary);
-        if (searchQuery) {
-            const query = document.createElement('div');
-            query.className = 'sources-query';
-            query.textContent = 'Sökfråga: ' + searchQuery;
-            details.appendChild(query);
-        }
-        for (const source of cited) {
-            appendSourceItem(details, source);
-        }
-        if (uncited.length) {
-            const rest = document.createElement('details');
-            rest.className = 'sources-uncited';
-            const restSummary = document.createElement('summary');
-            restSummary.textContent = 'Övriga hämtade källor (' + uncited.length + ')';
-            rest.appendChild(restSummary);
-            for (const source of uncited) {
-                appendSourceItem(rest, source);
+    function setStreaming(value) {
+        streaming = value;
+        sendBtn.disabled = value;
+        document.querySelectorAll('.regen-btn').forEach(btn => { btn.disabled = value; });
+    }
+
+    function createLiveTurn() {
+        const turn = el('div', 'turn live');
+        const status = buildStatusRow('live');
+        const phase = el('span', 'verdict pending');
+        phase.appendChild(icon('spinner', 14, 'spin'));
+        const phaseText = el('span', null, 'Söker i källor…');
+        phase.appendChild(phaseText);
+        status.badgeSlot.appendChild(phase);
+        status.sourcesBtn.hidden = true;
+        turn.appendChild(status.row);
+
+        let details = buildDetails([]);
+        wireDetailsToggle(status.toggle, details, false);
+        turn.appendChild(details);
+
+        const thoughtBox = el('details', 'live-thoughts');
+        thoughtBox.hidden = true;
+        thoughtBox.open = true;
+        const thoughtSummary = el('summary', null, 'Modellens tankar');
+        thoughtSummary.addEventListener('click', () => { thoughtBox.dataset.touched = 'true'; });
+        thoughtBox.appendChild(thoughtSummary);
+        const thoughtText = el('div', 'live-thought-text');
+        thoughtBox.appendChild(thoughtText);
+        turn.appendChild(thoughtBox);
+
+        const card = el('div', 'answer-card');
+        const answer = el('div', 'answer draft');
+        card.appendChild(answer);
+        turn.appendChild(card);
+
+        // Token events arrive far faster than the screen refreshes; coalesce
+        // them so each frame does at most one text write and one scroll.
+        let pendingThoughts = null;
+        let pendingAnswer = null;
+        let frame = 0;
+        const flush = () => {
+            frame = 0;
+            if (pendingThoughts !== null) {
+                thoughtBox.hidden = false;
+                thoughtText.textContent = pendingThoughts;
+                thoughtText.scrollTop = thoughtText.scrollHeight;
+                pendingThoughts = null;
             }
-            details.appendChild(rest);
-        }
-        container.appendChild(details);
+            if (pendingAnswer !== null) {
+                answer.classList.remove('md');
+                answer.textContent = pendingAnswer;
+                pendingAnswer = null;
+            }
+            scrollToBottom();
+        };
+        const schedule = () => { if (!frame) frame = requestAnimationFrame(flush); };
+        const cancel = () => { if (frame) { cancelAnimationFrame(frame); frame = 0; } pendingAnswer = null; };
+
+        return {
+            el: turn,
+            setPhase(text) { if (phaseText.textContent !== text) phaseText.textContent = text; },
+            setThoughts(text) { pendingThoughts = text; schedule(); },
+            streamAnswer(text) {
+                if (thoughtBox.open && !thoughtBox.dataset.touched) thoughtBox.open = false;
+                pendingAnswer = text;
+                schedule();
+            },
+            setAnswerText(text) { cancel(); answer.classList.remove('md'); answer.textContent = text; },
+            setAnswerHtml(html) { cancel(); answer.classList.add('md'); answer.innerHTML = html; decorateCitations(answer, 'live'); },
+            dispose() { if (frame) cancelAnimationFrame(frame); frame = 0; },
+            setDraft(draft) {
+                // Thoughts are shown live in thoughtBox, not repeated here.
+                const fresh = buildDetails(detailRows(Object.assign({}, draft, {thoughts: null})));
+                fresh.hidden = details.hidden;
+                details.replaceWith(fresh);
+                details = fresh;
+                setSourcesLabel(status, draft);
+                if (!draft.sources || !draft.sources.length) status.sourcesBtn.hidden = true;
+            },
+            setVerdict(draft) {
+                status.badgeSlot.innerHTML = '';
+                status.badgeSlot.appendChild(verdictBadge(verdictInfo(draft)));
+            },
+            detailsOpen() { return !details.hidden; }
+        };
     }
 
-    function appendSourceItem(parent, source) {
-        const item = document.createElement('details');
-        item.className = 'source-item';
-        if (source.citationNumber) {
-            item.dataset.sourceNumber = String(source.citationNumber);
-            item.id = 'source-' + source.citationNumber;
-        }
+    // ---------- Source panel ----------
 
-        const head = document.createElement('summary');
-        const title = (source.citationNumber ? '[' + source.citationNumber + '] ' : '')
-            + (source.title || source.name || source.source || 'Källa');
+    function setPanelOpen(open) {
+        panel.open = open;
+        localStorage.setItem(PANEL_KEY, String(open));
+        app.classList.toggle('panel-closed', !open);
+        sourcesToggle.classList.toggle('hidden', open);
+    }
+
+    function panelMessage() {
+        if (panel.messageIndex === 'live') return liveDraft;
+        const thread = activeThread();
+        return thread && panel.messageIndex !== null ? thread.messages[panel.messageIndex] || null : null;
+    }
+
+    function resetPanelSelection() {
+        panel.messageIndex = null;
+        panel.sourceNumber = null;
+        panel.showUncited = false;
+        const thread = activeThread();
+        if (!thread) return;
+        for (let i = thread.messages.length - 1; i >= 0; i--) {
+            const m = thread.messages[i];
+            if (m.role === 'assistant' && m.sources && m.sources.length) {
+                panel.messageIndex = i;
+                return;
+            }
+        }
+    }
+
+    function showPanelFor(index, number) {
+        if (panel.messageIndex !== index) panel.showUncited = false;
+        panel.messageIndex = index;
+        panel.sourceNumber = number;
+        setPanelOpen(true);
+        renderSourcePanel();
+    }
+
+    function selectedSource(split) {
+        const pool = split.cited.concat(panel.showUncited || !split.cited.length ? split.uncited : []);
+        const number = panel.sourceNumber;
+        const all = split.all;
+        const match = number !== null ? all.find((s, i) => String(sourceNumber(s, i)) === String(number)) : null;
+        if (match) return match;
+        return pool[0] || all[0] || null;
+    }
+
+    function sourceButton(source, index, selected) {
+        const number = sourceNumber(source, index);
+        const btn = el('button', 'source-card' + (source.cited === false ? ' uncited' : ''));
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', String(selected));
+        btn.appendChild(el('span', 'source-badge', String(number)));
+        const text = el('span', 'source-card-text');
+        const title = source.title || source.name || source.source || 'Källa';
+        text.appendChild(el('span', 'source-card-title', title));
+        const bits = [];
+        if (source.page !== undefined && source.page !== null) bits.push('Sida ' + source.page);
+        if (source.collection) bits.push(source.collection);
+        if (typeof source.score === 'number') bits.push('relevans ' + formatScore(source.score));
+        text.appendChild(el('span', 'source-card-meta', bits.join(' · ')));
+        btn.title = title;
+        btn.appendChild(text);
+        btn.addEventListener('click', () => {
+            panel.sourceNumber = number;
+            renderSourcePanel();
+        });
+        return btn;
+    }
+
+    function sourceRef(source) {
+        const title = source.title || source.name || source.source || 'Källa';
         const bits = [];
         if (source.collection) bits.push(source.collection);
         if (source.page !== undefined && source.page !== null) bits.push('sida ' + source.page);
-        if (typeof source.score === 'number') bits.push(source.score.toFixed(2));
-        head.textContent = title + (bits.length ? ' · ' + bits.join(' · ') : '');
-        item.appendChild(head);
+        return {title, meta: bits.join(' · '), documentId: source.documentId, page: source.page, text: source.text || source.content || ''};
+    }
 
-        const body = document.createElement('div');
-        body.className = 'source-text';
-        body.textContent = source.text || source.content || '';
-        item.appendChild(body);
+    function renderSourcePanel() {
+        sourceBody.innerHTML = '';
+        const m = panelMessage();
+        const split = splitSources(m && m.sources);
+        if (!split.all.length) {
+            sourceCount.textContent = '';
+            const empty = el('div', 'source-empty');
+            empty.appendChild(el('p', null, m && m.searched === false
+                ? 'Det här svaret byggde inte på någon sökning i dokumenten.'
+                : 'Källorna som ett svar bygger på visas här. Klicka på en siffra i svaret för att se utdraget.'));
+            sourceBody.appendChild(empty);
+            markActiveCitations();
+            return;
+        }
+        sourceCount.textContent = split.cited.length + ' av ' + split.all.length + ' ingick';
+        const current = selectedSource(split);
+        if (current) panel.sourceNumber = sourceNumber(current, split.all.indexOf(current));
 
-        const ref = {
-            title: title,
-            meta: bits.join(' · '),
-            documentId: source.documentId,
-            text: source.text || source.content || ''
-        };
+        const list = el('div', 'source-list');
+        const listed = split.cited.length ? split.cited : split.uncited;
+        for (const source of listed) {
+            list.appendChild(sourceButton(source, split.all.indexOf(source), source === current));
+        }
+        if (split.cited.length && split.uncited.length) {
+            const note = el('div', 'source-note');
+            note.appendChild(icon('info', 14));
+            const n = split.uncited.length;
+            note.appendChild(el('span', null, n + (n === 1 ? ' hämtad källa' : ' hämtade källor') + ' citerades inte i svaret.'));
+            const toggle = el('button', 'link-btn', panel.showUncited ? 'Dölj' : 'Visa');
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', String(panel.showUncited));
+            toggle.addEventListener('click', () => {
+                panel.showUncited = !panel.showUncited;
+                renderSourcePanel();
+            });
+            note.appendChild(toggle);
+            list.appendChild(note);
+            if (panel.showUncited) {
+                for (const source of split.uncited) {
+                    list.appendChild(sourceButton(source, split.all.indexOf(source), source === current));
+                }
+            }
+        }
+        sourceBody.appendChild(list);
+        if (current) sourceBody.appendChild(sourceDetail(current, split.all.indexOf(current)));
+        markActiveCitations();
+    }
+
+    function sourceDetail(source, index) {
+        const ref = sourceRef(source);
+        const wrap = el('div', 'source-detail');
+        wrap.appendChild(el('div', 'source-detail-label', 'Utdrag ur källa ' + sourceNumber(source, index)));
+        wrap.appendChild(el('p', 'source-excerpt', ref.text || 'Inget utdrag tillgängligt.'));
+
         const pdf = docPdfUrl(ref);
-        const download = docDownloadUrl(ref);
-        if (pdf || download) {
-            const actions = document.createElement('div');
-            actions.className = 'source-actions';
-            if (pdf || ref.documentId) {
-                const view = document.createElement('button');
-                view.type = 'button';
-                view.className = 'link-btn';
-                view.textContent = 'Visa';
-                view.addEventListener('click', () => openDocumentPopup(ref));
-                actions.appendChild(view);
+        if (pdf) {
+            const preview = el('div', 'pdf-preview');
+            const bar = el('div', 'pdf-preview-bar');
+            bar.appendChild(el('span', 'pdf-preview-title', ref.title));
+            if (ref.page !== undefined && ref.page !== null) bar.appendChild(el('span', null, 'Sida ' + ref.page));
+            preview.appendChild(bar);
+            const frame = el('iframe', 'pdf-preview-frame');
+            frame.title = 'Förhandsvisning av ' + ref.title;
+            frame.loading = 'lazy';
+            frame.setAttribute('referrerpolicy', 'no-referrer');
+            frame.src = pdf + (pdf.includes('#') ? '&' : '#') + 'toolbar=0&navpanes=0&view=FitH';
+            preview.appendChild(frame);
+            wrap.appendChild(preview);
+        }
+
+        const actions = el('div', 'source-actions');
+        if (ref.documentId) {
+            const open = el('button', 'primary-btn source-open');
+            open.type = 'button';
+            open.appendChild(icon('external', 14));
+            open.appendChild(el('span', null, ref.page !== undefined && ref.page !== null
+                ? 'Öppna PDF på sidan ' + ref.page : 'Öppna dokument'));
+            open.addEventListener('click', () => openDocumentPopup(ref));
+            actions.appendChild(open);
+            const download = el('a', 'icon-square');
+            download.href = docDownloadUrl(ref);
+            download.setAttribute('aria-label', 'Ladda ner');
+            download.title = 'Ladda ner';
+            download.appendChild(icon('download', 16));
+            actions.appendChild(download);
+        }
+        const quote = el('button', 'icon-square');
+        quote.type = 'button';
+        quote.setAttribute('aria-label', 'Kopiera citat');
+        quote.title = 'Kopiera citat';
+        quote.appendChild(icon('copy', 16));
+        quote.addEventListener('click', () => copyText('”' + ref.text.trim() + '” – ' + ref.title
+            + (ref.page !== undefined && ref.page !== null ? ', sida ' + ref.page : ''), quote));
+        actions.appendChild(quote);
+        wrap.appendChild(actions);
+        return wrap;
+    }
+
+    // ---------- Export ----------
+
+    function exportThread() {
+        const thread = activeThread();
+        if (!thread || !thread.messages.length) return;
+        const lines = ['# ' + threadTitle(thread), '', '_Exporterad ' + formatDate(new Date().toISOString())
+            + ' · ' + scopeLabel(thread) + '_', ''];
+        for (const m of thread.messages) {
+            if (m.role === 'user') {
+                lines.push('## Fråga', '', m.text, '');
+                continue;
             }
-            if (download) {
-                const link = document.createElement('a');
-                link.href = download;
-                link.textContent = 'Ladda ner';
-                actions.appendChild(link);
+            lines.push('## Svar', '', m.text || '', '');
+            if (m.searched !== false) lines.push('**Kontroll:** ' + verdictInfo(m).label, '');
+            const cited = splitSources(m.sources).cited;
+            if (cited.length) {
+                lines.push('**Källor:**', '');
+                cited.forEach((source, i) => {
+                    const ref = sourceRef(source);
+                    lines.push(sourceNumber(source, i) + '. ' + ref.title + (ref.meta ? ' (' + ref.meta + ')' : ''));
+                });
+                lines.push('');
             }
-            item.appendChild(actions);
         }
-
-        parent.appendChild(item);
+        const blob = new Blob([lines.join('\n')], {type: 'text/markdown;charset=utf-8'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const slug = threadTitle(thread).toLowerCase().replace(/[^a-z0-9åäö]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+        link.download = (slug || 'trad') + '.md';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
 
-    function appendRefinedNote(container) {
-        const note = document.createElement('div');
-        note.className = 'refined-note';
-        note.textContent = 'Omformulerad för att grundas i källorna.';
-        container.appendChild(note);
+    // ---------- Model status ----------
+
+    async function loadModelStatus() {
+        try {
+            const [settingsRes, modelsRes] = await Promise.all([fetch(API + '/settings'), fetch(API + '/models')]);
+            const settings = await settingsRes.json().catch(() => ({}));
+            const models = modelsRes.ok ? await modelsRes.json().catch(() => []) : [];
+            const chat = settings.chatModel || 'okänd modell';
+            const embed = settings.embeddingModel ? settings.embeddingModel.split('/').pop() : null;
+            const label = chat + (embed ? ' + ' + embed : '');
+            const available = Array.isArray(models) && models.length;
+            const missing = available && settings.chatModel && !models.includes(settings.chatModel);
+            modelStatus.className = 'model-status ' + (!available ? 'err' : missing ? 'warn' : 'ok');
+            modelStatusText.textContent = !available ? 'Ollama svarar inte' : missing ? label + ' · saknas' : label;
+            modelStatus.title = label;
+        } catch (error) {
+            modelStatus.className = 'model-status err';
+            modelStatusText.textContent = 'Kunde inte nå servern';
+        }
     }
 
-    function appendOriginalAnswer(container, text) {
-        if (!text) return;
-        const details = document.createElement('details');
-        details.className = 'original-answer';
-        const summary = document.createElement('summary');
-        summary.textContent = 'Ursprungligt svar (innan omformulering)';
-        details.appendChild(summary);
-        const body = document.createElement('div');
-        body.className = 'answer';
-        body.textContent = text;
-        details.appendChild(body);
-        container.appendChild(details);
+    async function resetOllama() {
+        if (streaming && !confirm('Ett svar genereras just nu. Avbryta det och återställa Ollama?')) return;
+        resetOllamaBtn.disabled = true;
+        modelStatus.className = 'model-status';
+        modelStatusText.textContent = 'Återställer Ollama…';
+        if (streamAbort) streamAbort.abort();
+        try {
+            const res = await fetch(API + '/ollama/reset', {
+                method: 'POST',
+                headers: {'X-Requested-With': 'FakturummetsArkiv'}
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('Fel: ' + res.status));
+            const unloaded = (data.unloadedModels || []).length;
+            const failed = (data.failedModels || []).length;
+            await loadModelStatus();
+            const summary = 'Återställd: ' + unloaded + (unloaded === 1 ? ' modell urladdad' : ' modeller urladdade')
+                + (failed ? ', ' + failed + ' misslyckades' : '');
+            modelStatus.title = summary + (data.cancelledRequests ? ' · ' + data.cancelledRequests + ' anrop avbrutna' : '');
+            modelStatusText.textContent = summary;
+            setTimeout(loadModelStatus, 4000);
+        } catch (error) {
+            modelStatus.className = 'model-status err';
+            modelStatusText.textContent = 'Återställning misslyckades';
+            modelStatus.title = error.message;
+        } finally {
+            resetOllamaBtn.disabled = false;
+        }
     }
 
-    function appendValidation(container, validation) {
-        if (!validation) return;
-        let cls = 'unknown';
-        let label = 'Ej verifierad';
-        if (validation.verdict === 'SUPPORTED' || validation.supported === true) {
-            cls = 'ok';
-            label = 'Verifierad mot källor';
-        } else if (validation.verdict === 'PARTIALLY_SUPPORTED') {
-            cls = 'warn';
-            label = 'Delvis styrkt av källor';
-        } else if (validation.verdict === 'NOT_ENOUGH_INFO') {
-            cls = 'info';
-            label = 'Källorna räcker inte för att verifiera';
-        } else if (validation.refused === true) {
-            cls = 'info';
-            label = 'Inget svar i källorna';
-        } else if (validation.verdict === 'UNSUPPORTED' || validation.supported === false) {
-            cls = 'warn';
-            label = 'Ej styrkt av källor';
-        }
-        const badge = document.createElement('span');
-        badge.className = 'badge ' + cls;
-        badge.textContent = label;
-        container.appendChild(badge);
-        if (validation.supported === false && validation.reason) {
-            const reason = document.createElement('div');
-            reason.className = 'validation-reason';
-            reason.textContent = 'Varför: ' + validation.reason;
-            container.appendChild(reason);
-        }
-        if (Array.isArray(validation.unsupportedClaims) && validation.unsupportedClaims.length) {
-            const claims = document.createElement('ul');
-            claims.className = 'validation-claims';
-            for (const claim of validation.unsupportedClaims) {
-                const item = document.createElement('li');
-                item.textContent = claim;
-                claims.appendChild(item);
-            }
-            container.appendChild(claims);
-        }
-    }
+    resetOllamaBtn.addEventListener('click', resetOllama);
 
     function sendQuestion(text) {
+        if (streaming) return;
         questionInput.value = text;
         if (typeof chatForm.requestSubmit === 'function') {
             chatForm.requestSubmit();
         } else {
             chatForm.dispatchEvent(new Event('submit', {cancelable: true}));
         }
-    }
-
-    function appendFollowUps(container, questions) {
-        if (!questions || !questions.length) return;
-        const wrap = document.createElement('div');
-        wrap.className = 'followups';
-        const label = document.createElement('div');
-        label.className = 'followups-label';
-        label.textContent = '💡 Relaterade frågor';
-        wrap.appendChild(label);
-        const list = document.createElement('div');
-        list.className = 'followup-list';
-        for (const q of questions) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'followup-btn';
-            btn.textContent = q;
-            btn.addEventListener('click', () => sendQuestion(q));
-            list.appendChild(btn);
-        }
-        wrap.appendChild(list);
-        container.appendChild(wrap);
     }
 
     function parseEvent(raw) {
@@ -434,106 +992,69 @@ const API = '/api/chat';
         return {event, data: dataLines.join('\n')};
     }
 
-    function createProgress(container) {
-        const bar = document.createElement('div');
-        bar.className = 'process';
-        let steps = [];
-        function makeSteps(labels) {
-            bar.innerHTML = '';
-            steps = labels.map(label => {
-                const step = document.createElement('div');
-                step.className = 'process-step';
-                const icon = document.createElement('span');
-                icon.className = 'process-icon';
-                const text = document.createElement('span');
-                text.className = 'process-label';
-                text.textContent = label;
-                step.appendChild(icon);
-                step.appendChild(text);
-                bar.appendChild(step);
-                return step;
-            });
-        }
-        function paint(active) {
-            steps.forEach((step, i) => {
-                step.classList.remove('done', 'active', 'wait');
-                if (active === 'all' || i < active) step.classList.add('done');
-                else if (i === active) step.classList.add('active');
-                else step.classList.add('wait');
-            });
-        }
-        makeSteps([
-            'Sökning i källor',
-            'Modell tänker & genererar',
-            'Domaren analyserar',
-            'Verifierat svar'
-        ]);
-        container.appendChild(bar);
-        paint(0);
-        return {
-            el: bar,
-            to(index) { paint(index); },
-            finish() { paint('all'); },
-            setDirect() { bar.remove(); }
-        };
+    function autoSizeQuestion() {
+        questionInput.style.height = 'auto';
+        questionInput.style.height = Math.min(questionInput.scrollHeight, 220) + 'px';
     }
 
-    function buildAssistantLayout() {
-        const div = document.createElement('div');
-        div.className = 'msg assistant';
-
-        const progress = createProgress(div);
-
-        const thoughtsBox = document.createElement('details');
-        thoughtsBox.className = 'thoughts';
-        const summary = document.createElement('summary');
-        summary.textContent = 'Steg 2: Modellens tankar';
-        const thoughts = document.createElement('div');
-        thoughts.className = 'thought-stream';
-        thoughtsBox.appendChild(summary);
-        thoughtsBox.appendChild(thoughts);
-        div.appendChild(thoughtsBox);
-
-        const answer = document.createElement('div');
-        answer.className = 'answer draft';
-        div.appendChild(answer);
-
-        const judge = document.createElement('div');
-        judge.className = 'judge-section waiting';
-        const judgeLabel = document.createElement('div');
-        judgeLabel.className = 'section-label';
-        judgeLabel.textContent = 'Steg 3: Domarens analys';
-        const judgeStatus = document.createElement('div');
-        judgeStatus.className = 'section-status';
-        judgeStatus.textContent = 'Väntar på verifiering...';
-        judge.appendChild(judgeLabel);
-        judge.appendChild(judgeStatus);
-        div.appendChild(judge);
-
-        return {div, progress, thoughtsBox, thoughts, answer, judge, judgeStatus};
+    function isTyping(target) {
+        return target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
     }
 
-    function completeJudge(ui, validation) {
-        ui.judge.classList.remove('waiting', 'active');
-        ui.judge.classList.add('done');
-        if (ui.judgeStatus) ui.judgeStatus.remove();
-        appendValidation(ui.judge, validation);
-    }
-
-    function showFinalAnswer(ui) {
-        ui.thoughtsBox.classList.remove('generating');
-        ui.answer.classList.remove('draft');
-    }
-
-    function createStreamingAnswer() {
-        const ui = buildAssistantLayout();
-        ui.thoughtsBox.open = true;
-        messages.appendChild(ui.div);
-        messages.scrollTop = messages.scrollHeight;
-        return ui;
+    function anyOverlayOpen() {
+        return !documentsPage.classList.contains('hidden') || !docOverlay.classList.contains('hidden')
+            || !threadDocOverlay.classList.contains('hidden') || shortcutsDialog.open;
     }
 
     newThreadBtn.addEventListener('click', () => createThread());
+    threadSearch.addEventListener('input', renderThreadList);
+    threadScopeBtn.addEventListener('click', () => {
+        const thread = activeThread() || createThread();
+        openThreadDocSelector(thread.id);
+    });
+    exportBtn.addEventListener('click', exportThread);
+    sourcesToggle.addEventListener('click', () => { setPanelOpen(true); renderSourcePanel(); });
+    sourcePanelClose.addEventListener('click', () => setPanelOpen(false));
+    questionInput.addEventListener('input', autoSizeQuestion);
+    questionInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            if (!streaming) sendQuestion(questionInput.value);
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        const link = event.target.closest('a.citation');
+        if (!link) return;
+        event.preventDefault();
+        const index = link.dataset.messageIndex === 'live' ? 'live' : Number(link.dataset.messageIndex);
+        showPanelFor(index, link.dataset.sourceNumber);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            if (!docOverlay.classList.contains('hidden')) closeDocumentPopup();
+            else if (!documentsPage.classList.contains('hidden')) closeDocuments();
+            else if (!threadDocOverlay.classList.contains('hidden')) closeThreadDocSelector();
+            else if (panel.open && window.matchMedia('(max-width: 1180px)').matches) setPanelOpen(false);
+            return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            if (anyOverlayOpen()) return;
+            event.preventDefault();
+            threadSearch.focus();
+            threadSearch.select();
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target) || anyOverlayOpen()) return;
+        if (event.key === '/') {
+            event.preventDefault();
+            questionInput.focus();
+        } else if (event.key === '?') {
+            event.preventDefault();
+            shortcutsDialog.showModal();
+        }
+    });
 
     let qdrantCollections = null;
 
@@ -593,36 +1114,9 @@ const API = '/api/chat';
         }
     }
 
-    settingsBtn.addEventListener('click', () => { window.location.href = '/settings.html'; });
     docModalClose.addEventListener('click', closeDocumentPopup);
     docOverlay.addEventListener('click', (event) => {
         if (event.target === docOverlay) closeDocumentPopup();
-    });
-    document.addEventListener('click', (event) => {
-        const link = event.target.closest('a.citation');
-        if (!link) return;
-        const message = link.closest('.msg');
-        const number = link.dataset.sourceNumber;
-        const target = message && number
-            ? message.querySelector('.source-item[data-source-number="' + number + '"]')
-            : null;
-        if (!target) return;
-        event.preventDefault();
-        let node = target;
-        while (node && node !== message) {
-            if (node.tagName === 'DETAILS') node.open = true;
-            node = node.parentElement;
-        }
-        target.scrollIntoView({block: 'nearest', behavior: 'smooth'});
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !docOverlay.classList.contains('hidden')) closeDocumentPopup();
-    });
-    document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        if (!documentsPage.classList.contains('hidden')) closeDocuments();
-        else if (!threadDocOverlay.classList.contains('hidden')) closeThreadDocSelector();
     });
 
     threadDocClose.addEventListener('click', closeThreadDocSelector);
@@ -1140,6 +1634,7 @@ const API = '/api/chat';
         const check = document.createElement('input');
         check.type = 'checkbox';
         check.className = 'doc-check';
+        check.value = doc.id;
         check.checked = selectedDocIds.has(doc.id);
         if (check.checked) row.classList.add('selected');
         check.addEventListener('change', () => {
@@ -1189,6 +1684,7 @@ const API = '/api/chat';
         thread.documentIds = documentIds;
         saveThreads();
         renderThreadList();
+        renderChatHeader();
         threadDocStatus.textContent = 'Sparat';
         threadDocStatus.className = 'status ok';
         setTimeout(() => {
@@ -1493,33 +1989,47 @@ const API = '/api/chat';
     chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const question = questionInput.value.trim();
-        if (!question) return;
+        if (!question || streaming) return;
         if (!activeThread()) createThread();
 
         const thread = activeThread();
+        if (!thread.messages.length) messagesInner.innerHTML = '';
         thread.messages.push({role: 'user', text: question});
+        touchThread(thread);
         saveThreads();
         renderThreadList();
-        renderMessage({role: 'user', text: question});
+        renderChatHeader();
+        messagesInner.appendChild(renderUser({text: question}));
 
         questionInput.value = '';
-        sendBtn.disabled = true;
+        autoSizeQuestion();
+        setStreaming(true);
 
-        const ui = createStreamingAnswer();
-        const {div, answer} = ui;
+        const startedAt = performance.now();
+        const ui = createLiveTurn();
+        messagesInner.appendChild(ui.el);
+        scrollToBottom(true);
+
+        const draft = {role: 'assistant', sources: [], searchQuery: '', thoughts: '', validation: null, searched: true};
+        liveDraft = draft;
         let contentText = '';
-        let thoughtsText = '';
         let originalText = '';
         let answerHtml = '';
-        let sources = [];
-        let validation = null;
         let followUps = [];
         let wasRefined = false;
-        let directMode = false;
-        let searchQuery = '';
+        let finished = false;
+
+        const fail = (text) => {
+            ui.el.remove();
+            if (panel.messageIndex === 'live') resetPanelSelection();
+            renderSourcePanel();
+            renderError(text);
+        };
 
         try {
+            streamAbort = new AbortController();
             const response = await fetch(API + '/stream', {
+                signal: streamAbort.signal,
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
                 body: JSON.stringify({
@@ -1531,21 +2041,19 @@ const API = '/api/chat';
             });
             if (!response.ok || !response.body) {
                 const error = await response.json().catch(() => ({}));
-                div.remove();
-                addMessage(error.error || ('Fel: ' + response.status), 'error');
+                fail(error.error || ('Fel: ' + response.status));
                 return;
             }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            let done = false;
-            while (!done) {
+            while (!finished) {
                 const result = await reader.read();
                 if (result.done) break;
                 buffer += decoder.decode(result.value, {stream: true});
                 let sep;
-                while ((sep = buffer.indexOf('\n\n')) !== -1) {
+                while (!finished && (sep = buffer.indexOf('\n\n')) !== -1) {
                     const raw = buffer.slice(0, sep);
                     buffer = buffer.slice(sep + 2);
                     const evt = parseEvent(raw);
@@ -1553,98 +2061,101 @@ const API = '/api/chat';
 
                     if (evt.event === 'content') {
                         contentText += JSON.parse(evt.data);
-                        answer.textContent = contentText;
-                        messages.scrollTop = messages.scrollHeight;
+                        ui.setPhase('Skriver svaret…');
+                        ui.streamAnswer(contentText);
                     } else if (evt.event === 'thought') {
-                        thoughtsText += JSON.parse(evt.data);
-                        ui.thoughts.textContent = thoughtsText;
-                        messages.scrollTop = messages.scrollHeight;
+                        draft.thoughts += JSON.parse(evt.data);
+                        ui.setPhase('Modellen tänker…');
+                        ui.setThoughts(draft.thoughts);
                     } else if (evt.event === 'search') {
                         const info = JSON.parse(evt.data) || {};
-                        searchQuery = info.query || '';
+                        draft.searchQuery = info.query || '';
                         if (info.needed === false) {
-                            directMode = true;
-                            ui.progress.setDirect();
-                            ui.thoughtsBox.classList.add('generating');
-                            if (ui.judge) ui.judge.remove();
+                            draft.searched = false;
+                            ui.setPhase('Svarar direkt…');
                         }
+                        ui.setDraft(draft);
                     } else if (evt.event === 'final') {
                         contentText = JSON.parse(evt.data);
-                        answer.textContent = contentText;
-                        ui.thoughtsBox.classList.remove('generating');
-                        if (!directMode) {
-                            ui.progress.to(2);
-                            ui.judge.classList.remove('waiting');
-                            ui.judge.classList.add('active');
-                            ui.judgeStatus.textContent = 'Analyserar svaret mot källorna...';
-                        }
-                        messages.scrollTop = messages.scrollHeight;
+                        ui.setAnswerText(contentText);
+                        if (draft.searched) ui.setPhase('Kontrollerar mot källorna…');
+                        scrollToBottom();
                     } else if (evt.event === 'refined') {
                         const refinedText = JSON.parse(evt.data);
                         if (contentText && contentText !== refinedText) originalText = contentText;
                         contentText = refinedText;
-                        answer.textContent = contentText;
+                        ui.setAnswerText(contentText);
                         wasRefined = true;
-                        messages.scrollTop = messages.scrollHeight;
+                        draft.refined = true;
+                        ui.setDraft(draft);
                     } else if (evt.event === 'answerHtml') {
                         answerHtml = JSON.parse(evt.data) || '';
-                        if (answerHtml) {
-                            answer.classList.add('md');
-                            answer.innerHTML = answerHtml;
-                        }
-                        messages.scrollTop = messages.scrollHeight;
+                        if (answerHtml) ui.setAnswerHtml(answerHtml);
+                        scrollToBottom();
                     } else if (evt.event === 'sources') {
-                        sources = JSON.parse(evt.data);
-                        ui.progress.to(1);
-                        ui.thoughtsBox.classList.add('generating');
+                        draft.sources = JSON.parse(evt.data) || [];
+                        if (!contentText) ui.setPhase('Modellen tänker…');
+                        ui.setDraft(draft);
+                        if (panel.messageIndex === null || panel.messageIndex === 'live'
+                            || panel.messageIndex === thread.messages.length - 2) {
+                            panel.messageIndex = 'live';
+                            renderSourcePanel();
+                        }
                     } else if (evt.event === 'validation') {
-                        validation = JSON.parse(evt.data);
-                        ui.progress.to(3);
-                        completeJudge(ui, validation);
+                        draft.validation = JSON.parse(evt.data);
+                        ui.setVerdict(draft);
+                        ui.setDraft(draft);
                     } else if (evt.event === 'followups') {
                         followUps = JSON.parse(evt.data) || [];
-                        appendFollowUps(div, followUps);
                     } else if (evt.event === 'error') {
                         const payload = JSON.parse(evt.data) || {};
-                        div.remove();
-                        addMessage(payload.message || 'Kunde inte slutföra svaret.', 'error');
-                        done = true;
+                        fail(payload.message || 'Kunde inte slutföra svaret.');
+                        finished = true;
                     } else if (evt.event === 'done') {
-                        if (!contentText) {
-                            answer.classList.remove('md');
-                            answer.textContent = '(inget svar)';
-                        }
-                        showFinalAnswer(ui);
-                        if (directMode) {
-                            if (!thoughtsText && ui.thoughtsBox) ui.thoughtsBox.remove();
-                        } else if (!ui.judge.classList.contains('done')) {
-                            ui.judge.classList.remove('waiting', 'active');
-                            ui.judge.classList.add('done');
-                            if (ui.judgeStatus) ui.judgeStatus.textContent = 'Ingen verifiering';
-                        }
-                        ui.progress.finish();
-                        if (wasRefined) appendRefinedNote(div);
-                        appendSources(div, sources, searchQuery);
-                        if (originalText) appendOriginalAnswer(div, originalText);
-                        thread.messages.push({role: 'assistant', text: contentText || '(inget svar)', html: answerHtml || null, sources: sources, validation: validation, thoughts: thoughtsText || null, followUps: followUps.length ? followUps : null, refined: wasRefined, originalText: originalText || null, searched: !directMode, searchQuery: searchQuery || null});
+                        const message = {
+                            role: 'assistant',
+                            text: contentText || '(inget svar)',
+                            html: answerHtml || null,
+                            sources: draft.sources,
+                            validation: draft.validation,
+                            thoughts: draft.thoughts || null,
+                            followUps: followUps.length ? followUps : null,
+                            refined: wasRefined,
+                            originalText: originalText || null,
+                            searched: draft.searched,
+                            searchQuery: draft.searchQuery || null,
+                            durationMs: Math.round(performance.now() - startedAt)
+                        };
+                        thread.messages.push(message);
+                        touchThread(thread);
                         saveThreads();
+                        const index = thread.messages.length - 1;
+                        if (panel.messageIndex === 'live') panel.messageIndex = index;
+                        else if (panel.messageIndex === null && message.sources && message.sources.length) panel.messageIndex = index;
+                        ui.el.replaceWith(renderAssistant(message, index, ui.detailsOpen()));
                         renderThreadList();
-                        done = true;
+                        renderSourcePanel();
+                        scrollToBottom();
+                        finished = true;
                     }
                 }
             }
+            if (!finished) fail('Svaret avbröts innan det blev klart.');
         } catch (error) {
-            if (!contentText) div.remove();
-            addMessage('Nätverksfel: ' + error.message, 'error');
+            fail(error.name === 'AbortError' ? 'Avbrutet: Ollama återställdes.' : 'Nätverksfel: ' + error.message);
         } finally {
-            sendBtn.disabled = false;
+            streamAbort = null;
+            ui.dispose();
+            liveDraft = null;
+            setStreaming(false);
             questionInput.focus();
         }
     });
 
+    setPanelOpen(panel.open);
     if (!threads.length) {
         createThread();
     } else {
-        renderThreadList();
-        renderMessages();
+        renderAll();
     }
+    loadModelStatus();
