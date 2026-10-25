@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Dokument – Fakturummets Arkiv</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/documents.css">
+    <link rel="stylesheet" href="/css/responsive.css">
+</head>
+<body>
+<div class="app-layout">
+<nav id="sidebar" data-page="documents"></nav>
+
+<main id="documentsPage" class="page-main">
+    <div class="page-inner">
+        <div class="page-head">
+            <div class="page-head-left">
+                <h2>Dokumenthantering</h2>
+            </div>
+            <span id="documentsStatus" class="status"></span>
+        </div>
+        <div class="tabs">
+            <button type="button" class="tab-btn active" data-tab="documents">Dokument</button>
+            <button type="button" class="tab-btn" data-tab="upload">Ladda upp</button>
+            <button type="button" class="tab-btn" data-tab="collections">Kollektioner</button>
+        </div>
+        <div class="tab-panel active" data-panel="documents">
+            <div id="docListView">
+                <div class="docs-toolbar">
+                    <input id="docsSearch" type="search" placeholder="Sök på namn..." autocomplete="off">
+                    <select id="docsFilterCollection">
+                        <option value="">Alla kollektioner</option>
+                    </select>
+                    <select id="docsFilterTag">
+                        <option value="">Alla taggar</option>
+                    </select>
+                    <select id="docsSort">
+                        <option value="date-desc">Nyast först</option>
+                        <option value="date-asc">Äldst först</option>
+                        <option value="name-asc">Namn A–Ö</option>
+                        <option value="name-desc">Namn Ö–A</option>
+                        <option value="chunks-desc">Flest textstycken</option>
+                    </select>
+                </div>
+                <div class="docs-bulk" id="docsBulk" hidden>
+                    <span id="docsBulkCount" class="docs-bulk-count"></span>
+                    <button type="button" id="docsBulkDownload" class="btn-ghost" disabled>Ladda ner</button>
+                    <button type="button" id="docsBulkDelete" class="danger" disabled>Ta bort</button>
+                    <button type="button" id="docsBulkClear" class="btn-ghost">Avmarkera</button>
+                </div>
+                <div class="table-card">
+                    <table class="doc-table">
+                        <thead><tr>
+                            <th class="col-check"><input type="checkbox" id="docsSelectAll" class="doc-check" aria-label="Markera alla synliga"></th>
+                            <th>Namn</th><th>Kollektion</th><th>Taggar</th><th class="num">Textstycken</th><th>Tillagd</th>
+                            <th class="col-actions"><span class="sr-only">Åtgärder</span></th>
+                        </tr></thead>
+                        <tbody id="docList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="tab-panel" data-panel="upload">
+            <form id="uploadForm" class="doc-form">
+                <label class="dropzone" id="dropzone">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                    <span><strong>Välj PDF-filer</strong> eller släpp dem här</span>
+                    <input type="file" name="files" multiple accept=".pdf,application/pdf">
+                </label>
+                <ul id="uploadList" class="upload-list"></ul>
+                <div class="row row-wrap">
+                    <button type="button" id="uploadFolderBtn" class="link-btn">Välj mapp (rekursivt)</button>
+                    <input type="file" id="uploadFolderInput" webkitdirectory directory multiple hidden>
+                    <span class="meta">Endast PDF-filer indexeras; andra filtyper hoppas över.</span>
+                </div>
+                <div class="settings-row">
+                    <label>Kollektion
+                        <select id="uploadCollection" name="collection"></select>
+                    </label>
+                    <label id="newCollectionField" class="hidden">Ny kollektion
+                        <input type="text" id="newCollectionName" placeholder="t.ex. experion-manualer">
+                    </label>
+                </div>
+                <label>Taggar (kommaseparerat)
+                    <input type="text" id="uploadTags" placeholder="t.ex. manual, experion">
+                </label>
+                <div id="tagSuggestions" class="tag-suggestions"></div>
+                <div class="row">
+                    <button id="uploadBtn" type="submit">Ladda upp</button>
+                </div>
+                <div id="uploadProgress" class="upload-progress hidden">
+                    <div class="upload-progress-head">
+                        <span id="uploadProgressLabel" class="upload-progress-label"></span>
+                        <span id="uploadProgressPct" class="upload-progress-pct"></span>
+                    </div>
+                    <div class="upload-progress-track">
+                        <div id="uploadProgressFill" class="upload-progress-fill"></div>
+                    </div>
+                    <div id="uploadProgressDetail" class="upload-progress-detail"></div>
+                </div>
+            </form>
+        </div>
+        <div class="tab-panel" data-panel="collections">
+            <div class="card-box">
+            <p class="tab-hint">Välj vilka kollektioner i vektordatabasen som ska ingå i sökningarna.</p>
+            <div class="doc-form">
+                <div class="row">
+                    <input type="text" id="newCollectionInput" placeholder="Skapa ny kollektion...">
+                    <button id="createCollectionBtn" type="button">Skapa</button>
+                </div>
+            </div>
+            <div id="collectionList" class="collection-list"></div>
+            <div class="modal-actions">
+                <span id="collectionsStatus" class="status"></span>
+                <button id="collectionsSave" type="button">Spara urval</button>
+            </div>
+            </div>
+        </div>
+    </div>
+</main>
+</div>
+
+<div id="docOverlay" class="overlay hidden">
+    <div class="modal doc-modal">
+        <div class="modal-head">
+            <div class="doc-modal-heading">
+                <h2 id="docModalTitle">Dokument</h2>
+                <div id="docModalMeta" class="meta"></div>
+            </div>
+            <button id="docModalClose" type="button" class="icon-btn" title="Stäng">×</button>
+        </div>
+        <div id="docModalActions" class="doc-detail-actions"></div>
+        <iframe id="docModalFrame" class="doc-modal-frame hidden" title="Dokument" referrerpolicy="no-referrer"></iframe>
+        <div id="docModalText" class="doc-detail-text hidden"></div>
+    </div>
+</div>
+
+
+<script src="/js/shared/common.js"></script>
+<script src="/js/shared/threads-store.js"></script>
+<script src="/js/shared/sidebar.js"></script>
+<script src="/js/shared/model-status.js"></script>
+<script src="/js/shared/doc-viewer.js"></script>
+<script src="/js/documents/list.js"></script>
+<script src="/js/documents/collections.js"></script>
+<script src="/js/documents/upload.js"></script>
+<script src="/js/documents/init.js"></script>
+</body>
+</html>

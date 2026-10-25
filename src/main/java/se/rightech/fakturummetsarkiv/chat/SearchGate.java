@@ -129,6 +129,14 @@ public class SearchGate {
             }
             return new Decision(true, query);
         } catch (RuntimeException ex) {
+            String msg = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
+            if (msg.contains("repeat") || msg.contains("token repeat")) {
+                log.debug("Gate-modellen hamnade i repetitionsloop, använder regelbaserad beslut: {}", ex.getMessage());
+                if (isSmallTalk(question)) {
+                    return new Decision(false, question);
+                }
+                return new Decision(!isRuleSmallTalk(question), question);
+            }
             log.warn("Kunde inte avgöra sökning, söker ändå: {}", ex.getMessage());
             return new Decision(true, question);
         }
