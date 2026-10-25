@@ -422,3 +422,9 @@
         padding: 16px;
     }
 }
+
+
+/* Enhetlig innehållsbredd (samma som dokumentsidan) */
+.settings-page { height: 100vh; overflow: hidden; }
+.settings-shell { max-width: 1200px; }
+.settings-topbar { padding-left: max(28px, calc((100% - 1200px) / 2 + 28px)); padding-right: max(28px, calc((100% - 1200px) / 2 + 28px)); }

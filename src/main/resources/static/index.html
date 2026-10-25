@@ -5,53 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
     <title>Fakturummets Arkiv – Lokalt RAG</title>
-    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/chat.css">
+    <link rel="stylesheet" href="/css/responsive.css">
 
 </head>
 <body>
 <div id="app" class="app-shell">
-<nav class="sidebar" aria-label="Trådar">
-    <div class="brand">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#18233b" stroke="#35476b"/><path d="M9 11l7-3 7 3-7 3-7-3zM9 16l7 3 7-3M9 21l7 3 7-3" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div>
-            <h1>Fakturummets Arkiv</h1>
-            <div class="brand-sub">Lokalt dokumentarkiv</div>
-        </div>
-    </div>
-    <div class="sidebar-actions">
-        <button id="newThreadBtn" type="button" class="primary-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            Ny tråd
-        </button>
-        <div class="thread-search">
-            <label for="threadSearch" class="sr-only">Sök trådar</label>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-            <input id="threadSearch" type="search" placeholder="Sök trådar" autocomplete="off">
-            <kbd>Ctrl K</kbd>
-        </div>
-    </div>
-    <div id="threadList" class="thread-list"></div>
-    <div class="sidebar-foot">
-        <button id="documentsBtn" type="button" class="nav-link">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>
-            Dokument
-        </button>
-        <a href="/settings.html" class="nav-link">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
-            Inställningar
-        </a>
-        <div class="model-row">
-            <div id="modelStatus" class="model-status" role="status">
-                <span class="dot"></span>
-                <span id="modelStatusText">Kontrollerar modeller…</span>
-            </div>
-            <button id="resetOllamaBtn" type="button" class="reset-ollama-btn" title="Återställ Ollama: avbryt pågående svar och ladda om modellerna">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 019-9 9 9 0 016.4 2.6L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9 9 0 01-6.4-2.6L3 16M3 21v-5h5"/></svg>
-                Återställ
-            </button>
-        </div>
-    </div>
-</nav>
+<nav id="sidebar" data-page="chat"></nav>
 
 <main class="chat-main">
     <header class="chat-head">
@@ -115,101 +78,6 @@
     <form method="dialog"><button type="submit" class="primary-btn">Stäng</button></form>
 </dialog>
 
-<div id="documentsPage" class="page hidden">
-    <div class="page-inner">
-        <div class="page-head">
-            <div class="page-head-left">
-                <button id="documentsClose" type="button" class="settings-btn">← Tillbaka</button>
-                <h2>Dokumenthantering</h2>
-            </div>
-            <span id="documentsStatus" class="status"></span>
-        </div>
-        <div class="tabs">
-            <button type="button" class="tab-btn active" data-tab="documents">Dokument</button>
-            <button type="button" class="tab-btn" data-tab="upload">Ladda upp</button>
-            <button type="button" class="tab-btn" data-tab="collections">Kollektioner</button>
-        </div>
-        <div class="tab-panel active" data-panel="documents">
-            <div id="docListView">
-                <div class="docs-toolbar">
-                    <input id="docsSearch" type="search" placeholder="Sök på namn..." autocomplete="off">
-                    <select id="docsFilterCollection">
-                        <option value="">Alla kollektioner</option>
-                    </select>
-                    <select id="docsFilterTag">
-                        <option value="">Alla taggar</option>
-                    </select>
-                    <select id="docsSort">
-                        <option value="date-desc">Nyast först</option>
-                        <option value="date-asc">Äldst först</option>
-                        <option value="name-asc">Namn A–Ö</option>
-                        <option value="name-desc">Namn Ö–A</option>
-                        <option value="chunks-desc">Flest textstycken</option>
-                    </select>
-                </div>
-                <div class="docs-bulk">
-                    <label class="bulk-check"><input type="checkbox" id="docsSelectAll"> Markera alla</label>
-                    <button type="button" id="docsBulkDownload" class="link-btn" disabled>Ladda ner markerade</button>
-                    <button type="button" id="docsBulkDelete" class="danger" disabled>Ta bort markerade</button>
-                    <span id="docsBulkCount" class="meta"></span>
-                </div>
-                <div id="docList" class="doc-list"></div>
-            </div>
-        </div>
-        <div class="tab-panel" data-panel="upload">
-            <form id="uploadForm" class="doc-form">
-                <label>Filer (flera tillåtna)
-                    <input type="file" name="files" multiple accept=".pdf">
-                </label>
-                <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
-                    <button type="button" id="uploadFolderBtn" class="link-btn">Välj mapp (rekursivt)</button>
-                    <input type="file" id="uploadFolderInput" webkitdirectory directory multiple hidden>
-                    <span class="meta">Endast PDF-filer indexeras; andra filtyper hoppas över.</span>
-                </div>
-                <div class="settings-row">
-                    <label>Kollektion
-                        <select id="uploadCollection" name="collection"></select>
-                    </label>
-                    <label id="newCollectionField" class="hidden">Ny kollektion
-                        <input type="text" id="newCollectionName" placeholder="t.ex. experion-manualer">
-                    </label>
-                </div>
-                <label>Taggar (kommaseparerat)
-                    <input type="text" id="uploadTags" placeholder="t.ex. manual, experion">
-                </label>
-                <div id="tagSuggestions" class="tag-suggestions"></div>
-                <div class="row">
-                    <button id="uploadBtn" type="submit">Ladda upp</button>
-                </div>
-                <div id="uploadProgress" class="upload-progress hidden">
-                    <div class="upload-progress-head">
-                        <span id="uploadProgressLabel" class="upload-progress-label"></span>
-                        <span id="uploadProgressPct" class="upload-progress-pct"></span>
-                    </div>
-                    <div class="upload-progress-track">
-                        <div id="uploadProgressFill" class="upload-progress-fill"></div>
-                    </div>
-                    <div id="uploadProgressDetail" class="upload-progress-detail"></div>
-                </div>
-            </form>
-        </div>
-        <div class="tab-panel" data-panel="collections">
-            <p class="tab-hint">Välj vilka kollektioner i vektordatabasen som ska ingå i sökningarna.</p>
-            <div class="doc-form">
-                <div class="row">
-                    <input type="text" id="newCollectionInput" placeholder="Skapa ny kollektion...">
-                    <button id="createCollectionBtn" type="button">Skapa</button>
-                </div>
-            </div>
-            <div id="collectionList" class="collection-list"></div>
-            <div class="modal-actions">
-                <span id="collectionsStatus" class="status"></span>
-                <button id="collectionsSave" type="button">Spara urval</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div id="docOverlay" class="overlay hidden">
     <div class="modal doc-modal">
         <div class="modal-head">
@@ -256,6 +124,19 @@
     </div>
 </div>
 
-<script src="/js/app.js"></script>
+<script src="/js/shared/common.js"></script>
+<script src="/js/shared/threads-store.js"></script>
+<script src="/js/shared/sidebar.js"></script>
+<script src="/js/shared/model-status.js"></script>
+<script src="/js/shared/doc-viewer.js"></script>
+<script src="/js/chat/state.js"></script>
+<script src="/js/chat/threads.js"></script>
+<script src="/js/chat/messages.js"></script>
+<script src="/js/chat/source-panel.js"></script>
+<script src="/js/chat/export.js"></script>
+<script src="/js/chat/scope-dialog.js"></script>
+<script src="/js/chat/stream.js"></script>
+<script src="/js/chat/input.js"></script>
+<script src="/js/chat/init.js"></script>
 </body>
 </html>

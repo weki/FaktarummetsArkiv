@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
     <title>Inställningar – Fakturummets Arkiv</title>
-    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/settings.css">
+    <link rel="stylesheet" href="/css/responsive.css">
 </head>
 <body class="settings-page">
+<div class="app-layout">
+<nav id="sidebar" data-page="settings"></nav>
+<div class="page-main">
 <header class="settings-topbar">
     <div class="settings-heading">
         <a class="settings-btn settings-back" href="/">← Tillbaka</a>
@@ -42,6 +48,9 @@
     </main>
 </div>
 
+</div>
+</div>
+
 <template id="groupTemplate">
     <section class="settings-group">
         <div class="settings-group-head">
@@ -52,6 +61,10 @@
     </section>
 </template>
 
-<script src="/js/settings.js"></script>
+<script src="/js/shared/common.js"></script>
+<script src="/js/shared/threads-store.js"></script>
+<script src="/js/shared/sidebar.js"></script>
+<script src="/js/shared/model-status.js"></script>
+<script src="/js/settings/settings.js"></script>
 </body>
 </html>
