@@ -33,6 +33,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * REST-kontroller för chattfunktionaliteten.
+ * Exponerar endpoints för att strömma svar via SSE, lista modeller, återställa Ollama och uppdatera inställningar.
+ */
 @RestController
 @RequestMapping("/api/chat")
 public class ChatController {
@@ -84,11 +88,18 @@ public class ChatController {
         return settingsStore.get();
     }
 
+    /**
+     * Hämtar lista över tillgängliga Ollama-modeller.
+     */
     @GetMapping("/models")
     public List<String> models() {
         return ollamaClient.listModels();
     }
 
+    /**
+     * Återställer Ollama: avbryter alla pågående anrop och avlastar modeller.
+     * Kräver skrivåtkomst via inställningsskyddet.
+     */
     @PostMapping("/ollama/reset")
     public OllamaClient.ResetResult resetOllama(HttpServletRequest request) {
         settingsAccessGuard.requireWriteAccess(request);
@@ -98,13 +109,21 @@ public class ChatController {
         return result;
     }
 
+    /**
+     * Uppdaterar arbetsplatsinställningar.
+     * Kräver skrivåtkomst via inställningsskyddet.
+     */
     @PostMapping("/settings")
     public WorkspaceSettings updateSettings(@RequestBody WorkspaceSettings settings,
                                             HttpServletRequest request) {
         settingsAccessGuard.requireWriteAccess(request);
-        return settingsStore.update(settings);
+        return settingsService.update(settings, request);
     }
 
+    /**
+     * Strömmar chatt-svar via Server-Sent Events (SSE).
+     * Öppnar en avbrytbar Ollama-scope, kör ChatService och skickar händelser tills svaret är klart.
+     */
     @PostMapping("/stream")
     public SseEmitter chatStream(@RequestBody ChatRequest request) {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
@@ -210,6 +229,9 @@ public class ChatController {
         return result;
     }
 
+    /**
+     * Skickar en SSE-händelse. Avbryter scopet om klienten kopplar ner eller om strömmen redan är avbruten.
+     */
     private void sendEvent(SseEmitter emitter, OllamaClient.Scope scope, String name, Object data, MediaType type) {
         if (scope.isCancelled()) {
             return;
@@ -217,7 +239,7 @@ public class ChatController {
         try {
             emitter.send(SseEmitter.event().name(name).data(data, type));
         } catch (IOException | IllegalStateException ex) {
-            // The browser is gone; stop generating for it.
+            // Webbläsaren är borta; stoppa genereringen för den klienten.
             ollamaClient.cancelScope(scope, "Avbrutet: klienten kopplade ner");
             emitter.completeWithError(ex);
         }
