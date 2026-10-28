@@ -75,6 +75,11 @@ public class SettingsSchema {
 
                 text("gpu.stats-url", "gpu", "GPU-stats URL", "Adress till gpu-stats på Ollama-maskinen, t.ex. http://192.168.1.20:9101/gpu", "", ApplyMode.LIVE, null, null),
                 integer("gpu.poll-interval-ms", "gpu", "Pollintervall (ms)", "Hur ofta GPU-status uppdateras i gränssnittet.", 2000, 1000, 10000, 100, ApplyMode.LIVE, null, null),
+                bool("gpu.history-enabled", "gpu", "Spara GPU-historik", "Spara historik på servern för grafer över tid.", true, ApplyMode.LIVE, null, null),
+                integer("gpu.history-hours", "gpu", "Historik (timmar)", "Hur länge historiken sparas.", 24, 1, 168, 1, ApplyMode.LIVE, null, null),
+                integer("gpu.history-sample-seconds", "gpu", "Provintervall (sekunder)", "Hur ofta prover tas.", 5, 2, 60, 1, ApplyMode.LIVE, null, null),
+                bool("gpu.restart-enabled", "gpu", "Tillåt omstart av Ollama", "Aktivera endast om sidovagnen stödjer det säkert.", false, ApplyMode.LIVE, null, null),
+                text("gpu.restart-token", "gpu", "Ombstartstoken", "Hemlig token till sidovagnen.", "", ApplyMode.LIVE, null, null),
 
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),

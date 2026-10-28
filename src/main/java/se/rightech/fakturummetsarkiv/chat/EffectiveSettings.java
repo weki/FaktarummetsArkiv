@@ -129,6 +129,11 @@ public class EffectiveSettings {
             case "archive.pdf-roots" -> archive.pdfRoots();
             case "gpu.stats-url" -> "";
             case "gpu.poll-interval-ms" -> 2000;
+            case "gpu.history-enabled" -> true;
+            case "gpu.history-hours" -> 24;
+            case "gpu.history-sample-seconds" -> 5;
+            case "gpu.restart-enabled" -> false;
+            case "gpu.restart-token" -> "";
             case "spring.servlet.multipart.max-file-size", "spring.servlet.multipart.max-request-size",
                  "server.tomcat.max-swallow-size", "spring.codec.max-in-memory-size" ->
                     environment == null ? null : environment.getProperty(key);
