@@ -37,9 +37,8 @@ function buildSidebar(nav) {
         + '<div id="threadList" class="thread-list"></div>'
         + '<div class="sidebar-foot">'
         + link('/documents.html', 'documentsLink', 'Dokument', 'docs', 'documents')
-        + link('/gpu.html', 'gpuLink', 'GPU', 'gpu', 'gpu')
         + link('/settings.html', 'settingsLink', 'Inställningar', 'settings', 'settings')
-        + '<div id="gpuSidebarCard" class="gpu-sidebar-card" style="display:none"></div>'
+        + '<div id="gpuSidebarCard" class="gpu-sidebar-card" style="display:none" role="button" tabindex="0" aria-label="Öppna GPU-panel"></div>'
         + '<div class="model-row"><div id="modelStatus" class="model-status" role="status"><span class="dot"></span>'
         + '<span id="modelStatusText">Kontrollerar modeller…</span></div>'
         + '<button id="resetOllamaBtn" type="button" class="reset-ollama-btn" title="Återställ Ollama: avbryt pågående svar och ladda om modellerna">'
@@ -114,6 +113,25 @@ if (sidebarNav.dataset.page !== 'chat') {
 (function initGpuSidebar() {
     var card = document.getElementById('gpuSidebarCard');
     if (!card) return;
+    card.addEventListener('click', function (e) {
+        if (e.target.tagName === 'A') return;
+        e.preventDefault();
+        if (typeof window.GpuModal !== 'undefined') {
+            window.GpuModal.open();
+        } else {
+            window.location.href = 'gpu.html';
+        }
+    });
+    card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (typeof window.GpuModal !== 'undefined') {
+                window.GpuModal.open();
+            } else {
+                window.location.href = 'gpu.html';
+            }
+        }
+    });
     if (typeof window.GpuPoller === 'undefined') {
         var s = document.createElement('script');
         s.src = 'js/shared/gpu-poller.js';
@@ -135,12 +153,12 @@ if (sidebarNav.dataset.page !== 'chat') {
         var muGb = mu != null ? (mu / 1024).toFixed(1) : '-';
         var mtGb = mt != null ? (mt / 1024).toFixed(1) : '-';
         var warn = (data.warnings && data.warnings.length > 0) || data._stale;
-        card.innerHTML = '<a class="gpu-sidebar-link" href="gpu.html">'
+        card.innerHTML = '<div class="gpu-sidebar-link">'
             + '<div class="gpu-sidebar-row"><span>GPU</span><span class="gpu-sidebar-val">' + (util != null ? util + '%' : '-') + '</span></div>'
             + '<div class="gpu-sidebar-bar"><span style="width:' + (util != null ? Math.max(0, Math.min(100, util)) : 0) + '%"></span></div>'
             + '<div class="gpu-sidebar-row"><span>VRAM</span><span class="gpu-sidebar-val">' + muGb + ' / ' + mtGb + ' GB</span></div>'
             + '<div class="gpu-sidebar-bar"><span style="width:' + (mu != null && mt != null && mt > 0 ? Math.max(0, Math.min(100, (mu/mt)*100)) : 0) + '%"></span></div>'
-            + '</a>'
+            + '</div>'
             + '<span class="gpu-sidebar-dot ' + (warn ? 'warn' : '') + '"></span>';
         card.classList.toggle('gpu-sidebar-stale', !!data._stale);
     }
