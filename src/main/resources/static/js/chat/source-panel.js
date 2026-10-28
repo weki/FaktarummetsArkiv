@@ -56,7 +56,11 @@ function sourceButton(source, index, selected) {
     const title = source.title || source.name || source.source || 'Källa';
     text.appendChild(el('span', 'source-card-title', title));
     const bits = [];
-    if (source.page !== undefined && source.page !== null) bits.push('Sida ' + source.page);
+    if (source.pageStart !== undefined && source.pageStart !== null && source.pageEnd !== undefined && source.pageEnd !== null && source.pageStart !== source.pageEnd) {
+        bits.push('Sida ' + source.pageStart + '–' + source.pageEnd);
+    } else if (source.page !== undefined && source.page !== null) {
+        bits.push('Sida ' + source.page);
+    }
     if (source.collection) bits.push(source.collection);
     if (typeof source.score === 'number') bits.push('relevans ' + formatScore(source.score));
     text.appendChild(el('span', 'source-card-meta', bits.join(' · ')));

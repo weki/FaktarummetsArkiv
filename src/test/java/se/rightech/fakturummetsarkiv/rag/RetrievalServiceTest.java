@@ -13,6 +13,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -101,5 +103,144 @@ class RetrievalServiceTest {
                 .containsExactly("doc-a", "doc-b");
         verify(qdrantClient, never()).keywordSearch(anyString(), anyString(), anyInt(), any());
         verify(qdrantClient, never()).ensureTextIndex(anyString());
+    }
+
+    @Test
+    void neighborExpansionKeepsHitWhenNeighborsMissing() {
+        RetrievalService service = service(false);
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
+                        new java.util.LinkedHashMap<>() {{
+                            put("title", "doc-a");
+                            put("source", "doc-a");
+                            put("text", "alpha");
+                            put("chunkIndex", 5);
+                            put("documentId", "doc1");
+                            put("collection", "docs");
+                        }})));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), anyMap()))
+                .thenReturn(List.of());
+
+        List<Map<String, Object>> sources = service.retrieve("q", List.of("docs"), 5, 0.3, null);
+
+        assertThat(sources).hasSize(1);
+        assertThat(sources.get(0).get("text")).isEqualTo("alpha");
+    }
+
+    @Test
+    void neighborExpansionKeepsHitWithoutChunkIndex() {
+        RetrievalService service = service(false);
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
+                        new java.util.LinkedHashMap<>() {{
+                            put("title", "doc-a");
+                            put("source", "doc-a");
+                            put("text", "alpha");
+                            put("documentId", "doc1");
+                            put("collection", "docs");
+                        }})));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), anyMap()))
+                .thenReturn(List.of());
+
+        List<Map<String, Object>> sources = service.retrieve("q", List.of("docs"), 5, 0.3, null);
+
+        assertThat(sources).hasSize(1);
+        assertThat(sources.get(0).get("text")).isEqualTo("alpha");
+    }
+
+    @Test
+    void neighborExpansionKeepsOriginalOnScrollException() {
+        RetrievalService service = service(false);
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
+                        new java.util.LinkedHashMap<>() {{
+                            put("title", "doc-a");
+                            put("source", "doc-a");
+                            put("text", "alpha");
+                            put("chunkIndex", 5);
+                            put("documentId", "doc1");
+                            put("collection", "docs");
+                        }})));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), anyMap()))
+                .thenThrow(new RuntimeException("boom"));
+
+        List<Map<String, Object>> sources = service.retrieve("q", List.of("docs"), 5, 0.3, null);
+
+        assertThat(sources).hasSize(1);
+        assertThat(sources.get(0).get("text")).isEqualTo("alpha");
+    }
+
+    @Test
+    void neighborExpansionPreservesOrderAndCountOfDocuments() {
+        RetrievalService service = service(false);
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(
+                        new QdrantClient.ScoredPoint("a", 0.9,
+                                new java.util.LinkedHashMap<>() {{
+                                    put("title", "doc-a");
+                                    put("source", "doc-a");
+                                    put("text", "alpha");
+                                    put("chunkIndex", 1);
+                                    put("documentId", "doc1");
+                                    put("collection", "docs");
+                                }}),
+                        new QdrantClient.ScoredPoint("b", 0.8,
+                                new java.util.LinkedHashMap<>() {{
+                                    put("title", "doc-b");
+                                    put("source", "doc-b");
+                                    put("text", "beta");
+                                    put("chunkIndex", 1);
+                                    put("documentId", "doc2");
+                                    put("collection", "docs");
+                                }})
+                ));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), anyMap()))
+                .thenReturn(List.of(
+                        Map.of("text", "alpha", "page", 1, "chunkIndex", 1, "documentId", "doc1"),
+                        Map.of("text", "beta", "page", 1, "chunkIndex", 1, "documentId", "doc2")
+                ));
+
+        List<Map<String, Object>> sources = service.retrieve("q", List.of("docs"), 5, 0.3, null);
+
+        assertThat(sources).hasSize(2);
+        assertThat(sources.get(0).get("documentId")).isEqualTo("doc1");
+        assertThat(sources.get(1).get("documentId")).isEqualTo("doc2");
+    }
+
+    @Test
+    void mergesAdjacentHitsWithoutDuplicatedText() {
+        RetrievalService service = service(false);
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+                .thenReturn(List.of(
+                        new QdrantClient.ScoredPoint("a", 0.9,
+                                new java.util.LinkedHashMap<>() {{
+                                    put("title", "doc-a");
+                                    put("source", "doc-a");
+                                    put("text", "hello");
+                                    put("chunkIndex", 1);
+                                    put("documentId", "doc1");
+                                    put("collection", "docs");
+                                }}),
+                        new QdrantClient.ScoredPoint("b", 0.8,
+                                new java.util.LinkedHashMap<>() {{
+                                    put("title", "doc-a");
+                                    put("source", "doc-a");
+                                    put("text", "world");
+                                    put("chunkIndex", 2);
+                                    put("documentId", "doc1");
+                                    put("collection", "docs");
+                                }})
+                ));
+        when(qdrantClient.scrollPayloads(eq("docs"), anyList(), anyMap()))
+                .thenReturn(List.of(
+                        Map.of("text", "hello world", "page", 1, "chunkIndex", 1, "documentId", "doc1"),
+                        Map.of("text", "world more", "page", 1, "chunkIndex", 2, "documentId", "doc1")
+                ));
+
+        List<Map<String, Object>> sources = service.retrieve("q", List.of("docs"), 5, 0.3, null);
+
+        assertThat(sources).hasSize(1);
+        String text = String.valueOf(sources.get(0).get("text"));
+        assertThat(text).doesNotContain("world world");
     }
 }

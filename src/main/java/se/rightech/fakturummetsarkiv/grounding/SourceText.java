@@ -30,11 +30,26 @@ public final class SourceText {
             String title = sanitize(source.get("title"));
             String text = sanitize(source.get("text"));
             Object page = source.get("page");
-            String header = "<<<SOURCE " + number + ": " + title
-                    + (page == null ? "" : ", page " + page) + ">>>";
+            Object pageStart = source.get("pageStart");
+            Object pageEnd = source.get("pageEnd");
+            String pagePart = "";
+            if (pageStart != null && pageEnd != null) {
+                Object ps = pageStart;
+                Object pe = pageEnd;
+                if (ps.equals(pe)) {
+                    pagePart = ", page " + ps;
+                } else {
+                    pagePart = ", pages " + ps + "-" + pe;
+                }
+            } else if (pageStart != null && pageEnd == null) {
+                pagePart = ", page " + pageStart;
+            } else if (page != null && pageStart == null && pageEnd == null) {
+                pagePart = ", page " + page;
+            }
+            String header = "<<<SOURCE " + number + ": " + title + pagePart + ">>>";
             String block = header + "\n" + text + "\n<<<END SOURCE>>>\n\n";
             if (block.length() > budget) {
-                break;
+                continue;
             }
             sb.append(block);
             budget -= block.length();

@@ -117,7 +117,7 @@ public class ChatController {
     public WorkspaceSettings updateSettings(@RequestBody WorkspaceSettings settings,
                                             HttpServletRequest request) {
         settingsAccessGuard.requireWriteAccess(request);
-        return settingsService.update(settings, request);
+        return settingsStore.update(settings);
     }
 
     /**

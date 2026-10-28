@@ -97,6 +97,7 @@ public class EffectiveSettings {
             case "rag.gate.mode" -> rag.gateMode();
             case "rag.chunk-size" -> rag.chunkSize();
             case "rag.chunk-overlap" -> rag.chunkOverlap();
+            case "rag.neighbor-chunks" -> 1;
             case "rag.hybrid.enabled" -> hybrid.enabled();
             case "rag.hybrid.keyword-limit" -> hybrid.keywordLimit();
             case "rag.hybrid.rrf-k" -> hybrid.rrfK();

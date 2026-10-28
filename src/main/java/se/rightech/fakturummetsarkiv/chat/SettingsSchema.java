@@ -70,6 +70,8 @@ public class SettingsSchema {
                 integer("rag.chunk-size", "indexing", "Chunkstorlek", "Tecken per chunk. Påverkar nya dokument; gamla kräver omindexering.", 1200, 100, 20000, 50, ApplyMode.REINDEX, null, "Gamla dokument behöver indexeras om för att få ny chunkning."),
                 integer("rag.chunk-overlap", "indexing", "Chunköverlapp", "Överlapp mellan chunks.", 200, 0, 10000, 10, ApplyMode.REINDEX, null, "Gamla dokument behöver indexeras om för att få ny chunkning."),
 
+                integer("rag.neighbor-chunks", "search", "Grannstycken", "Antal stycken före och efter varje träff som tas med så att procedurer inte klipps av. 0 stänger av.", 1, 0, 3, 1, ApplyMode.LIVE, null, null),
+
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),
                 readOnly(text("spring.servlet.multipart.max-file-size", "limits", "Max filstorlek", "Största tillåtna uppladdning.", "100MB", ApplyMode.RESTART, null, null)),
