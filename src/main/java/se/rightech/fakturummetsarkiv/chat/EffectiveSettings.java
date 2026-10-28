@@ -67,6 +67,82 @@ public class EffectiveSettings {
                 new RerankProperties(false, 25, "", 600));
     }
 
+    /** Effektiv modell för en roll: rollens eget värde, annars chattmodellen. */
+    public String effectiveModel(String role) {
+        String chatModel = firstNonBlank(string("ollama.model"), ollama.model());
+        return switch (role == null ? "" : role) {
+            case "chat" -> chatModel;
+            case "validator" -> firstNonBlank(string("ollama.validator-model"), chatModel);
+            case "refine" -> firstNonBlank(string("ollama.refine-model"), chatModel);
+            case "gate" -> firstNonBlank(string("ollama.gate-model"), chatModel);
+            case "rewrite" -> firstNonBlank(string("ollama.rewrite-model"), chatModel);
+            // Följdfrågor har ingen egen modellinställning. De använder förfiningsmodellen
+            // när den är satt, annars chattmodellen (samma beteende som tidigare).
+            case "followup" -> firstNonBlank(string("ollama.followup-model"),
+                    firstNonBlank(string("ollama.refine-model"), chatModel));
+            case "rerank" -> firstNonBlank(string("rag.rerank.model"), chatModel);
+            default -> chatModel;
+        };
+    }
+
+    /** Effektivt kontextfönster: rollens eget värde, annars chattens. */
+    public int effectiveNumCtx(String role) {
+        int chatCtx = integer("ollama.chat-num-ctx");
+        if (chatCtx <= 0) {
+            chatCtx = ollama.chatNumCtx();
+        }
+        if (chatCtx <= 0) {
+            chatCtx = 16384;
+        }
+        return switch (role == null ? "" : role) {
+            case "chat", "refine", "followup", "rerank" -> chatCtx;
+            case "validator" -> positiveOr(integer("ollama.validator-num-ctx"), chatCtx);
+            case "gate" -> positiveOr(integer("ollama.gate-num-ctx"), chatCtx);
+            case "rewrite" -> positiveOr(integer("ollama.rewrite-num-ctx"), chatCtx);
+            default -> chatCtx;
+        };
+    }
+
+    /** True när rollen använder ett eget värde i stället för att ärva. */
+    public boolean hasOwnModel(String role) {
+        String key = switch (role == null ? "" : role) {
+            case "validator" -> "ollama.validator-model";
+            case "refine" -> "ollama.refine-model";
+            case "gate" -> "ollama.gate-model";
+            case "rewrite" -> "ollama.rewrite-model";
+            case "followup" -> "ollama.followup-model";
+            case "rerank" -> "rag.rerank.model";
+            default -> null;
+        };
+        if (key == null) {
+            return false;
+        }
+        String value = string(key);
+        return value != null && !value.isBlank();
+    }
+
+    /** True när rollen använder ett eget kontextfönster i stället för att ärva. */
+    public boolean hasOwnNumCtx(String role) {
+        String key = switch (role == null ? "" : role) {
+            case "validator" -> "ollama.validator-num-ctx";
+            case "gate" -> "ollama.gate-num-ctx";
+            case "rewrite" -> "ollama.rewrite-num-ctx";
+            default -> null;
+        };
+        return key != null && integer(key) > 0;
+    }
+
+    private static String firstNonBlank(String value, String fallback) {
+        if (value != null && !value.isBlank()) {
+            return value.trim();
+        }
+        return fallback == null ? "" : fallback.trim();
+    }
+
+    private static int positiveOr(int value, int fallback) {
+        return value > 0 ? value : fallback;
+    }
+
     public Object value(String key) {
         if (overrides.containsKey(key)) {
             return overrides.get(key);
@@ -81,6 +157,7 @@ public class EffectiveSettings {
             case "chat.validator-model", "ollama.validator-model" -> ollama.validatorModel();
             case "chat.embedding-model", "ollama.embedding-model" -> ollama.embeddingModel();
             case "chat.refine-model", "ollama.refine-model" -> ollama.refineModel();
+            case "ollama.followup-model" -> "";
             case "chat.gate-model", "ollama.gate-model" -> ollama.gateModel();
             case "chat.rewrite-model", "ollama.rewrite-model" -> ollama.rewriteModel();
             case "chat.validate-grounding" -> ollama.validate();
@@ -107,9 +184,9 @@ public class EffectiveSettings {
             case "rag.rerank.max-chars" -> rerank.maxChars();
             case "qdrant.top-k" -> qdrant.topK();
             case "ollama.chat-num-ctx" -> ollama.chatNumCtx();
-            case "ollama.validator-num-ctx" -> ollama.validatorNumCtx();
-            case "ollama.gate-num-ctx" -> ollama.gateNumCtx();
-            case "ollama.rewrite-num-ctx" -> ollama.rewriteNumCtx();
+            case "ollama.validator-num-ctx" -> nullablePositive(ollama.validatorNumCtx());
+            case "ollama.gate-num-ctx" -> nullablePositive(ollama.gateNumCtx());
+            case "ollama.rewrite-num-ctx" -> nullablePositive(ollama.rewriteNumCtx());
             case "ollama.validator-thinking" -> ollama.validatorThinking();
             case "ollama.refine-thinking" -> ollama.refineThinking();
             case "ollama.gate-thinking" -> ollama.gateThinking();
@@ -219,6 +296,10 @@ public class EffectiveSettings {
             values.forEach(this::putOverride);
         }
         revision.incrementAndGet();
+    }
+
+    private static Integer nullablePositive(int value) {
+        return value > 0 ? value : null;
     }
 
     private static String duration(Duration value) {

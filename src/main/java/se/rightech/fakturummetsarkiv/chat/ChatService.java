@@ -84,12 +84,12 @@ public StreamResult streamChat(String question, String sessionId,
                         sessionMemory.history(sessionId, historySize(settings)), effective.integer("rag.max-history-chars")))
                 : List.of();
 
-        String model = settings.chatModel() != null && !settings.chatModel().isBlank()
-                ? settings.chatModel() : effective.string("ollama.model");
+        String model = effective.effectiveModel("chat");
 
         boolean smart = settings.smartSearch() == null || settings.smartSearch();
         SearchGate.Decision gate = smart
-                ? searchGate.decide(question, history, settings.gateModel(), effective.string("rag.search-language"))
+                ? searchGate.decide(question, history, effective.effectiveModel("gate"),
+                        effective.string("rag.search-language"))
                 : new SearchGate.Decision(true, question);
         boolean search = gate.search();
 
@@ -99,8 +99,7 @@ public StreamResult streamChat(String question, String sessionId,
         if (search) {
             if ((settings.rewriteQuery() == null || settings.rewriteQuery())
                     && searchQuery.equalsIgnoreCase(question.trim())) {
-                String rewriteModel = settings.rewriteModel() != null && !settings.rewriteModel().isBlank()
-                        ? settings.rewriteModel() : model;
+                String rewriteModel = effective.effectiveModel("rewrite");
                 searchQuery = queryRewriter.rewrite(question, history, rewriteModel, effective.string("rag.search-language"));
             }
             if (onSearchPlan != null) {
@@ -145,7 +144,7 @@ public StreamResult streamChat(String question, String sessionId,
                         onThought.accept(thought);
                     }
                 });
-        llm.chatStream(model, messages, temperature, effective.integer("ollama.chat-num-ctx"),
+        llm.chatStream(model, messages, temperature, effective.effectiveNumCtx("chat"),
                 effective.bool("chat.thinking"), thinkFilter::accept,
                 thought -> {
                     if (thought != null && !thought.isEmpty() && onThought != null) {
@@ -184,7 +183,7 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     private void warnIfContextRisk(String model, List<Map<String, String>> messages) {
-        int numCtx = effective.integer("ollama.chat-num-ctx");
+        int numCtx = effective.effectiveNumCtx("chat");
         if (numCtx <= 0) {
             return;
         }

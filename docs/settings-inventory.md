@@ -1,5 +1,17 @@
 # Settings inventory (round 4, G0)
 
+> **Uppdatering (AGENT_TASKS_11):** modeller och kontext är nuvschema-baserade med arv.
+> `ollama.model` och `ollama.chat-num-ctx` är standard för alla roller. Per-roll-värden
+> (`ollama.validator-model`, `ollama.refine-model`, `ollama.gate-model`, `ollama.rewrite-model`,
+> `ollama.followup-model`, `rag.rerank.model`) är tomma som standard och ärver då huvudmodellen.
+> `ollama.validator-num-ctx`, `ollama.gate-num-ctx` och `ollama.rewrite-num-ctx` är tomma/0 som
+> standard och ärver `ollama.chat-num-ctx=16384`. Förfining, följdfrågor och rerank använder alltid
+> chattens kontext. `EffectiveSettings.effectiveModel(role)` och `effectiveNumCtx(role)` är den
+> enda källan som tjänsterna läser. `SettingsFileStore` tolkar sparade per-roll-värden som är lika
+> med chatten som ärvda i minnet, men skriver inte om filen. Inställningssidan visar effektivt värde,
+> markerar ärvda värden och varnar för samma modell med olika `num_ctx`, fler än två modeller när
+> `ollama.vram-gb` är satt, samt modeller som inte finns installerade (sparas ändå).
+
 Inventering gjord mot `round3/phase4` (round 2–3 inräknade). `live?` är kontrollerad i koden, inte
 gissad. Med **live** menas att ett nytt värde läses vid nästa anrop utan omstart. `modelReload`
 betyder att Ollama laddar modellen med nya parametrar nästa gång. `reindex` betyder att gamla
@@ -53,15 +65,16 @@ Källa: UI via `POST /api/chat/settings` (minne). Standardvärden hämtas från 
 | `model` | model | `""` | `SettingsStore` default; fallback i `ChatService`, `QueryRewriter`, `FollowUpGenerator`, `LlmReranker` | Ja som fallback | fil/env, UI-override | Modell laddas om |
 | `embedding-model` | model | `""` | `SettingsStore` default; fallback i `RetrievalService`, `DocumentService` | Ja som fallback | fil/env, UI-override | **Reindex** |
 | `timeout` | duration | `120s` (properties: `300s`) | `OllamaClient` konstruktor | Nej | fil/env | **Omstart** |
-| `validator-model` | model | `""` | `SettingsStore` default; validering via `WorkspaceSettings` | Ja via override | fil/env, UI | Modell laddas om |
+| `validator-model` | model | `""` (ärver `ollama.model`) | `EffectiveSettings.effectiveModel("validator")`, validering | Ja via override | fil/env, UI | Modell laddas om |
 | `validate` | boolean | `false` | `SettingsStore` default; validering via override | Ja via override | fil/env, UI | Direkt |
-| `refine-model` | model | `""` | `SettingsStore` default; fallback i `AnswerRefiner`, `FollowUpGenerator` | Ja | fil/env, UI | Modell laddas om |
-| `gate-model` | model | `""` | `SettingsStore` default; fallback i `SearchGate` | Ja | fil/env, UI | Modell laddas om |
-| `rewrite-model` | model | `""` | `SettingsStore` default; fallback i `QueryRewriter` | Ja | fil/env, UI | Modell laddas om |
-| `chat-num-ctx` | int | `16384` (properties: `8192`) | `ChatService`, `AnswerRefiner`, `FollowUpGenerator`, `LlmReranker` | Ja | fil/env | Modell laddas om |
-| `validator-num-ctx` | int | `16384` (properties: `8192`) | `GroundingValidator` | Ja | fil/env | Modell laddas om |
-| `gate-num-ctx` | int | `2048` | `SearchGate` | Ja | fil/env | Modell laddas om |
-| `rewrite-num-ctx` | int | `2048` | `QueryRewriter` | Ja | fil/env | Modell laddas om |
+| `refine-model` | model | `""` (ärver `ollama.model`) | `EffectiveSettings.effectiveModel("refine")`, `AnswerRefiner` | Ja | fil/env, UI | Modell laddas om |
+| `gate-model` | model | `""` (ärver `ollama.model`) | `EffectiveSettings.effectiveModel("gate")`, `SearchGate` | Ja | fil/env, UI | Modell laddas om |
+| `rewrite-model` | model | `""` (ärver `ollama.model`) | `EffectiveSettings.effectiveModel("rewrite")`, `QueryRewriter` | Ja | fil/env, UI | Modell laddas om |
+| `followup-model` | model | `""` (ärver refine, annars `ollama.model`) | `EffectiveSettings.effectiveModel("followup")`, `FollowUpGenerator` | Ja | fil/env, UI | Modell laddas om |
+| `chat-num-ctx` | int | `16384` | `EffectiveSettings.effectiveNumCtx("chat")` och alla ärvande roller | Ja | fil/env, UI | Modell laddas om |
+| `validator-num-ctx` | int/null | `null`/0 (ärver `chat-num-ctx`) | `EffectiveSettings.effectiveNumCtx("validator")` | Ja | fil/env, UI | Modell laddas om |
+| `gate-num-ctx` | int/null | `null`/0 (ärver `chat-num-ctx`) | `EffectiveSettings.effectiveNumCtx("gate")` | Ja | fil/env, UI | Modell laddas om |
+| `rewrite-num-ctx` | int/null | `null`/0 (ärver `chat-num-ctx`) | `EffectiveSettings.effectiveNumCtx("rewrite")` | Ja | fil/env, UI | Modell laddas om |
 | `validator-thinking` | boolean | `false` | `GroundingValidator` | Ja | fil/env | Direkt (nästa anrop) |
 | `refine-thinking` | boolean | `false` | `AnswerRefiner` | Ja | fil/env | Direkt |
 | `gate-thinking` | boolean | `false` | `SearchGate` | Ja | fil/env | Direkt |
@@ -117,7 +130,7 @@ Källa: UI via `POST /api/chat/settings` (minne). Standardvärden hämtas från 
 |---|---|---|---|---|---|---|
 | `enabled` | boolean | `false` | `RetrievalService` | Ja | fil/env | Direkt |
 | `candidates` | int | `25` | `RetrievalService` | Ja | fil/env | Direkt |
-| `model` | model | `""` (fallback `ollama.model`) | `LlmReranker`, `ModelConfigurationLogger` | Ja som fallback | fil/env | Modell laddas om |
+| `model` | model | `""` (ärver `ollama.model`) | `EffectiveSettings.effectiveModel("rerank")`, `LlmReranker`, `ModelConfigurationLogger` | Ja som fallback | fil/env, UI | Modell laddas om |
 | `max-chars` | int | `600` | `LlmReranker` | Ja | fil/env | Direkt |
 
 ## ArchiveProperties (`archive.*`)
@@ -148,8 +161,10 @@ Källa: UI via `POST /api/chat/settings` (minne). Standardvärden hämtas från 
 - Ingen read-only-regel för infrastruktur, ingen maskning, ingen export/import.
 - Ingen `procedure top-k` och ingen procedure-retrieval i koden.
 - Ingen modellstorlek i `GET /api/chat/models`; ingen `/api/ps`-vy, ingen anslutningsdiagnostik.
-- Max 3-modellsregeln finns i `SettingsStore`, men räknar inte in `rag.rerank.model`. Startloggen
-  räknar däremot in den. Regeln bör samma källa i round 4.
+- `validateModelBudget` i `SettingsValidator` stoppar fortfarande fler än tre modeller. Sidan och
+  startloggen varnar redan vid fler än två när `ollama.vram-gb` är satt. Reglerna bör samma källa.
+- Den äldre `WorkspaceSettings`-vägen har kvar en egen max 3-kontroll, men det nya
+  `/api/settings`-flödet använder `EffectiveSettings`.
 - Embeddingdimension kontrolleras först vid indexering, inte vid start eller i UI.
 - `chunk-overlap < chunk-size` är inte validerat; `Chunker` klampar tyst overlap.
 - `num_ctx` kontra källbudget varnas bara i `ChatService` när prompten redan är stor.

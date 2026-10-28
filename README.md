@@ -17,24 +17,33 @@ två sista är opt-in).
 
 ### Ollama-modeller
 
-Appens standardkonfiguration använder tre modeller:
+Appens standardkonfiguration använder en chattmodell för alla roller plus en embeddingmodell:
 
 ```bash
 ollama pull qwen3:8b
 ollama pull qllama/multilingual-e5-large
-ollama pull phi3.5:latest
 ```
 
-- `qwen3:8b` – chatt, svarsvalidering, förfining och följdfrågor
+- `qwen3:8b` – chatt, validering, förfining, sök-gate, omformulering, följdfrågor och rerank
 - `qllama/multilingual-e5-large` – embeddings (1024 dimensioner)
-- `phi3.5:latest` – sök-gate och omformulering av sökfrågor
 
-Modellerna kan bytas i `src/main/resources/application.properties` eller i inställningarna i
-webbgränssnittet. Vid start loggas vilka distinkta modeller som används. Om fler än två är
-konfigurerade och `ollama.vram-gb` är satt under 14 loggas en varning.
+Alla roller ärver `ollama.model`. Du kan ge en enskild roll en egen modell i
+`src/main/resources/application.properties` eller under **Avancerat: modell per roll** i
+inställningarna. Ett tomt värde betyder att rollen ärver huvudmodellen. Samma sak gäller
+`num_ctx`: rollen ärver `ollama.chat-num-ctx` om den inte har ett eget värde.
 
-Vill du bara lasta två modeller (qwen3 + e5) finns profilen `two-models`, som använder qwen3 även
-för gate och rewrite:
+Vid start loggas vilka distinkta modeller som används och om en roll ärver eller har ett eget
+värde. Om fler än två modeller är konfigurerade och `ollama.vram-gb` är satt loggas en varning.
+Ingen modell blockeras, men fler modeller kan göra att Ollama laddar om mellan anropen.
+
+Vill du använda en liten modell för gate och rewrite, sätt till exempel:
+
+```properties
+ollama.gate-model=phi3.5:latest
+ollama.rewrite-model=phi3.5:latest
+```
+
+Profilen `two-models` finns kvar för den som vill låta gate och rewrite använda chattmodellen:
 
 ```bash
 SPRING_PROFILES_ACTIVE=two-models ./gradlew bootRun
@@ -42,28 +51,66 @@ SPRING_PROFILES_ACTIVE=two-models ./gradlew bootRun
 
 Profilen är opt-in och ändrar inte standardkonfigurationen.
 
+## Modeller och kontext
+
+En modell och ett kontextfönster är standard för alla roller:
+
+```properties
+ollama.model=qwen3:8b
+ollama.chat-num-ctx=16384
+```
+
+Per-roll-inställningarna är tomma som standard och ärver då huvudmodellen respektive
+`ollama.chat-num-ctx`:
+
+```properties
+# Tomt = ärv ollama.model
+ollama.validator-model=
+ollama.refine-model=
+ollama.gate-model=
+ollama.rewrite-model=
+ollama.followup-model=
+rag.rerank.model=
+
+# Tomt/0 = ärv ollama.chat-num-ctx
+ollama.validator-num-ctx=
+ollama.gate-num-ctx=
+ollama.rewrite-num-ctx=
+```
+
+Följdfrågor använder `ollama.followup-model` om den är satt, annars förfiningsmodellen, annars
+chattmodellen. Förfining, följdfrågor och rerank använder alltid chattens kontextfönster.
+
+Inställningssidan visar det effektiva värdet och markerar ärvda värden. Äldre sparade värden som är
+lika med chattmodellen eller chattens kontext behandlas som ärvda när filen läses in; filen skrivs
+inte om förrän du sparar. Ett eget värde som skiljer sig från chatten behålls.
+
+Samma modell med olika `num_ctx` för olika roller får Ollama att ladda om modellen mellan anropen.
+Sidan och startloggen varnar för det. En liten modell (under ca 4B parametrar) räcker oftast för
+sök-gate och omformulering och lämnar mer VRAM till huvudmodellen.
+
 ## VRAM och kontextfönster
 
-Chat och validator använder `ollama.chat-num-ctx=8192` respektive
-`ollama.validator-num-ctx=8192`. Gate och rewrite behöver bara korta prompter och har därför egna,
-mindre kontextfönster:
+Alla roller ärver `ollama.chat-num-ctx=16384` som standard, så samma modell laddas normalt inte om
+med olika kontext. Ett mindre `num_ctx` ger mindre KV-cache, särskilt för modeller utan GQA. Om du
+ger gate och rewrite egna mindre fönster, sätt dem uttryckligen:
 
 ```properties
 ollama.gate-num-ctx=2048
 ollama.rewrite-num-ctx=2048
 ```
 
-Ett mindre `num_ctx` ger mindre KV-cache, särskilt för modeller utan GQA, och ska minska risken
-att gate och rewrite tränger ut chatmodellen ur VRAM. Modellnamn, prompts och indexerade data
-är oförändrade; ingen omindexering behövs. Vid start loggas model och `num_ctx` per roll.
+Modellnamn, prompts och indexerade data är oförändrade; ingen omindexering behövs. Vid start loggas
+modell och `num_ctx` per roll, med `(egen)` eller `(ärvd)`.
 
 Verifiering kräver en maskin med Ollama och GPU. Jag har inte kunnat köra eller mäta VRAM i den här
 miljön. Gör så här hos dig:
 
 1. Starta appen och titta efter loggraderna `Rollkonfiguration gate` och
-   `Rollkonfiguration rewrite` – de ska visa `num_ctx=2048`.
+   `Rollkonfiguration rewrite` – de ska visa om värdet är eget eller ärvt.
 2. Ställ en fråga som kräver sökning och kör `ollama ps` före och efter.
-3. Kontrollera att phi3.5 visar context 2048 och att modellerna inte längre lastas om varje gång.
+3. Kontrollera att modellerna inte laddas om varje gång. Om du satt egna små kontextfönster ska
+   gate- och rewritemodellen visa dem i `ollama ps`.
 4. Om modellerna fortfarande trängs ut, mät med `ollama ps` och justera kontextstorlekarna utifrån
    mätningen i stället för att gissa.
 
@@ -152,10 +199,11 @@ Värden som kräver omstart (`RESTART`) och infrastruktur (Ollama/Qdrant-adresse
 vektordimension, distansmått, prefix, arkivsökvägar och Spring/Tomcat-gränser) visas men kan bara
 ändras i konfigurationen. Hemliga värden ska aldrig läggas i `settings.json`.
 
-Vid modellbyte gäller max tre olika modeller samtidigt, inklusive `rag.rerank.model`. Ett byte av
-embeddingmodell eller vektordimension kräver omindexering; sidan varnar men startar aldrig någon
-omindexering. Chunkstorlek och överlapp påverkar nya dokument direkt, medan gamla dokument måste
-indexeras om för att få den nya chunkningen.
+Vid modellbyte varnar sidan om fler än två distinkta modeller är konfigurerade när `ollama.vram-gb`
+är satt, och om samma modell används med olika `num_ctx`. Ett byte av embeddingmodell eller
+vektordimension kräver omindexering; sidan varnar men startar aldrig någon omindexering. Chunkstorlek
+och överlapp påverkar nya dokument direkt, medan gamla dokument måste indexeras om för att få den
+nya chunkningen. En modell som inte finns installerad i Ollama ger en varning men sparas ändå.
 
 Skrivningar till inställnings-API:t tillåts bara från serverns egen dator och kräver headern
 `X-Requested-With: FakturummetsArkiv`. Läsning fungerar även från andra datorer i nätverket. Det
@@ -271,7 +319,7 @@ Aktivera t.ex. gate-thinking med `ollama.gate-thinking=true`. Även om en modell
 
 ## Kontextbudget
 
-Både `ollama.chat-num-ctx` och `ollama.validator-num-ctx` är 8192 som default. Det räcker för
+`ollama.chat-num-ctx` är 16384 som standard och ärvs av alla roller. Det räcker för
 `rag.max-source-chars=8000` (cirka 2 500 tokens) plus systemprompt, fråga, svar och thinking, men
 historiken måste begränsas. Därför trimmas historiken till `rag.max-history-chars=4000` tecken;
 äldsta meddelandet tas bort först. Om den uppskattade prompten ändå överstiger `num_ctx`, eller

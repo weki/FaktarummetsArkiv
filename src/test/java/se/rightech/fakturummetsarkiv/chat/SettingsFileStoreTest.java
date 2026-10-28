@@ -79,6 +79,75 @@ class SettingsFileStoreTest {
     }
 
     @Test
+    void perRoleValuesEqualToChatAreLoadedAsInherited() throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Files.writeString(file, "{\"version\":1,\"overrides\":{"
+                + "\"ollama.validator-model\":\"gemma4:latest\","
+                + "\"ollama.refine-model\":\"gemma4:latest\","
+                + "\"ollama.gate-model\":\"gemma4:latest\","
+                + "\"ollama.rewrite-model\":\"gemma4:latest\","
+                + "\"ollama.gate-num-ctx\":16384}}");
+
+        EffectiveSettings settings = inheriting();
+        store(file, settings).load();
+
+        assertThat(settings.effectiveModel("gate")).isEqualTo("gemma4:latest");
+        assertThat(settings.hasOwnModel("gate")).isFalse();
+        assertThat(settings.hasOwnModel("validator")).isFalse();
+        assertThat(settings.hasOwnNumCtx("gate")).isFalse();
+        assertThat(file).exists();
+    }
+
+    @Test
+    void oldPerRoleOverridesAreKeptAsOwn() throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Files.writeString(file, "{\"version\":1,\"overrides\":{"
+                + "\"ollama.gate-model\":\"phi3.5:latest\","
+                + "\"ollama.gate-num-ctx\":2048}}");
+
+        EffectiveSettings settings = inheriting();
+        store(file, settings).load();
+
+        assertThat(settings.effectiveModel("gate")).isEqualTo("phi3.5:latest");
+        assertThat(settings.effectiveNumCtx("gate")).isEqualTo(2048);
+        assertThat(settings.hasOwnModel("gate")).isTrue();
+        assertThat(settings.hasOwnNumCtx("gate")).isTrue();
+    }
+
+    @Test
+    void blankOptionalValuesAreLoadedAsInherited() throws IOException {
+        Path file = tempDir.resolve("settings.json");
+        Files.writeString(file, "{\"version\":1,\"overrides\":{"
+                + "\"ollama.gate-model\":\"\","
+                + "\"ollama.gate-num-ctx\":\"\"}}");
+
+        EffectiveSettings settings = inheriting();
+        store(file, settings).load();
+
+        assertThat(settings.hasOwnModel("gate")).isFalse();
+        assertThat(settings.hasOwnNumCtx("gate")).isFalse();
+        assertThat(settings.effectiveModel("gate")).isEqualTo("gemma4:latest");
+        assertThat(settings.effectiveNumCtx("gate")).isEqualTo(16384);
+    }
+
+    @Test
+    void savingBlankOptionalValueRemovesTheOverride() {
+        EffectiveSettings settings = effective();
+        settings.putOverride("ollama.gate-model", "phi3.5:latest");
+        SettingsSchema schema = new SettingsSchema();
+        SettingsValidator validator = new SettingsValidator(schema, settings);
+        Path file = tempDir.resolve("settings.json");
+        SettingsService service = new SettingsService(schema, settings, validator,
+                new MockEnvironment(), store(file, settings));
+
+        service.update(Map.of("ollama.gate-model", ""), null);
+
+        assertThat(settings.overrides()).doesNotContainKey("ollama.gate-model");
+        assertThat(settings.hasOwnModel("gate")).isFalse();
+        assertThat(settings.effectiveModel("gate")).isEqualTo("gemma4:latest");
+    }
+
+    @Test
     void settingsServicePersistsUpdatesBeforeApplyingThem() {
         EffectiveSettings settings = effective();
         SettingsSchema schema = new SettingsSchema();
@@ -104,11 +173,20 @@ class SettingsFileStoreTest {
     }
 
     private static EffectiveSettings effective() {
+        return settings("phi3.5:latest", 4096, 2048, 2048);
+    }
+
+    private static EffectiveSettings inheriting() {
+        return settings("", 0, 0, 0);
+    }
+
+    private static EffectiveSettings settings(String validatorModel, int validatorCtx,
+                                              int gateCtx, int rewriteCtx) {
         QdrantProperties qdrant = new QdrantProperties("http://localhost:6333", "docs", 1024, "Cosine", 7,
                 Duration.ofSeconds(5), "query: ", "passage:");
         OllamaProperties ollama = new OllamaProperties("http://localhost:11434", "gemma4:latest",
-                "qllama/multilingual-e5-large", Duration.ofSeconds(5), "phi3.5:latest", true, "gemma4:latest",
-                "phi3.5:latest", "", 16384, 4096, 2048, 2048, false, false, false, false, false, null);
+                "qllama/multilingual-e5-large", Duration.ofSeconds(5), validatorModel, true, "",
+                "", "", 16384, validatorCtx, gateCtx, rewriteCtx, false, false, false, false, false, null);
         RagProperties rag = new RagProperties(20, 1200, 200, 8000, "en", 0.3, 4000, "model");
         return new EffectiveSettings(ollama, qdrant, rag, new ChatProperties(0.1, true, "en"),
                 new HybridProperties(false, 50, 60), new RerankProperties(false, 25, "", 600),

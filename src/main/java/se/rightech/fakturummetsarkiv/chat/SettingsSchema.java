@@ -26,13 +26,14 @@ public class SettingsSchema {
                 new SettingsGroup("infrastructure", "Infrastruktur", "Ollama, Qdrant och övrig drift. Ändras i konfigurationen och kräver omstart.", 80));
 
         List<SettingDefinition> list = List.of(
-                model("ollama.model", "models", "Chattmodell", "Huvudmodell för svar och följdfrågor.", "qwen3:8b"),
-                model("ollama.validator-model", "models", "Valideringsmodell", "Modell som kontrollerar att svaret stöds av källorna.", "qwen3:8b"),
+                model("ollama.model", "models", "Modell", "Används för alla roller om inget annat anges.", "qwen3:8b"),
+                model("ollama.validator-model", "models", "Valideringsmodell", "Tomt värde ärver huvudmodellen.", ""),
                 embedding("ollama.embedding-model", "models", "Embeddingmodell", "Måste ge samma vektordimension som Qdrant-samlingen.", "qllama/multilingual-e5-large"),
-                model("ollama.refine-model", "models", "Förfiningsmodell", "Modell som skriver om svaret vid underkänd validering.", "qwen3:8b"),
-                model("ollama.gate-model", "models", "Sökgatemodell", "Liten modell som avgör om sökning behövs.", "phi3.5:latest"),
-                model("ollama.rewrite-model", "models", "Omformuleringsmodell", "Liten modell som gör fristående sökfrågor av följdfrågor.", "phi3.5:latest"),
-                model("rag.rerank.model", "models", "Rerankmodell", "Tomt värde använder chattmodellen.", ""),
+                model("ollama.refine-model", "models", "Förfiningsmodell", "Tomt värde ärver huvudmodellen.", ""),
+                model("ollama.gate-model", "models", "Sökgatemodell", "Tomt värde ärver huvudmodellen.", ""),
+                model("ollama.rewrite-model", "models", "Omformuleringsmodell", "Tomt värde ärver huvudmodellen.", ""),
+                model("ollama.followup-model", "models", "Följdfrågemodell", "Tomt värde ärver förfinings- eller huvudmodellen.", ""),
+                model("rag.rerank.model", "models", "Rerankmodell", "Tomt värde ärver huvudmodellen.", ""),
 
                 bool("chat.smart-search", "search", "Smart sökning", "Låt sökgaten avgöra om dokument behöver sökas.", true, ApplyMode.LIVE, null, null),
                 text("rag.gate.mode", "search", "Sökgate", "model använder en modell, rules använder enkla regler och off söker alltid.", "model", ApplyMode.LIVE, null, null),
@@ -59,10 +60,10 @@ public class SettingsSchema {
                 bool("ollama.validator-thinking", "validation", "Thinking för validering", "Slå på thinking i valideringsmodellen.", false, ApplyMode.LIVE, null, null),
                 bool("ollama.refine-thinking", "validation", "Thinking för förfinning", "Slå på thinking när svaret förfinas.", false, ApplyMode.LIVE, null, null),
 
-                integer("ollama.chat-num-ctx", "context", "Kontext: chatt", "Kontextfönster för chattmodellen.", 8192, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
-                integer("ollama.validator-num-ctx", "context", "Kontext: validering", "Kontextfönster för valideringsmodellen.", 8192, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
-                integer("ollama.gate-num-ctx", "context", "Kontext: gate", "Kontextfönster för sökgaten.", 2048, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
-                integer("ollama.rewrite-num-ctx", "context", "Kontext: omformulering", "Kontextfönster för omformulering.", 2048, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
+                integer("ollama.chat-num-ctx", "context", "Kontextfönster (alla roller)", "Kontextfönster för chattmodellen. Roller utan eget värde ärver detta.", 16384, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
+                optionalInteger("ollama.validator-num-ctx", "context", "Kontext: validering", "Tomt värde ärver kontextfönstret för alla roller.", 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
+                optionalInteger("ollama.gate-num-ctx", "context", "Kontext: gate", "Tomt värde ärver kontextfönstret för alla roller.", 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
+                optionalInteger("ollama.rewrite-num-ctx", "context", "Kontext: omformulering", "Tomt värde ärver kontextfönstret för alla roller.", 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
                 bool("ollama.gate-thinking", "context", "Thinking: gate", "Thinking-läge för sökgaten.", false, ApplyMode.LIVE, null, null),
                 bool("ollama.rewrite-thinking", "context", "Thinking: omformulering", "Thinking-läge för omformulering.", false, ApplyMode.LIVE, null, null),
                 bool("ollama.followup-thinking", "context", "Thinking: följdfrågor", "Thinking-läge för följdfrågor.", false, ApplyMode.LIVE, null, null),
@@ -79,7 +80,7 @@ public class SettingsSchema {
                 integer("gpu.history-hours", "gpu", "Historik (timmar)", "Hur länge historiken sparas.", 24, 1, 168, 1, ApplyMode.LIVE, null, null),
                 integer("gpu.history-sample-seconds", "gpu", "Provintervall (sekunder)", "Hur ofta prover tas.", 5, 2, 60, 1, ApplyMode.LIVE, null, null),
                 bool("gpu.restart-enabled", "gpu", "Tillåt omstart av Ollama", "Aktivera endast om sidovagnen stödjer det säkert.", false, ApplyMode.LIVE, null, null),
-                text("gpu.restart-token", "gpu", "Ombstartstoken", "Hemlig token till sidovagnen.", "", ApplyMode.LIVE, null, null),
+                text("gpu.restart-token", "gpu", "Omstartstoken", "Hemlig token till sidovagnen.", "", ApplyMode.LIVE, null, null),
 
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),
@@ -149,6 +150,13 @@ public class SettingsSchema {
                                              int defaultValue, double min, double max, double step,
                                              ApplyMode applyMode, String dependsOn, String warning) {
         return new SettingDefinition(key, group, label, description, SettingsType.INTEGER, defaultValue,
+                null, min, max, step, null, applyMode, dependsOn, warning, false, false);
+    }
+
+    private static SettingDefinition optionalInteger(String key, String group, String label, String description,
+                                                     double min, double max, double step,
+                                                     ApplyMode applyMode, String dependsOn, String warning) {
+        return new SettingDefinition(key, group, label, description, SettingsType.INTEGER, null,
                 null, min, max, step, null, applyMode, dependsOn, warning, false, false);
     }
 

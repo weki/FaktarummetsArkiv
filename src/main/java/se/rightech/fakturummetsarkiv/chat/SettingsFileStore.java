@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -104,15 +105,57 @@ public class SettingsFileStore {
                 overrides.put(entry.getKey(), entry.getValue());
             }
             Map<String, Object> normalized = overrides.isEmpty() ? Map.of() : validator.normalize(overrides);
-            Map<String, Object> applied = new LinkedHashMap<>();
-            normalized.forEach((key, value) -> {
-                if (value != null) {
-                    applied.put(key, value);
-                }
-            });
+            Map<String, Object> applied = inheritedValues(normalized, effective);
             effective.replaceOverrides(applied);
         } catch (IOException | RuntimeException exception) {
             quarantine(exception.getMessage());
+        }
+    }
+
+    /**
+     * Värden som är lika med chattmodellen/chattens kontext tolkas som ärvda i minnet.
+     * Filen skrivs inte om, så en äldre konfiguration kan läsas oförändrad.
+     */
+    static Map<String, Object> inheritedValues(Map<String, Object> normalized, EffectiveSettings effective) {
+        Map<String, Object> applied = new LinkedHashMap<>();
+        normalized.forEach((key, value) -> {
+            if (value != null) {
+                applied.put(key, value);
+            }
+        });
+        String chatModel = applied.containsKey("ollama.model")
+                ? String.valueOf(applied.get("ollama.model"))
+                : effective.string("ollama.model");
+        int chatCtx = applied.containsKey("ollama.chat-num-ctx")
+                ? toInt(applied.get("ollama.chat-num-ctx"))
+                : effective.effectiveNumCtx("chat");
+        for (String key : List.of("ollama.validator-model", "ollama.refine-model",
+                "ollama.gate-model", "ollama.rewrite-model", "ollama.followup-model",
+                "rag.rerank.model")) {
+            Object value = applied.get(key);
+            if (value == null || String.valueOf(value).isBlank()
+                    || String.valueOf(value).trim().equals(chatModel == null ? "" : chatModel.trim())) {
+                applied.remove(key);
+            }
+        }
+        for (String key : List.of("ollama.validator-num-ctx", "ollama.gate-num-ctx",
+                "ollama.rewrite-num-ctx")) {
+            Object value = applied.get(key);
+            if (value != null && toInt(value) == chatCtx) {
+                applied.remove(key);
+            }
+        }
+        return applied;
+    }
+
+    private static int toInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return value == null || String.valueOf(value).isBlank() ? 0 : Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return 0;
         }
     }
 

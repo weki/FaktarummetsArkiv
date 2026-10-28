@@ -53,12 +53,14 @@ public class ChatController {
     private final FollowUpGenerator followUpGenerator;
     private final MarkdownRenderer markdownRenderer;
     private final OllamaClient ollamaClient;
+    private final EffectiveSettings effective;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
     public ChatController(ChatService chatService, SettingsStore settingsStore, SettingsAccessGuard settingsAccessGuard,
                           GroundingValidator groundingValidator, AnswerRefiner answerRefiner,
                           FollowUpGenerator followUpGenerator,
-                          MarkdownRenderer markdownRenderer, OllamaClient ollamaClient) {
+                          MarkdownRenderer markdownRenderer, OllamaClient ollamaClient,
+                          EffectiveSettings effective) {
         this.chatService = chatService;
         this.settingsStore = settingsStore;
         this.settingsAccessGuard = settingsAccessGuard;
@@ -67,6 +69,7 @@ public class ChatController {
         this.followUpGenerator = followUpGenerator;
         this.markdownRenderer = markdownRenderer;
         this.ollamaClient = ollamaClient;
+        this.effective = effective;
     }
 
     public record ChatRequest(String message, String mode, String sessionId,
@@ -162,13 +165,13 @@ public class ChatController {
                 CompletableFuture<GroundingResult> validationFuture = validate
                         ? CompletableFuture.supplyAsync(ollamaClient.within(scope, () -> groundingValidator.validate(
                                 request.message(), collectedSources, result.answer(),
-                                settings.validatorModel(), true)), streamExecutor)
+                                effective.effectiveModel("validator"), true)), streamExecutor)
                         : CompletableFuture.completedFuture(null);
                 CompletableFuture<List<String>> followUpsFuture = CompletableFuture.supplyAsync(
                         ollamaClient.within(scope, () -> followUpGenerator.generate(
                                 request.message(), result.answer(), collectedSources,
-                                settings.chatModel(), settings.refineModel(), 3, null, null,
-                                settings.answerLanguage())),
+                                effective.effectiveModel("chat"), effective.effectiveModel("followup"),
+                                3, null, null, settings.answerLanguage())),
                         streamExecutor);
 
                 GroundingResult validation = validationFuture.join();
@@ -177,7 +180,7 @@ public class ChatController {
                 }
                 if (validation != null && Boolean.FALSE.equals(validation.supported()) && answerRefiner != null) {
                     String refined = answerRefiner.refine(request.message(), collectedSources,
-                            result.answer(), settings.refineModel(), settings.answerLanguage());
+                            result.answer(), effective.effectiveModel("refine"), settings.answerLanguage());
                     if (refined != null && !refined.isBlank()
                             && !refined.trim().equals(result.answer().trim())) {
                         sendEvent(emitter, scope, "refined", json(refined), MediaType.TEXT_PLAIN);

@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,7 +36,8 @@ class LlmRerankerTest {
 
     @Test
     void reordersByModelOutputAndKeepsTopK() {
-        when(client.chat(anyString(), anyString(), anyString())).thenReturn("3, 1, 2");
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("3, 1, 2");
 
         List<Map<String, Object>> result = new LlmReranker(client, OLLAMA, PROPS)
                 .rerank("beta", candidates(), 2);
@@ -43,7 +47,8 @@ class LlmRerankerTest {
 
     @Test
     void appendsMissingCandidatesInOriginalOrder() {
-        when(client.chat(anyString(), anyString(), anyString())).thenReturn("3");
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("3");
 
         List<Map<String, Object>> result = new LlmReranker(client, OLLAMA, PROPS)
                 .rerank("beta", candidates(), 3);
@@ -53,7 +58,8 @@ class LlmRerankerTest {
 
     @Test
     void keepsOriginalOrderWhenResponseIsUnparseable() {
-        when(client.chat(anyString(), anyString(), anyString())).thenReturn("no idea");
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("no idea");
 
         List<Map<String, Object>> result = new LlmReranker(client, OLLAMA, PROPS)
                 .rerank("beta", candidates(), 3);
@@ -63,7 +69,8 @@ class LlmRerankerTest {
 
     @Test
     void keepsOriginalOrderWhenModelFails() {
-        when(client.chat(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("nere"));
+        when(client.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenThrow(new RuntimeException("nere"));
 
         List<Map<String, Object>> result = new LlmReranker(client, OLLAMA, PROPS)
                 .rerank("beta", candidates(), 3);

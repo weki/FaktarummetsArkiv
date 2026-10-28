@@ -60,7 +60,7 @@ public class QueryRewriter {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT,
-                    buildPrompt(safeHistory, question, searchLanguage), 0.0, effective.integer("ollama.rewrite-num-ctx"),
+                    buildPrompt(safeHistory, question, searchLanguage), 0.0, effective.effectiveNumCtx("rewrite"),
                     effective.bool("ollama.rewrite-thinking"));
             String cleaned = clean(raw);
             if (cleaned.isEmpty() || cleaned.equalsIgnoreCase(question.trim())) {
@@ -77,10 +77,7 @@ public class QueryRewriter {
         if (model != null && !model.isBlank()) {
             return model;
         }
-        if (effective.string("ollama.rewrite-model") != null && !effective.string("ollama.rewrite-model").isBlank()) {
-            return effective.string("ollama.rewrite-model");
-        }
-        return effective.string("ollama.model") == null ? "" : effective.string("ollama.model");
+        return effective.effectiveModel("rewrite");
     }
 
     static String buildPrompt(List<Map<String, String>> history, String question) {

@@ -17,6 +17,18 @@
         REINDEX: 'Kräver omindexering'
     };
 
+    const PER_ROLE = [
+        {label: 'Validering', model: 'ollama.validator-model', ctx: 'ollama.validator-num-ctx'},
+        {label: 'Förfining', model: 'ollama.refine-model'},
+        {label: 'Sökgate', model: 'ollama.gate-model', ctx: 'ollama.gate-num-ctx'},
+        {label: 'Omformulering', model: 'ollama.rewrite-model', ctx: 'ollama.rewrite-num-ctx'},
+        {label: 'Följdfrågor', model: 'ollama.followup-model'},
+        {label: 'Rerank', model: 'rag.rerank.model'}
+    ];
+    const PER_ROLE_MODEL_KEYS = new Set(PER_ROLE.map(role => role.model));
+    const PER_ROLE_CTX_KEYS = new Set(PER_ROLE.filter(role => role.ctx).map(role => role.ctx));
+    const PRIMARY_MODEL_KEYS = new Set(['ollama.model', 'ollama.chat-num-ctx', 'ollama.embedding-model']);
+
     let snapshot = null;
     let models = [];
     let dirty = new Map();
@@ -70,14 +82,25 @@
 
         for (const group of groups) {
             const settings = snapshot.settings.filter(setting => setting.group === group.id);
-            const matching = settings.filter(setting => matches(setting, query));
-            if (query && matching.length === 0) continue;
-            visible += matching.length;
+            let matching;
+            let advanced = [];
+            if (group.id === 'models') {
+                matching = settings.filter(setting => PRIMARY_MODEL_KEYS.has(setting.key)
+                    && matches(setting, query));
+                advanced = advancedSettings().filter(setting => !query || matches(setting, query));
+            } else if (group.id === 'context') {
+                matching = settings.filter(setting => !PER_ROLE_CTX_KEYS.has(setting.key)
+                    && matches(setting, query));
+            } else {
+                matching = settings.filter(setting => matches(setting, query));
+            }
+            if (query && matching.length === 0 && advanced.length === 0) continue;
+            visible += matching.length + advanced.length;
 
             const link = document.createElement('a');
             link.href = '#group-' + group.id;
             link.dataset.group = group.id;
-            link.innerHTML = `<span>${escapeHtml(group.label)}</span><span>${matching.length}</span>`;
+            link.innerHTML = `<span>${escapeHtml(group.label)}</span><span>${matching.length + advanced.length}</span>`;
             nav.appendChild(link);
 
             const section = document.createElement('section');
@@ -92,6 +115,15 @@
             const rows = section.querySelector('.settings-rows');
             for (const setting of matching) {
                 rows.appendChild(renderSetting(setting));
+            }
+            if (group.id === 'models') {
+                const warnings = modelWarnings();
+                if (warnings.length > 0) {
+                    rows.appendChild(renderWarnings(warnings));
+                }
+                if (advanced.length > 0) {
+                    rows.appendChild(renderAdvanced(advanced, query));
+                }
             }
             content.appendChild(section);
         }
@@ -108,6 +140,157 @@
         if (!query) return true;
         return [setting.label, setting.key, setting.description, setting.group]
             .some(value => String(value || '').toLowerCase().includes(query));
+    }
+
+    function findSetting(key) {
+        return snapshot ? snapshot.settings.find(setting => setting.key === key) : null;
+    }
+
+    function advancedSettings() {
+        const keys = [];
+        for (const role of PER_ROLE) {
+            keys.push(role.model);
+            if (role.ctx) keys.push(role.ctx);
+        }
+        return keys.map(findSetting).filter(Boolean);
+    }
+
+    function isOwn(setting) {
+        if (!setting) return false;
+        const value = currentValue(setting);
+        return value !== null && value !== undefined && String(value).trim() !== '';
+    }
+
+    function chatModelValue() {
+        const setting = findSetting('ollama.model');
+        const value = setting ? currentValue(setting) : '';
+        return value === null || value === undefined ? '' : String(value);
+    }
+
+    function chatCtxValue() {
+        const setting = findSetting('ollama.chat-num-ctx');
+        const value = setting ? Number(currentValue(setting)) : 0;
+        return Number.isFinite(value) && value > 0 ? value : 16384;
+    }
+
+    function effectiveValue(setting) {
+        if (!setting) return '';
+        const own = currentValue(setting);
+        if (PER_ROLE_MODEL_KEYS.has(setting.key)) {
+            if (isOwn(setting)) return String(own);
+            if (setting.key === 'ollama.followup-model') {
+                const refine = findSetting('ollama.refine-model');
+                return isOwn(refine) ? String(currentValue(refine)) : chatModelValue();
+            }
+            return chatModelValue();
+        }
+        if (PER_ROLE_CTX_KEYS.has(setting.key)) {
+            return isOwn(setting) ? own : chatCtxValue();
+        }
+        return own;
+    }
+
+    function renderWarnings(warnings) {
+        const box = document.createElement('div');
+        box.className = 'settings-warning-box';
+        const title = document.createElement('h4');
+        title.textContent = 'Varningar';
+        box.appendChild(title);
+        for (const warning of warnings) {
+            const text = document.createElement('p');
+            text.textContent = warning;
+            box.appendChild(text);
+        }
+        return box;
+    }
+
+    function modelWarnings() {
+        const chatModel = chatModelValue();
+        const chatCtx = chatCtxValue();
+        const byModel = new Map();
+        for (const role of PER_ROLE) {
+            const modelSetting = findSetting(role.model);
+            const model = isOwn(modelSetting) ? String(currentValue(modelSetting)).trim() : chatModel.trim();
+            if (!model) continue;
+            const ctxSetting = role.ctx ? findSetting(role.ctx) : null;
+            const ctx = ctxSetting && isOwn(ctxSetting) ? Number(currentValue(ctxSetting)) : chatCtx;
+            if (!byModel.has(model)) byModel.set(model, new Set());
+            byModel.get(model).add(ctx);
+        }
+        const warnings = [];
+        for (const [model, contexts] of byModel) {
+            if (contexts.size > 1) {
+                warnings.push(`Olika kontext för samma modell (${model}): ${Array.from(contexts).join(', ')}. `
+                    + 'Olika kontext för samma modell ger omladdning mellan anropen. '
+                    + 'Sätt samma värde eller låt rollen ärva.');
+            }
+        }
+
+        const configured = new Set(byModel.keys());
+        if (chatModel.trim()) configured.add(chatModel.trim());
+        const embeddingSetting = findSetting('ollama.embedding-model');
+        const embedding = embeddingSetting ? String(currentValue(embeddingSetting) || '').trim() : '';
+        if (embedding) configured.add(embedding);
+
+        const budgetSetting = findSetting('ollama.vram-gb');
+        const budget = budgetSetting ? Number(currentValue(budgetSetting)) : 0;
+        if (configured.size > 2 && Number.isFinite(budget) && budget > 0) {
+            warnings.push(`Fler än två unika modeller är konfigurerade (${Array.from(configured).join(', ')}). `
+                + `Kontrollera att GPU-budgeten på ${budget} GB räcker.`);
+        }
+
+        if (models.length > 0) {
+            const missing = Array.from(configured).filter(model => !models.includes(model));
+            if (missing.length > 0) {
+                warnings.push(`Dessa modeller är inte installerade i Ollama: ${missing.join(', ')}. `
+                    + 'Inställningarna kan sparas ändå, men anropen misslyckas tills modellerna finns.');
+            }
+        }
+        return warnings;
+    }
+
+    function renderAdvanced(advanced, query) {
+        const details = document.createElement('details');
+        details.className = 'settings-advanced';
+        details.open = Boolean(query);
+        const summary = document.createElement('summary');
+        const ownCount = PER_ROLE.reduce((count, role) => count
+            + (isOwn(findSetting(role.model)) ? 1 : 0)
+            + (role.ctx && isOwn(findSetting(role.ctx)) ? 1 : 0), 0);
+        summary.textContent = 'Avancerat: modell per roll'
+            + (ownCount > 0 ? ` (${ownCount} eget värde)` : '');
+        details.appendChild(summary);
+        const intro = document.createElement('p');
+        intro.className = 'settings-advanced-intro';
+        intro.textContent = 'Låt rollerna ärva huvudmodellen och kontextfönstret om du inte har ett särskilt skäl att avvika.';
+        details.appendChild(intro);
+        const grid = document.createElement('div');
+        grid.className = 'settings-advanced-roles';
+        for (const role of PER_ROLE) {
+            const modelSetting = findSetting(role.model);
+            const ctxSetting = role.ctx ? findSetting(role.ctx) : null;
+            if (!modelSetting || (query && !matches(modelSetting, query)
+                    && !(ctxSetting && matches(ctxSetting, query)))) {
+                continue;
+            }
+            const wrap = document.createElement('div');
+            wrap.className = 'settings-advanced-role';
+            const heading = document.createElement('h4');
+            heading.textContent = role.label;
+            wrap.appendChild(heading);
+            if (role.model === 'ollama.gate-model' || role.model === 'ollama.rewrite-model') {
+                const tip = document.createElement('p');
+                tip.className = 'settings-role-tip';
+                tip.textContent = 'Tips: en liten modell (under ca 4B parametrar) räcker oftast '
+                    + 'för det här steget och lämnar mer VRAM till huvudmodellen.';
+                wrap.appendChild(tip);
+            }
+            wrap.appendChild(renderSetting(modelSetting));
+            if (ctxSetting) wrap.appendChild(renderSetting(ctxSetting));
+            grid.appendChild(wrap);
+        }
+        details.appendChild(grid);
+        return details;
     }
 
     function renderSetting(setting) {
@@ -174,6 +357,7 @@
         if (setting.type === 'ENUM' || setting.type === 'MODEL') {
             const select = document.createElement('select');
             select.dataset.key = setting.key;
+            select.setAttribute('aria-label', setting.label);
             const options = setting.type === 'MODEL' ? modelOptions(setting) : (setting.allowedValues || []);
             for (const option of options) {
                 const element = document.createElement('option');
@@ -189,8 +373,13 @@
                 select.appendChild(element);
             }
             select.value = value == null ? '' : String(value);
-            select.addEventListener('change', () => change(setting, select.value));
-            return select;
+            select.addEventListener('change', () => change(setting, select.value === '' ? null : select.value));
+            const label = document.createElement('label');
+            label.className = 'setting-field';
+            const caption = document.createElement('span');
+            caption.textContent = setting.label;
+            label.append(caption, select);
+            return label;
         }
 
         const input = document.createElement('input');
@@ -200,8 +389,12 @@
         if (setting.type === 'DECIMAL') input.step = setting.step == null ? '0.1' : String(setting.step);
         if (setting.min != null) input.min = String(setting.min);
         if (setting.max != null) input.max = String(setting.max);
+        input.setAttribute('aria-label', setting.label);
         const value = currentValue(setting);
         input.value = value == null ? '' : String(value);
+        if (PER_ROLE_CTX_KEYS.has(setting.key) && !isOwn(setting)) {
+            input.placeholder = `ärver ${chatCtxValue()}`;
+        }
         input.addEventListener('input', () => {
             const next = input.value === '' ? null
                 : (setting.type === 'INTEGER' || setting.type === 'DECIMAL') ? Number(input.value) : input.value;
@@ -212,8 +405,8 @@
 
     function modelOptions(setting) {
         const options = [];
-        if (setting.key === 'rag.rerank.model' || setting.defaultValue === '') {
-            options.push({value: '', label: 'Standard (chattmodellen)'});
+        if (PER_ROLE_MODEL_KEYS.has(setting.key)) {
+            options.push({value: '', label: 'Samma som huvudmodellen'});
         }
         for (const model of models) {
             options.push({value: model, label: model});
@@ -231,10 +424,16 @@
     function renderMeta(setting) {
         const meta = document.createElement('div');
         meta.className = 'setting-meta';
-        const value = currentValue(setting);
-        const effective = value === null || value === undefined || value === '' ? 'Ej satt' : String(value);
-        meta.innerHTML = `<span>Effektivt: <strong>${escapeHtml(effective)}</strong></span>
-            <span>Standard: <strong>${escapeHtml(readableDefault(setting.defaultValue))}</strong></span>`;
+        const value = effectiveValue(setting);
+        const perRole = PER_ROLE_MODEL_KEYS.has(setting.key) || PER_ROLE_CTX_KEYS.has(setting.key);
+        const own = !perRole || isOwn(setting);
+        const effective = value === null || value === undefined || value === ''
+            ? 'Ej satt' : String(value);
+        const inherited = own ? '' : ' (ärvd)';
+        const fallback = perRole && readableDefault(setting.defaultValue) === 'Ej satt'
+            ? 'ärvd' : readableDefault(setting.defaultValue);
+        meta.innerHTML = `<span>Effektivt: <strong>${escapeHtml(effective)}</strong>${escapeHtml(inherited)}</span>
+            <span>Standard: <strong>${escapeHtml(fallback)}</strong></span>`;
         return meta;
     }
 
@@ -267,6 +466,41 @@
         applyDependencies();
         updateSaveButton();
         updateNavCounts();
+        updateDerived();
+    }
+
+    function updateDerived() {
+        if (!snapshot) return;
+        for (const setting of snapshot.settings) {
+            const row = content.querySelector(`.setting-row[data-key="${cssEscape(setting.key)}"]`);
+            if (!row) continue;
+            const meta = row.querySelector('.setting-meta');
+            if (meta) meta.replaceWith(renderMeta(setting));
+            if (PER_ROLE_CTX_KEYS.has(setting.key)) {
+                const input = row.querySelector('input');
+                if (input) {
+                    if (isOwn(setting)) {
+                        input.removeAttribute('placeholder');
+                    } else {
+                        input.placeholder = `ärver ${chatCtxValue()}`;
+                    }
+                }
+            }
+        }
+        const rows = content.querySelector('#group-models .settings-rows');
+        if (!rows) return;
+        const existing = rows.querySelector('.settings-warning-box');
+        if (existing) existing.remove();
+        const warnings = modelWarnings();
+        if (warnings.length > 0) {
+            const box = renderWarnings(warnings);
+            const advanced = rows.querySelector('.settings-advanced');
+            if (advanced) {
+                rows.insertBefore(box, advanced);
+            } else {
+                rows.appendChild(box);
+            }
+        }
     }
 
     function sameValue(left, right) {
@@ -308,10 +542,21 @@
 
     function updateNavCounts() {
         if (!snapshot) return;
+        const query = filter.trim().toLowerCase();
         for (const link of nav.querySelectorAll('a')) {
             const group = link.dataset.group;
-            const count = snapshot.settings.filter(setting => setting.group === group
-                && matches(setting, filter.trim().toLowerCase())).length;
+            let count;
+            if (group === 'models') {
+                count = snapshot.settings.filter(setting => setting.group === 'models'
+                    && PRIMARY_MODEL_KEYS.has(setting.key) && matches(setting, query)).length
+                    + advancedSettings().filter(setting => matches(setting, query)).length;
+            } else if (group === 'context') {
+                count = snapshot.settings.filter(setting => setting.group === 'context'
+                    && !PER_ROLE_CTX_KEYS.has(setting.key) && matches(setting, query)).length;
+            } else {
+                count = snapshot.settings.filter(setting => setting.group === group
+                    && matches(setting, query)).length;
+            }
             const badge = link.lastElementChild;
             if (badge) badge.textContent = count;
         }

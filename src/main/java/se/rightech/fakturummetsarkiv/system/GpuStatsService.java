@@ -376,93 +376,36 @@ public class GpuStatsService {
                     warnings.add(w);
                 }
             }
-            // CTX_MISMATCH - simple check based on configured num_ctx for roles sharing model? best effort
-            // check if same model name loaded multiple times or different context lengths
-            Map<String, List<Integer>> ctxByModel = new ConcurrentHashMap<>();
-            for (Map<String, Object> m : models) {
-                String name = String.valueOf(m.getOrDefault("name", ""));
-                Object cl = m.get("contextLength");
-                if (cl instanceof Number cn) {
-                    ctxByModel.computeIfAbsent(name, k -> new ArrayList<>()).add(cn.intValue());
+            // CTX_MISMATCH: samma modell konfigurerad med olika num_ctx för olika roller.
+            Map<String, List<String>> rolesByModel = new LinkedHashMap<>();
+            Map<String, Integer> ctxByRole = new LinkedHashMap<>();
+            for (String role : List.of("chat", "validator", "refine", "gate", "rewrite", "followup", "rerank")) {
+                String model = effective.effectiveModel(role);
+                if (model == null || model.isBlank()) {
+                    continue;
                 }
+                rolesByModel.computeIfAbsent(model, key -> new ArrayList<>()).add(role);
+                ctxByRole.put(role, effective.effectiveNumCtx(role));
             }
-            for (Map.Entry<String, List<Integer>> e : ctxByModel.entrySet()) {
-                if (e.getValue().size() >= 2) {
-                    // different values
-                    boolean diff = false;
-                    int first = e.getValue().get(0);
-                    for (int v : e.getValue()) {
-                        if (v != first) {
-                            diff = true;
-                            break;
-                        }
-                    }
-                    if (diff || e.getValue().size() >= 2) {
-                        // also check configured contexts for roles
+            for (Map.Entry<String, List<String>> entry : rolesByModel.entrySet()) {
+                List<Integer> values = new ArrayList<>();
+                for (String role : entry.getValue()) {
+                    Integer ctx = ctxByRole.get(role);
+                    if (ctx != null && !values.contains(ctx)) {
+                        values.add(ctx);
                     }
                 }
-            }
-            // configured check
-            try {
-                String cm = effective.string("ollama.model");
-                String vm = effective.string("ollama.validator-model");
-                String rm = effective.string("ollama.refine-model");
-                String gm = effective.string("ollama.gate-model");
-                String rwm = effective.string("ollama.rewrite-model");
-                int cc = effective.integer("ollama.chat-num-ctx");
-                int vc = effective.integer("ollama.validator-num-ctx");
-                int gc = effective.integer("ollama.gate-num-ctx");
-                int rwc = effective.integer("ollama.rewrite-num-ctx");
-                // find groups sharing same model name
-                Map<String, List<String>> rolesByModel = new LinkedHashMap<>();
-                addRole(rolesByModel, cm, "chatt");
-                addRole(rolesByModel, vm, "validering");
-                addRole(rolesByModel, rm, "förfining");
-                // map ctx to roles
-                Map<String, Integer> ctxForRole = new LinkedHashMap<>();
-                if (cm != null) {
-                    ctxForRole.put("chatt", cc);
+                if (values.size() > 1) {
+                    Map<String, Object> warning = new LinkedHashMap<>();
+                    warning.put("code", "CTX_MISMATCH");
+                    warning.put("model", entry.getKey());
+                    warning.put("message", "Modellen " + entry.getKey() + " används med olika num_ctx ("
+                            + values + "), modellen laddas om mellan anropen.");
+                    warnings.add(warning);
                 }
-                if (vm != null) {
-                    ctxForRole.put("validering", vc);
-                }
-                if (rm != null) {
-                    ctxForRole.put("förfining", effective.integer("ollama.refine-num-ctx") == 0 && vm != null && vm.equals(rm) ? vc : cc); // best effort
-                }
-                ctxForRole.put("validering", vc);
-                ctxForRole.put("förfining", effective.integer("ollama.chat-num-ctx") == cc && rm != null && rm.equals(cm) ? cc : (rm != null && rm.equals(vm) ? vc : cc));
-                // simpler: if same model used by different roles with different num_ctx in config
-                List<int[]> pairs = new ArrayList<>();
-                if (cm != null && vm != null && cm.equals(vm) && cc != vc) {
-                    pairs.add(new int[]{1});
-                }
-                if (cm != null && rm != null && cm.equals(rm)) {
-                    // refine might use same as chat
-                }
-                // check common cases
-                boolean mismatch = false;
-                String roles = "";
-                if (cm != null && vm != null && cm.equals(vm) && cc != vc) {
-                    mismatch = true;
-                    roles = "chatt och validering";
-                }
-                if (mismatch) {
-                    Map<String, Object> w = new LinkedHashMap<>();
-                    w.put("code", "CTX_MISMATCH");
-                    w.put("message", "Rollerna " + roles + " använder olika num_ctx, modellen laddas om mellan anropen");
-                    warnings.add(w);
-                }
-            } catch (Exception ignore) {
             }
         } catch (Exception ignore) {
         }
-    }
-
-    private void addRole(Map<String, List<String>> rolesByModel, String model, String role) {
-        if (model == null || model.isBlank()) {
-            return;
-        }
-        rolesByModel.computeIfAbsent(model, k -> new ArrayList<>()).add(role);
     }
 
     private final ConcurrentHashMap<String, Boolean> lastState = new ConcurrentHashMap<>();

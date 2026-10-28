@@ -70,7 +70,7 @@ public class SearchGate {
     }
 
     public boolean enabled() {
-        return enabled(effective.string("ollama.gate-model"));
+        return enabled(effective.effectiveModel("gate"));
     }
 
     public boolean enabled(String gateModel) {
@@ -78,7 +78,7 @@ public class SearchGate {
     }
 
     public Decision decide(String question) {
-        return decide(question, List.of(), effective.string("ollama.gate-model"));
+        return decide(question, List.of(), effective.effectiveModel("gate"));
     }
 
     public Decision decide(String question, String gateModel) {
@@ -109,7 +109,7 @@ public class SearchGate {
         }
         try {
             String raw = client.chat(gateModel, SYSTEM_PROMPT,
-                    buildPrompt(question, history, searchLanguage), 0.0, effective.integer("ollama.gate-num-ctx"),
+                    buildPrompt(question, history, searchLanguage), 0.0, effective.effectiveNumCtx("gate"),
                     effective.bool("ollama.gate-thinking")).trim();
             if (raw.isEmpty()) {
                 log.warn("Sökgaten gav tomt svar, söker ändå");

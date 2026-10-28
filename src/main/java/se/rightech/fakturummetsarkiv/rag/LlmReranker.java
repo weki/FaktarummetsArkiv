@@ -55,13 +55,13 @@ public class LlmReranker implements Reranker {
         if (candidates == null || candidates.size() <= 1 || query == null || query.isBlank()) {
             return candidates == null ? List.of() : candidates;
         }
-        String model = effective.string("rag.rerank.model") != null && !effective.string("rag.rerank.model").isBlank()
-                ? effective.string("rag.rerank.model") : effective.string("ollama.model");
+        String model = effective.effectiveModel("rerank");
         if (model == null || model.isBlank()) {
             return candidates;
         }
         try {
-            String raw = client.chat(model, SYSTEM_PROMPT, buildPrompt(query, candidates));
+            String raw = client.chat(model, SYSTEM_PROMPT, buildPrompt(query, candidates), 0.0,
+                    effective.effectiveNumCtx("rerank"), false);
             List<Map<String, Object>> reordered = reorder(raw, candidates);
             if (reordered.isEmpty()) {
                 log.warn("Kunde inte tolka rerank-svaret, behåller ursprunglig ordning");

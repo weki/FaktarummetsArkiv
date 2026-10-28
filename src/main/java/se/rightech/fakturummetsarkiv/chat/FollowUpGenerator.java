@@ -116,7 +116,7 @@ public class FollowUpGenerator {
             String systemPrompt = SYSTEM_PROMPT.formatted(AnswerLanguage.followUpInstruction(answerLanguage));
             String raw = client.chat(model, systemPrompt,
                     buildPrompt(question, answer, sources, !unresolved, validationNote),
-                    0.0, effective.integer("ollama.chat-num-ctx"), effective.bool("ollama.followup-thinking"));
+                    0.0, effective.effectiveNumCtx("followup"), effective.bool("ollama.followup-thinking"));
             List<String> questions = parse(raw, max, question);
             if (questions.isEmpty() && unresolved) {
                 questions = fallbackLocators(question, sources, max);
@@ -135,10 +135,7 @@ public class FollowUpGenerator {
         if (chatModel != null && !chatModel.isBlank()) {
             return chatModel;
         }
-        if (effective.string("ollama.refine-model") != null && !effective.string("ollama.refine-model").isBlank()) {
-            return effective.string("ollama.refine-model");
-        }
-        return effective.string("ollama.model") == null ? "" : effective.string("ollama.model");
+        return effective.effectiveModel("followup");
     }
 
     private static boolean looksUnanswered(String answer) {

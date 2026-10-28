@@ -28,7 +28,7 @@ class SettingsSchemaTest {
     @Test
     void exposesVerifiedDefaultsAndReadOnlyInfrastructure() {
         assertThat(schema.require("rag.gate.mode").defaultValue()).isEqualTo("model");
-        assertThat(schema.require("ollama.chat-num-ctx").defaultValue()).isEqualTo(8192);
+        assertThat(schema.require("ollama.chat-num-ctx").defaultValue()).isEqualTo(16384);
         assertThat(schema.require("qdrant.top-k").defaultValue()).isEqualTo(5);
         assertThat(schema.require("qdrant.base-url").editable()).isFalse();
         assertThat(schema.require("ollama.model").editable()).isTrue();

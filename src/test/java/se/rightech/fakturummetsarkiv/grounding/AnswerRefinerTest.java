@@ -43,11 +43,13 @@ class AnswerRefinerTest {
     }
 
     @Test
-    void disabledWithoutModel() {
+    void inheritsChatModelWhenNoOwnModel() {
+        when(client.chat(eq("deepseek-r1:14b"), any(), any(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("  grundat svar  ");
         AnswerRefiner refiner = new AnswerRefiner(client, props(""), RAG);
 
-        assertThat(refiner.enabled()).isFalse();
-        assertThat(refiner.refine("fraga", sources(), "utkast")).isNull();
+        assertThat(refiner.enabled()).isTrue();
+        assertThat(refiner.refine("fraga", sources(), "utkast")).isEqualTo("grundat svar");
     }
 
     @Test

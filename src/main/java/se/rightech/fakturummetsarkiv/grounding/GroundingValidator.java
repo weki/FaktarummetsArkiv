@@ -68,8 +68,9 @@ public class GroundingValidator {
         if (!enabled) {
             return new GroundingResult(null, "Validering avstangd");
         }
-        String model = validatorModel;
-        if (model == null || model.isBlank()) {
+        String model = validatorModel != null && !validatorModel.isBlank()
+                ? validatorModel : effective.effectiveModel("validator");
+        if (model.isBlank()) {
             return new GroundingResult(null, "Ingen domarmodell vald");
         }
         if (answer == null || answer.isBlank()) {
@@ -80,7 +81,7 @@ public class GroundingValidator {
         }
         try {
             String raw = client.chat(model, SYSTEM_PROMPT, buildUserPrompt(question, sources, answer),
-                    0.0, effective.integer("ollama.validator-num-ctx"), effective.bool("ollama.validator-thinking"));
+                    0.0, effective.effectiveNumCtx("validator"), effective.bool("ollama.validator-thinking"));
             return parse(raw);
         } catch (Exception ex) {
             return new GroundingResult(null, "Kunde inte verifiera: " + ex.getMessage());

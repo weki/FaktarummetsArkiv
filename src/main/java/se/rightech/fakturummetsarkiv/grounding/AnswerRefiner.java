@@ -54,7 +54,7 @@ public class AnswerRefiner {
     }
 
     public boolean enabled() {
-        return enabled(effective.string("ollama.refine-model"));
+        return enabled(effective.effectiveModel("refine"));
     }
 
     public boolean enabled(String model) {
@@ -66,7 +66,7 @@ public class AnswerRefiner {
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft) {
-        return refine(question, sources, draft, effective.string("ollama.refine-model"));
+        return refine(question, sources, draft, effective.effectiveModel("refine"));
     }
 
     public String refine(String question, List<Map<String, Object>> sources, String draft, String model) {
@@ -75,14 +75,14 @@ public class AnswerRefiner {
 
     public String refine(String question, List<Map<String, Object>> sources, String draft, String model,
                          String answerLanguage) {
-        String chosen = model != null && !model.isBlank() ? model : effective.string("ollama.refine-model");
+        String chosen = model != null && !model.isBlank() ? model : effective.effectiveModel("refine");
         if (!enabled(chosen) || sources == null || sources.isEmpty()) {
             return null;
         }
         try {
             String systemPrompt = SYSTEM_PROMPT.formatted(AnswerLanguage.answerInstruction(answerLanguage));
             String raw = client.chat(chosen, systemPrompt, buildPrompt(question, sources, draft),
-                    0.0, effective.integer("ollama.chat-num-ctx"), effective.bool("ollama.refine-thinking"));
+                    0.0, effective.effectiveNumCtx("refine"), effective.bool("ollama.refine-thinking"));
             String answer = raw == null ? "" : raw.trim();
             return answer.isEmpty() ? null : answer;
         } catch (Exception ex) {

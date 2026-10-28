@@ -41,6 +41,12 @@ public class SettingsValidator {
 
     private Object convert(SettingDefinition definition, Object raw) {
         try {
+            // Tomt värde betyder "ärv" när inställningen saknar ett eget standardvärde.
+            if (raw instanceof String text && text.isBlank()
+                    && (definition.defaultValue() == null
+                    || String.valueOf(definition.defaultValue()).isBlank())) {
+                return null;
+            }
             return switch (definition.type()) {
                 case BOOLEAN -> asBoolean(definition, raw);
                 case INTEGER -> asInteger(definition, raw);
@@ -144,6 +150,7 @@ public class SettingsValidator {
 
     private static Set<String> modelKeys() {
         return Set.of("ollama.model", "ollama.validator-model", "ollama.embedding-model",
-                "ollama.refine-model", "ollama.gate-model", "ollama.rewrite-model", "rag.rerank.model");
+                "ollama.refine-model", "ollama.gate-model", "ollama.rewrite-model",
+                "ollama.followup-model", "rag.rerank.model");
     }
 }
