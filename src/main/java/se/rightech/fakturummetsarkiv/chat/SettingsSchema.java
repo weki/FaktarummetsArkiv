@@ -21,6 +21,7 @@ public class SettingsSchema {
                 new SettingsGroup("validation", "Validering", "Grundningskontroll och modellernas thinking-läge.", 40),
                 new SettingsGroup("context", "Kontext och VRAM", "Kontextfönster per roll och GPU-budget.", 50),
                 new SettingsGroup("indexing", "Indexering", "Chunkning och dokumentlagring. Kräver omindexering för gamla dokument.", 60),
+                new SettingsGroup("gpu", "GPU", "GPU- och modellstatus från Ollama-maskinen.", 65),
                 new SettingsGroup("limits", "Gränser", "Uppladdning, requeststorlek och arkivsökvägar.", 70),
                 new SettingsGroup("infrastructure", "Infrastruktur", "Ollama, Qdrant och övrig drift. Ändras i konfigurationen och kräver omstart.", 80));
 
@@ -71,6 +72,9 @@ public class SettingsSchema {
                 integer("rag.chunk-overlap", "indexing", "Chunköverlapp", "Överlapp mellan chunks.", 200, 0, 10000, 10, ApplyMode.REINDEX, null, "Gamla dokument behöver indexeras om för att få ny chunkning."),
 
                 integer("rag.neighbor-chunks", "search", "Grannstycken", "Antal stycken före och efter varje träff som tas med så att procedurer inte klipps av. 0 stänger av.", 1, 0, 3, 1, ApplyMode.LIVE, null, null),
+
+                text("gpu.stats-url", "gpu", "GPU-stats URL", "Adress till gpu-stats på Ollama-maskinen, t.ex. http://192.168.1.20:9101/gpu", "", ApplyMode.LIVE, null, null),
+                integer("gpu.poll-interval-ms", "gpu", "Pollintervall (ms)", "Hur ofta GPU-status uppdateras i gränssnittet.", 2000, 1000, 10000, 100, ApplyMode.LIVE, null, null),
 
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),

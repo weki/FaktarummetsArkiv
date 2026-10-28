@@ -127,6 +127,8 @@ public class EffectiveSettings {
             case "qdrant.passage-prefix" -> qdrant.passagePrefix();
             case "archive.upload-dir" -> archive.uploadDir();
             case "archive.pdf-roots" -> archive.pdfRoots();
+            case "gpu.stats-url" -> "";
+            case "gpu.poll-interval-ms" -> 2000;
             case "spring.servlet.multipart.max-file-size", "spring.servlet.multipart.max-request-size",
                  "server.tomcat.max-swallow-size", "spring.codec.max-in-memory-size" ->
                     environment == null ? null : environment.getProperty(key);
