@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GPU och modeller – Fakturummets Arkiv</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/gpu.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2318233b'/%3E%3Cpath d='M18 24l14-6 14 6-14 6-14-6zM18 34l14 6 14-6M18 44l14 6 14-6' stroke='%2338bdf8' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app-layout">
+    <nav id="sidebar" data-page="gpu"></nav>
+    <main class="page-main">
+        <div class="page-inner" id="gpuApp">
+            <header class="gpu-head">
+                <div class="gpu-title">
+                    <h2>GPU och modeller</h2>
+                    <div class="gpu-sub"><span id="gpuName">-</span> · <span id="gpuVram">-</span></div>
+                </div>
+                <div class="gpu-head-actions">
+                    <div class="gpu-live" id="gpuLive">
+                        <span class="gpu-live-dot"></span>
+                        <span id="gpuLiveText">Kontrollerar…</span>
+                    </div>
+                    <div class="gpu-range">
+                        <button type="button" class="active" data-min="2">2 min</button>
+                        <button type="button" data-min="5">5 min</button>
+                        <button type="button" data-min="10">10 min</button>
+                    </div>
+                </div>
+            </header>
+
+            <div id="gpuBanner" class="gpu-banner" style="display:none">
+                <span>⚠</span>
+                <span id="gpuBannerText">Ingen kontakt med gpu-stats</span>
+            </div>
+
+            <div id="gpuWarnBox" class="gpu-warnbox" style="display:none">
+                <div id="gpuWarnList"></div>
+            </div>
+
+            <div id="gpuDisabled" class="gpu-empty" style="display:none">
+                GPU-delen är avstängd. Sätt <a href="settings.html">gpu.stats-url</a> under Inställningar → GPU för att visa status.
+            </div>
+
+            <section class="gpu-kpi-grid">
+                <article class="gpu-kpi">
+                    <div class="gpu-kpi-label">Belastning</div>
+                    <div class="gpu-kpi-value" id="kpiUtil">-</div>
+                    <div class="gpu-kpi-sub">GPU-utnyttjande</div>
+                </article>
+                <article class="gpu-kpi">
+                    <div class="gpu-kpi-label">VRAM</div>
+                    <div class="gpu-kpi-value" id="kpiVram">-</div>
+                    <div class="gpu-kpi-sub" id="kpiVramSub">-</div>
+                </article>
+                <article class="gpu-kpi">
+                    <div class="gpu-kpi-label">Temperatur</div>
+                    <div class="gpu-kpi-value" id="kpiTemp">-</div>
+                    <div class="gpu-kpi-sub">°C</div>
+                </article>
+                <article class="gpu-kpi">
+                    <div class="gpu-kpi-label">Effekt</div>
+                    <div class="gpu-kpi-value" id="kpiPow">-</div>
+                    <div class="gpu-kpi-sub" id="kpiPowSub">-</div>
+                </article>
+            </section>
+
+            <section class="gpu-charts" id="gpuChartsWrap">
+                <article class="gpu-card">
+                    <header class="gpu-card-head">
+                        <div>
+                            <div class="gpu-card-title">Belastning</div>
+                            <div class="gpu-card-sub">%</div>
+                        </div>
+                    </header>
+                    <div class="gpu-chart">
+                        <svg id="chartUtil" class="gpu-svg" viewBox="0 0 520 200" preserveAspectRatio="none"></svg>
+                    </div>
+                </article>
+                <article class="gpu-card">
+                    <header class="gpu-card-head">
+                        <div>
+                            <div class="gpu-card-title">VRAM</div>
+                            <div class="gpu-card-sub">% av totalt</div>
+                        </div>
+                    </header>
+                    <div class="gpu-chart">
+                        <svg id="chartMem" class="gpu-svg" viewBox="0 0 520 200" preserveAspectRatio="none"></svg>
+                    </div>
+                </article>
+            </section>
+
+            <section class="gpu-section">
+                <header class="gpu-section-head">
+                    <h3>Laddade modeller</h3>
+                </header>
+                <div class="gpu-table-wrap">
+                    <table class="gpu-table">
+                        <thead>
+                        <tr>
+                            <th>Modell</th>
+                            <th>Storlek</th>
+                            <th>Placering</th>
+                            <th>Kontext</th>
+                            <th>Går ut</th>
+                        </tr>
+                        </thead>
+                        <tbody id="gpuModelsBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="gpu-section">
+                <header class="gpu-section-head">
+                    <h3>GPU-processer</h3>
+                </header>
+                <div class="gpu-table-wrap">
+                    <table class="gpu-table">
+                        <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>Process</th>
+                            <th>VRAM</th>
+                        </tr>
+                        </thead>
+                        <tbody id="gpuProcBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<script src="js/shared/common.js"></script>
+<script src="js/shared/threads-store.js"></script>
+<script src="js/shared/gpu-poller.js"></script>
+<script src="js/shared/sidebar.js"></script>
+<script src="js/shared/model-status.js"></script>
+<script src="js/gpu/gpu.js"></script>
+</body>
+</html>

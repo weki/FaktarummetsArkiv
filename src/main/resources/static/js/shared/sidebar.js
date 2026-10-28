@@ -6,6 +6,7 @@ const SIDEBAR_ICONS = {
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
     docs: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/>',
+    gpu: '<rect x="4" y="7" width="16" height="10" rx="2"/><path d="M9 7V4M15 7V4M9 17v3M15 17v3"/>',
     reset: '<path d="M3 12a9 9 0 019-9 9 9 0 016.4 2.6L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9 9 0 01-6.4-2.6L3 16M3 21v-5h5"/>'
 };
 
@@ -36,7 +37,9 @@ function buildSidebar(nav) {
         + '<div id="threadList" class="thread-list"></div>'
         + '<div class="sidebar-foot">'
         + link('/documents.html', 'documentsLink', 'Dokument', 'docs', 'documents')
+        + link('/gpu.html', 'gpuLink', 'GPU', 'gpu', 'gpu')
         + link('/settings.html', 'settingsLink', 'Inställningar', 'settings', 'settings')
+        + '<div id="gpuSidebarCard" class="gpu-sidebar-card" style="display:none"></div>'
         + '<div class="model-row"><div id="modelStatus" class="model-status" role="status"><span class="dot"></span>'
         + '<span id="modelStatusText">Kontrollerar modeller…</span></div>'
         + '<button id="resetOllamaBtn" type="button" class="reset-ollama-btn" title="Återställ Ollama: avbryt pågående svar och ladda om modellerna">'
@@ -94,14 +97,55 @@ buildSidebar(sidebarNav);
 if (sidebarNav.dataset.page !== 'chat') {
     const box = document.getElementById('threadList');
     const search = document.getElementById('threadSearch');
-    const draw = () => renderThreadListInto(box, search.value, {activeId: null});
-    search.addEventListener('input', draw);
-    draw();
-    document.addEventListener('keydown', (event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-            event.preventDefault();
-            search.focus();
-            search.select();
-        }
-    });
+    if (box && search) {
+        const draw = () => renderThreadListInto(box, search.value, {activeId: null});
+        search.addEventListener('input', draw);
+        draw();
+        document.addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                search.focus();
+                search.select();
+            }
+        });
+    }
 }
+
+(function initGpuSidebar() {
+    var card = document.getElementById('gpuSidebarCard');
+    if (!card) return;
+    if (typeof window.GpuPoller === 'undefined') {
+        var s = document.createElement('script');
+        s.src = 'js/shared/gpu-poller.js';
+        s.onload = initGpuSidebar;
+        document.head.appendChild(s);
+        return;
+    }
+    function render(data) {
+        if (!data) return;
+        var gpu = data.gpu || {};
+        if (gpu.reason === 'disabled') {
+            card.style.display = 'none';
+            return;
+        }
+        card.style.display = 'block';
+        var util = typeof gpu.utilPct === 'number' ? gpu.utilPct : null;
+        var mu = typeof gpu.memUsedMiB === 'number' ? gpu.memUsedMiB : null;
+        var mt = typeof gpu.memTotalMiB === 'number' ? gpu.memTotalMiB : null;
+        var muGb = mu != null ? (mu / 1024).toFixed(1) : '-';
+        var mtGb = mt != null ? (mt / 1024).toFixed(1) : '-';
+        var warn = (data.warnings && data.warnings.length > 0) || data._stale;
+        card.innerHTML = '<a class="gpu-sidebar-link" href="gpu.html">'
+            + '<div class="gpu-sidebar-row"><span>GPU</span><span class="gpu-sidebar-val">' + (util != null ? util + '%' : '-') + '</span></div>'
+            + '<div class="gpu-sidebar-bar"><span style="width:' + (util != null ? Math.max(0, Math.min(100, util)) : 0) + '%"></span></div>'
+            + '<div class="gpu-sidebar-row"><span>VRAM</span><span class="gpu-sidebar-val">' + muGb + ' / ' + mtGb + ' GB</span></div>'
+            + '<div class="gpu-sidebar-bar"><span style="width:' + (mu != null && mt != null && mt > 0 ? Math.max(0, Math.min(100, (mu/mt)*100)) : 0) + '%"></span></div>'
+            + '</a>'
+            + '<span class="gpu-sidebar-dot ' + (warn ? 'warn' : '') + '"></span>';
+        card.classList.toggle('gpu-sidebar-stale', !!data._stale);
+    }
+    window.GpuPoller.subscribe(render);
+    window.addEventListener('pagehide', function () {
+        try { window.GpuPoller.unsubscribe(render); } catch (e) { }
+    });
+})();
