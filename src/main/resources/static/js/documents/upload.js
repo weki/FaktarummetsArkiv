@@ -1,6 +1,7 @@
 /* Uppladdning av PDF-filer. */
 const uploadForm = document.getElementById('uploadForm');
 const uploadBtn = document.getElementById('uploadBtn');
+const uploadCollectionName = document.getElementById('uploadCollectionName');
 const uploadTags = document.getElementById('uploadTags');
 const uploadFolderBtn = document.getElementById('uploadFolderBtn');
 const uploadFolderInput = document.getElementById('uploadFolderInput');
@@ -101,6 +102,7 @@ uploadForm.addEventListener('submit', async (event) => {
         setDocumentsStatus('Välj minst en fil', 'err');
         return;
     }
+    const collection = (uploadCollectionName.value || '').trim();
     const tags = uploadTags.value.split(',').map(t => t.trim()).filter(Boolean);
     const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
     uploadBtn.disabled = true;
@@ -118,7 +120,7 @@ uploadForm.addEventListener('submit', async (event) => {
             setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
                 totalBytes ? (base / totalBytes) * 100 : 100,
                 formatBytes(base) + ' av ' + formatBytes(totalBytes));
-            const added = await uploadFile(file, '', tags, (loaded) => {
+            const added = await uploadFile(file, collection, tags, (loaded) => {
                 const pct = totalBytes ? ((base + loaded) / totalBytes) * 100 : 100;
                 setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
                     pct, formatBytes(base + loaded) + ' av ' + formatBytes(totalBytes));
