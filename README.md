@@ -136,7 +136,7 @@ Starta sedan appen:
 | --- | --- | --- |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Adress till Ollama |
 | `QDRANT_BASE_URL` | `http://localhost:6333` | Adress till Qdrant |
-| `QDRANT_COLLECTION` | `docs` | Standardkollektion |
+| `QDRANT_COLLECTION` | `FaktarummetsArkiv` | Standardkollektion |
 | `CHAT_THINKING` | `true` | Skicka `think` till qwen3-modeller |
 
 Övriga inställningar kan sättas i `src/main/resources/application.properties` eller i den
@@ -145,7 +145,7 @@ gitignorerade filen `application-local.properties`:
 ```properties
 ollama.base-url=http://localhost:11434
 qdrant.base-url=http://localhost:6333
-qdrant.collection=docs
+qdrant.collection=FaktarummetsArkiv
 ```
 
 Uppladdade original sparas i `archive/` (kan ändras med `archive.upload-dir`). PDF-filer utanför

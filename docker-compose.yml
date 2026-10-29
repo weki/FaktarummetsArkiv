@@ -15,7 +15,7 @@ services:
       - qdrant
     environment:
       QDRANT_BASE_URL: http://qdrant:6333
-      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-docs}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-FaktarummetsArkiv}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
     extra_hosts:
