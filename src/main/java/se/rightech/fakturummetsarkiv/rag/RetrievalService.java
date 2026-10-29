@@ -77,16 +77,19 @@ public class RetrievalService {
             return List.of();
         }
 
-        List<String> targets = resolveCollections(collections);
-        if (targets.contains(qdrant.collection())) {
-            qdrantClient.ensureCollection();
-        }
+        List<String> sourceSystems = collections == null ? List.of() : collections.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .toList();
+
+        List<String> targets = List.of(qdrant.collection());
+        qdrantClient.ensureCollection();
 
         List<Map<String, Object>> sources;
         if (effective.bool("rag.hybrid.enabled")) {
-            sources = hybridSearch(query, vector, targets, topK, scoreThreshold, documentIds);
+            sources = hybridSearch(query, vector, targets, topK, scoreThreshold, documentIds, sourceSystems);
         } else {
-            sources = denseSearch(vector, targets, topK, scoreThreshold, documentIds);
+            sources = denseSearch(vector, targets, topK, scoreThreshold, documentIds, sourceSystems);
         }
 
         List<Map<String, Object>> deduped = new ArrayList<>();
@@ -119,11 +122,12 @@ public class RetrievalService {
     }
 
     private List<Map<String, Object>> denseSearch(double[] vector, List<String> targets, int topK,
-                                                  Double scoreThreshold, List<String> documentIds) {
+                                                  Double scoreThreshold, List<String> documentIds,
+                                                  List<String> sourceSystems) {
         List<Map<String, Object>> sources = new ArrayList<>();
         for (String collection : targets) {
             for (QdrantClient.ScoredPoint hit : qdrantClient.search(collection, vector, topK, scoreThreshold,
-                    documentIds)) {
+                    documentIds, sourceSystems)) {
                 sources.add(toSource(collection, hit.payload(), hit.score()));
             }
         }
@@ -133,20 +137,21 @@ public class RetrievalService {
     }
 
     private List<Map<String, Object>> hybridSearch(String query, double[] vector, List<String> targets, int topK,
-                                                   Double scoreThreshold, List<String> documentIds) {
+                                                   Double scoreThreshold, List<String> documentIds,
+                                                   List<String> sourceSystems) {
         int candidates = Math.max(topK * 4, 20);
         Map<String, FusedHit> fused = new LinkedHashMap<>();
 
         for (String collection : targets) {
             qdrantClient.ensureTextIndex(collection);
             List<QdrantClient.ScoredPoint> dense = qdrantClient.search(collection, vector, candidates,
-                    scoreThreshold, documentIds);
+                    scoreThreshold, documentIds, sourceSystems);
             for (int i = 0; i < dense.size(); i++) {
                 QdrantClient.ScoredPoint hit = dense.get(i);
                 addFused(fused, hit, collection, 1.0 / (effective.integer("rag.hybrid.rrf-k") + i + 1));
             }
             List<QdrantClient.ScoredPoint> keyword = qdrantClient.keywordSearch(collection, query,
-                    effective.integer("rag.hybrid.keyword-limit"), documentIds);
+                    effective.integer("rag.hybrid.keyword-limit"), documentIds, sourceSystems);
             for (int i = 0; i < keyword.size(); i++) {
                 QdrantClient.ScoredPoint hit = keyword.get(i);
                 addFused(fused, hit, collection, 1.0 / (effective.integer("rag.hybrid.rrf-k") + i + 1));
@@ -234,21 +239,6 @@ public class RetrievalService {
         if (payload.containsKey(key) && payload.get(key) != null) {
             target.put(key, payload.get(key));
         }
-    }
-
-    private List<String> resolveCollections(List<String> collections) {
-        List<String> result = new ArrayList<>();
-        if (collections != null) {
-            for (String collection : collections) {
-                if (collection != null && !collection.isBlank() && !result.contains(collection)) {
-                    result.add(collection);
-                }
-            }
-        }
-        if (result.isEmpty()) {
-            result.add(qdrant.collection());
-        }
-        return result;
     }
 
     private static String dedupKey(Map<String, Object> source) {

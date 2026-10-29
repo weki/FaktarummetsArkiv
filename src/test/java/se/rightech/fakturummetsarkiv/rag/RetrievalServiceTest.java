@@ -58,9 +58,9 @@ class RetrievalServiceTest {
     @Test
     void fusesVectorAndKeywordResultsWithRrf() {
         RetrievalService service = service(true);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(hit("a", 0.9, "alpha"), hit("b", 0.8, "beta")));
-        when(qdrantClient.keywordSearch(eq("docs"), anyString(), anyInt(), any()))
+        when(qdrantClient.keywordSearch(eq("docs"), anyString(), anyInt(), any(), any()))
                 .thenReturn(List.of(hit("b", 2.0, "beta"), hit("c", 1.0, "gamma")));
 
         List<Map<String, Object>> sources = service.retrieve("beta", List.of("docs"), 5, 0.3, null);
@@ -77,7 +77,7 @@ class RetrievalServiceTest {
         RetrievalService service = service(false, true);
         List<Map<String, Object>> candidates = List.of(
                 source("a", "alpha"), source("b", "beta"), source("c", "gamma"));
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(hit("a", 0.9, "alpha"), hit("b", 0.8, "beta"), hit("c", 0.7, "gamma")));
         when(reranker.rerank(eq("beta"), any(), eq(2))).thenReturn(List.of(candidates.get(1), candidates.get(2)));
 
@@ -94,21 +94,21 @@ class RetrievalServiceTest {
     @Test
     void usesOnlyVectorSearchWhenHybridIsDisabled() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(hit("a", 0.9, "alpha"), hit("b", 0.8, "beta")));
 
         List<Map<String, Object>> sources = service.retrieve("beta", List.of("docs"), 5, 0.3, null);
 
         assertThat(sources).extracting(source -> source.get("title"))
                 .containsExactly("doc-a", "doc-b");
-        verify(qdrantClient, never()).keywordSearch(anyString(), anyString(), anyInt(), any());
+        verify(qdrantClient, never()).keywordSearch(anyString(), anyString(), anyInt(), any(), any());
         verify(qdrantClient, never()).ensureTextIndex(anyString());
     }
 
     @Test
     void neighborExpansionKeepsHitWhenNeighborsMissing() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
                         new java.util.LinkedHashMap<>() {{
                             put("title", "doc-a");
@@ -130,7 +130,7 @@ class RetrievalServiceTest {
     @Test
     void neighborExpansionKeepsHitWithoutChunkIndex() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
                         new java.util.LinkedHashMap<>() {{
                             put("title", "doc-a");
@@ -151,7 +151,7 @@ class RetrievalServiceTest {
     @Test
     void neighborExpansionKeepsOriginalOnScrollException() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(new QdrantClient.ScoredPoint("a", 0.9,
                         new java.util.LinkedHashMap<>() {{
                             put("title", "doc-a");
@@ -173,7 +173,7 @@ class RetrievalServiceTest {
     @Test
     void neighborExpansionPreservesOrderAndCountOfDocuments() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(
                         new QdrantClient.ScoredPoint("a", 0.9,
                                 new java.util.LinkedHashMap<>() {{
@@ -210,7 +210,7 @@ class RetrievalServiceTest {
     @Test
     void mergesAdjacentHitsWithoutDuplicatedText() {
         RetrievalService service = service(false);
-        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any()))
+        when(qdrantClient.search(eq("docs"), any(double[].class), anyInt(), any(), any(), any()))
                 .thenReturn(List.of(
                         new QdrantClient.ScoredPoint("a", 0.9,
                                 new java.util.LinkedHashMap<>() {{

@@ -417,7 +417,22 @@ public class DocumentService {
     }
 
     public List<String> collections() {
-        return qdrantClient.listCollections();
+        String main = qdrant.collection();
+        Set<String> result = new LinkedHashSet<>();
+        try {
+            for (Map<String, Object> payload : qdrantClient.scrollPayloads(main, List.of("collection"))) {
+                String value = firstText(payload.get("collection"));
+                if (value != null && !value.isBlank()) {
+                    result.add(value.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // fall through to default
+        }
+        if (result.isEmpty()) {
+            result.add(main);
+        }
+        return new ArrayList<>(result);
     }
 
     /** Alla taggar som används i någon kollektion. */

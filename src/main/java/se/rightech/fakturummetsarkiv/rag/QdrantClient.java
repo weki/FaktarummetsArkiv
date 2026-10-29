@@ -133,6 +133,11 @@ public class QdrantClient {
      * kandidaterna rangordnas lokalt efter antal matchande frågetermer.
      */
     public List<ScoredPoint> keywordSearch(String collection, String query, int limit, List<String> documentIds) {
+        return keywordSearch(collection, query, limit, documentIds, null);
+    }
+
+    public List<ScoredPoint> keywordSearch(String collection, String query, int limit, List<String> documentIds,
+                                           List<String> sourceSystems) {
         List<String> terms = keywordTerms(query);
         if (terms.isEmpty()) {
             return List.of();
@@ -145,6 +150,13 @@ public class QdrantClient {
                 .toList();
         if (!ids.isEmpty()) {
             must.add(Map.of("key", "documentId", "match", Map.of("any", ids)));
+        }
+        List<String> systems = sourceSystems == null ? List.of() : sourceSystems.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .toList();
+        if (!systems.isEmpty()) {
+            must.add(Map.of("key", "collection", "match", Map.of("any", systems)));
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("limit", Math.max(1, limit));
@@ -257,6 +269,11 @@ public class QdrantClient {
 
     public List<ScoredPoint> search(String collection, double[] vector, int limit, Double scoreThreshold,
                                     List<String> documentIds) {
+        return search(collection, vector, limit, scoreThreshold, documentIds, null);
+    }
+
+    public List<ScoredPoint> search(String collection, double[] vector, int limit, Double scoreThreshold,
+                                    List<String> documentIds, List<String> sourceSystems) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("vector", vector);
         body.put("limit", limit);
@@ -264,13 +281,23 @@ public class QdrantClient {
         if (scoreThreshold != null) {
             body.put("score_threshold", scoreThreshold);
         }
+        List<Map<String, Object>> must = new ArrayList<>();
         List<String> ids = documentIds == null ? List.of() : documentIds.stream()
                 .filter(id -> id != null && !id.isBlank())
                 .distinct()
                 .toList();
         if (!ids.isEmpty()) {
-            body.put("filter", Map.of("must", List.of(
-                    Map.of("key", "documentId", "match", Map.of("any", ids)))));
+            must.add(Map.of("key", "documentId", "match", Map.of("any", ids)));
+        }
+        List<String> systems = sourceSystems == null ? List.of() : sourceSystems.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .toList();
+        if (!systems.isEmpty()) {
+            must.add(Map.of("key", "collection", "match", Map.of("any", systems)));
+        }
+        if (!must.isEmpty()) {
+            body.put("filter", Map.of("must", must));
         }
         JsonNode node = restClient.post()
                 .uri("/collections/{collection}/points/search", collection)
