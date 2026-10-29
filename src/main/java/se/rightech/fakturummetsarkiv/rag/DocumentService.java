@@ -174,6 +174,8 @@ public class DocumentService {
         String id = firstText(first.get("documentId"));
         String name = firstText(first.get("title"));
         String path = firstText(first.get("path"));
+        String payloadCollection = firstText(first.get("collection"));
+        String sourceSystem = payloadCollection != null ? payloadCollection : collection;
         Set<String> tags = new LinkedHashSet<>();
         long characters = 0;
         long createdAt = 0;
@@ -194,7 +196,7 @@ public class DocumentService {
             }
         }
         return new DocumentInfo(id, name == null ? "Dokument" : name, payloads.size(), (int) characters, path,
-                collection, List.copyOf(tags), createdAt > 0 ? Instant.ofEpochMilli(createdAt) : null,
+                sourceSystem, List.copyOf(tags), createdAt > 0 ? Instant.ofEpochMilli(createdAt) : null,
                 true, null);
     }
 
@@ -342,7 +344,9 @@ public class DocumentService {
                     name = firstText(payload.get("source"));
                 }
                 final String docName = name == null ? "Dokument" : name;
-                Group group = groups.computeIfAbsent(id, key -> new Group(key, docName, collection));
+                String payloadCollection = firstText(payload.get("collection"));
+                Group group = groups.computeIfAbsent(id, key ->
+                        new Group(key, docName, payloadCollection != null ? payloadCollection : collection));
                 group.chunks++;
                 Number chars = asNumber(payload.get("characters"));
                 if (chars != null) {
@@ -381,19 +385,22 @@ public class DocumentService {
                 Map.of("key", "documentId", "match", Map.of("value", id)),
                 Map.of("key", "source", "match", Map.of("value", id))));
         List<Map<String, Object>> allPayloads = new ArrayList<>();
-        Set<String> collections = new LinkedHashSet<>();
+        String payloadCollection = null;
         for (String collection : List.of(qdrant.collection())) {
             List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(collection,
                     List.of("title", "source", "path", "page", "chunkIndex", "text", "tags", "collection"), filter);
             if (!payloads.isEmpty()) {
                 allPayloads.addAll(payloads);
-                collections.add(collection);
+                if (payloadCollection == null) {
+                    payloadCollection = firstText(payloads.get(0).get("collection"));
+                }
             }
         }
         if (allPayloads.isEmpty()) {
             throw new IllegalArgumentException("Dokumentet finns inte");
         }
-        return buildDetail(id, String.join(", ", collections), allPayloads);
+        String sourceSystem = payloadCollection != null ? payloadCollection : qdrant.collection();
+        return buildDetail(id, sourceSystem, allPayloads);
     }
 
     private DocumentDetail buildDetail(String id, String collection, List<Map<String, Object>> payloads) {
