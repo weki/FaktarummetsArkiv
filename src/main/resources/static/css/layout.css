@@ -148,3 +148,26 @@
 .page-head-left { display: flex; align-items: center; gap: 14px; }
 a.thread-item { text-decoration: none; display: flex; }
 a.primary-btn { text-decoration: none; }
+
+/* Varningsmärke för trådar vars valda källsystem inte längre finns i arkivet. */
+.thread-stale-badge {
+    flex: none;
+    color: var(--warn);
+    font-size: 10.5px;
+    font-weight: 650;
+    border: 1px solid rgba(251, 191, 36, .4);
+    border-radius: 999px;
+    padding: 1px 7px;
+    background: rgba(251, 191, 36, .09);
+    cursor: help;
+}
+
+.thread-item .thread-stale-badge,
+.thread-row .thread-stale-badge {
+    align-self: flex-start;
+    margin-top: 4px;
+}
+
+.scope-stale {
+    color: var(--warn) !important;
+}

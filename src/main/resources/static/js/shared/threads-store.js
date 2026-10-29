@@ -45,6 +45,20 @@ function scopeLabel(thread) {
     return 'alla dokument';
 }
 
+/** Trådens sparade källsystem som inte längre finns i arkivet (t.ex. efter namnbyte). */
+function staleCollections(thread) {
+    if (!thread || !Array.isArray(thread.collections) || !thread.collections.length) return [];
+    if (!Array.isArray(qdrantCollections)) return [];
+    return thread.collections.filter(name => !qdrantCollections.includes(name));
+}
+
+/** Hämtar kända källsystem och ritar om listan så att varningsmärken visas. */
+async function refreshThreadStaleMarkers() {
+    await loadCollections();
+    if (typeof renderThreadList === 'function') renderThreadList();
+    if (typeof renderChatHeader === 'function') renderChatHeader();
+}
+
 function isToday(ts) {
     return ts && new Date(ts).toDateString() === new Date().toDateString();
 }

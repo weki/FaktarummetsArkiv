@@ -74,6 +74,13 @@ function renderThreadListInto(box, searchText, opts) {
             btn.appendChild(el('span', 'thread-name', threadTitle(thread)));
             const time = formatThreadTime(thread.updatedAt);
             btn.appendChild(el('span', 'thread-meta', (time ? time + ' · ' : '') + scopeLabel(thread)));
+            const stale = staleCollections(thread);
+            if (stale.length) {
+                const badge = el('span', 'thread-stale-badge', '⚠ saknas');
+                badge.title = 'Valt källsystem finns inte längre i arkivet: ' + stale.join(', ')
+                    + '. Sökningen i tråden ger inga träffar.';
+                btn.appendChild(badge);
+            }
             if (opts.onSelect) btn.addEventListener('click', () => opts.onSelect(thread.id));
             item.appendChild(btn);
             if (opts.onDelete) {
@@ -100,6 +107,9 @@ if (sidebarNav.dataset.page !== 'chat') {
         const draw = () => renderThreadListInto(box, search.value, {activeId: null});
         search.addEventListener('input', draw);
         draw();
+        if (typeof refreshThreadStaleMarkers === 'function') {
+            refreshThreadStaleMarkers().then(draw).catch(() => {});
+        }
         document.addEventListener('keydown', (event) => {
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
@@ -108,6 +118,8 @@ if (sidebarNav.dataset.page !== 'chat') {
             }
         });
     }
+} else if (typeof refreshThreadStaleMarkers === 'function') {
+    refreshThreadStaleMarkers().catch(() => {});
 }
 
 (function initGpuSidebar() {

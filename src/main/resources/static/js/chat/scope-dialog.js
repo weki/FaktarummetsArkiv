@@ -35,6 +35,7 @@ async function loadThreadDocCollections() {
     try {
         const res = await fetch(DOC_API + '/collections');
         const collections = await res.json().catch(() => []);
+        if (Array.isArray(collections)) qdrantCollections = collections;
         const available = new Set(collections);
         const thread = threads.find(t => t.id === threadDocTargetId);
         const selected = new Set(thread?.collections || []);
