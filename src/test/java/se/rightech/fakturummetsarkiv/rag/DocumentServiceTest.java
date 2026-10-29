@@ -199,19 +199,15 @@ class DocumentServiceTest {
     }
 
     @Test
-    void listsDocumentsGroupedAcrossCollections() {
-        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+    void listsDocumentsFromConfiguredCollection() {
         when(qdrantClient.scrollPayloads(eq("docs"), anyList())).thenReturn(List.of(
                 Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
                 Map.of("documentId", "d1", "title", "a.pdf", "collection", "docs", "createdAt", 1000L),
                 Map.of("source", "gammal.pdf", "path", "/x/gammal.pdf", "text", "gammal text")));
-        when(qdrantClient.scrollPayloads(eq("manuals"), anyList())).thenReturn(List.of(
-                Map.of("documentId", "d2", "title", "b.pdf", "collection", "manuals",
-                        "tags", List.of("manual"), "createdAt", 2000L)));
 
         List<DocumentService.DocumentInfo> docs = service.list();
 
-        assertThat(docs).hasSize(3);
+        assertThat(docs).hasSize(2);
         assertThat(docs).anySatisfy(doc -> {
             assertThat(doc.id()).isEqualTo("d1");
             assertThat(doc.name()).isEqualTo("a.pdf");
@@ -221,26 +217,14 @@ class DocumentServiceTest {
             assertThat(doc.id()).isEqualTo("gammal.pdf");
             assertThat(doc.characters()).isEqualTo("gammal text".length());
         });
-        assertThat(docs).anySatisfy(doc -> {
-            assertThat(doc.id()).isEqualTo("gammal.pdf");
-            assertThat(doc.chunks()).isEqualTo(1);
-        });
-        assertThat(docs).anySatisfy(doc -> {
-            assertThat(doc.id()).isEqualTo("d2");
-            assertThat(doc.collection()).isEqualTo("manuals");
-            assertThat(doc.tags()).containsExactly("manual");
-        });
     }
 
     @Test
-    void listsTagsAcrossCollections() {
-        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+    void listsTagsFromConfiguredCollection() {
         when(qdrantClient.scrollPayloads(eq("docs"), anyList())).thenReturn(List.of(
                 Map.of("tags", List.of("manual", "experion"))));
-        when(qdrantClient.scrollPayloads(eq("manuals"), anyList())).thenReturn(List.of(
-                Map.of("tags", List.of("experion", "faktura"))));
 
-        assertThat(service.tags()).containsExactlyInAnyOrder("manual", "experion", "faktura");
+        assertThat(service.tags()).containsExactlyInAnyOrder("manual", "experion");
     }
 
     @Test
@@ -253,13 +237,10 @@ class DocumentServiceTest {
     }
 
     @Test
-    void deletesByDocumentIdOnlyInEveryCollection() {
-        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
-
+    void deletesByDocumentIdInConfiguredCollection() {
         service.delete("d1");
 
         verify(qdrantClient).deleteByMatch("docs", "documentId", "d1");
-        verify(qdrantClient).deleteByMatch("manuals", "documentId", "d1");
         verify(qdrantClient, org.mockito.Mockito.never()).deleteByMatch(anyString(), eq("source"), anyString());
     }
 
@@ -392,17 +373,15 @@ class DocumentServiceTest {
     }
 
     @Test
-    void detailMergesMatchesFromSeveralCollections() {
-        when(qdrantClient.listCollections()).thenReturn(List.of("docs", "manuals"));
+    void detailMergesChunksFromConfiguredCollection() {
         when(qdrantClient.scrollPayloads(eq("docs"), anyList(), any())).thenReturn(List.of(
-                Map.of("title", "a.pdf", "chunkIndex", 0, "text", "del ett")));
-        when(qdrantClient.scrollPayloads(eq("manuals"), anyList(), any())).thenReturn(List.of(
+                Map.of("title", "a.pdf", "chunkIndex", 0, "text", "del ett"),
                 Map.of("title", "a.pdf", "chunkIndex", 1, "text", "del tva")));
 
         DocumentService.DocumentDetail detail = service.detail("d1");
 
         assertThat(detail.chunks()).isEqualTo(2);
-        assertThat(detail.collection()).isEqualTo("docs, manuals");
+        assertThat(detail.collection()).isEqualTo("docs");
         assertThat(detail.content()).extracting(DocumentService.DocumentChunk::text)
                 .containsExactly("del ett", "del tva");
     }

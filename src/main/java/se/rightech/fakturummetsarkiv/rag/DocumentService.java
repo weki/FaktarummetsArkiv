@@ -151,7 +151,7 @@ public class DocumentService {
     private DocumentInfo findByContentHash(String contentHash) {
         Map<String, Object> filter = Map.of("must", List.of(
                 Map.of("key", "contentHash", "match", Map.of("value", contentHash))));
-        for (String collection : qdrantClient.listCollections()) {
+        for (String collection : List.of(qdrant.collection())) {
             List<Map<String, Object>> payloads =
                     qdrantClient.scrollPayloads(collection, DOC_FIELDS, filter);
             if (!payloads.isEmpty()) {
@@ -316,7 +316,7 @@ public class DocumentService {
     /** Listar dokumenten som faktiskt finns i vektordatabasen (grupperade per dokument). */
     public List<DocumentInfo> list() {
         Map<String, Group> groups = new LinkedHashMap<>();
-        for (String collection : qdrantClient.listCollections()) {
+        for (String collection : List.of(qdrant.collection())) {
             for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection, DOC_FIELDS)) {
                 String id = firstText(payload.get("documentId"));
                 if (id == null) {
@@ -373,7 +373,7 @@ public class DocumentService {
                 Map.of("key", "source", "match", Map.of("value", id))));
         List<Map<String, Object>> allPayloads = new ArrayList<>();
         Set<String> collections = new LinkedHashSet<>();
-        for (String collection : qdrantClient.listCollections()) {
+        for (String collection : List.of(qdrant.collection())) {
             List<Map<String, Object>> payloads = qdrantClient.scrollPayloads(collection,
                     List.of("title", "source", "path", "page", "chunkIndex", "text", "tags", "collection"), filter);
             if (!payloads.isEmpty()) {
@@ -438,7 +438,7 @@ public class DocumentService {
     /** Alla taggar som används i någon kollektion. */
     public List<String> tags() {
         TreeSet<String> result = new TreeSet<>();
-        for (String collection : qdrantClient.listCollections()) {
+        for (String collection : List.of(qdrant.collection())) {
             for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection, List.of("tags"))) {
                 result.addAll(tagsOf(payload));
             }
@@ -461,7 +461,7 @@ public class DocumentService {
         Set<String> paths = new LinkedHashSet<>();
         Map<String, Object> filter = Map.of("must", List.of(
                 Map.of("key", "documentId", "match", Map.of("value", id))));
-        for (String collection : qdrantClient.listCollections()) {
+        for (String collection : List.of(qdrant.collection())) {
             for (Map<String, Object> payload : qdrantClient.scrollPayloads(collection,
                     List.of("path"), filter)) {
                 String path = firstText(payload.get("path"));
