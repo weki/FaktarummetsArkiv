@@ -73,6 +73,15 @@ public class DocumentController {
         return documentService.collections();
     }
 
+    @PostMapping(path = "/{id}/tags", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Boolean> updateTags(@PathVariable String id, @RequestBody TagsRequest request) {
+        documentService.updateTags(id, request == null ? List.of() : request.tags());
+        return Map.of("updated", true);
+    }
+
+    public record TagsRequest(List<String> tags) {
+    }
+
     @GetMapping("/{id}")
     public DocumentService.DocumentDetail detail(@PathVariable String id) {
         return documentService.detail(id);

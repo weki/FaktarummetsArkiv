@@ -444,6 +444,15 @@ public class DocumentService {
         return new ArrayList<>(result);
     }
 
+    /** Uppdaterar taggar för ett dokument (alla dess chunks). */
+    public void updateTags(String documentId, List<String> tags) {
+        if (documentId == null || documentId.isBlank()) {
+            throw new IllegalArgumentException("Inget dokument-id angivet");
+        }
+        List<String> clean = cleanTags(tags);
+        qdrantClient.updateTags(qdrant.collection(), documentId, clean);
+    }
+
     /** Alla taggar som används i någon kollektion. */
     public List<String> tags() {
         TreeSet<String> result = new TreeSet<>();

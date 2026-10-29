@@ -6,6 +6,7 @@ const docsBulkDownload = document.getElementById('docsBulkDownload');
 const docsBulkDelete = document.getElementById('docsBulkDelete');
 const docsBulkCount = document.getElementById('docsBulkCount');
 const docsSearch = document.getElementById('docsSearch');
+const docsFilterCollection = document.getElementById('docsFilterCollection');
 const docsFilterTag = document.getElementById('docsFilterTag');
 const docsSort = document.getElementById('docsSort');
 
@@ -30,6 +31,8 @@ async function loadDocuments() {
         for (const id of Array.from(selectedDocIds)) if (!valid.has(id)) selectedDocIds.delete(id);
         persistSelectedDocIds();
         refreshDocFilters();
+        const sc = localStorage.getItem('docs_filter_collection');
+        if (sc && Array.from(docsFilterCollection.options).some(o=>o.value===sc)) docsFilterCollection.value=sc;
         const st = localStorage.getItem('docs_filter_tag');
         if (st && Array.from(docsFilterTag.options).some(o=>o.value===st)) docsFilterTag.value=st;
         const ss = localStorage.getItem('docs_sort');
@@ -41,10 +44,13 @@ async function loadDocuments() {
 }
 
 function refreshDocFilters() {
+    const collections = new Set();
     const tags = new Set();
     for (const doc of allDocuments) {
+        if (doc.collection) collections.add(doc.collection);
         for (const tag of (doc.tags || [])) tags.add(tag);
     }
+    fillFilterSelect(docsFilterCollection, 'Alla källsystem', collections);
     fillFilterSelect(docsFilterTag, 'Alla taggar', tags);
 }
 
@@ -66,9 +72,11 @@ function fillFilterSelect(select, allLabel, values) {
 
 function visibleDocuments() {
     const term = docsSearch.value.trim().toLowerCase();
+    const collection = docsFilterCollection.value;
     const tag = docsFilterTag.value;
     const documents = allDocuments.filter(doc => {
         if (term && !(doc.name || '').toLowerCase().includes(term)) return false;
+        if (collection && doc.collection !== collection) return false;
         if (tag && !(doc.tags || []).includes(tag)) return false;
         return true;
     });
@@ -173,7 +181,11 @@ function documentRow(doc) {
     del.textContent = 'Ta bort';
     del.setAttribute('aria-label', 'Ta bort ' + doc.name);
     del.addEventListener('click', () => deleteDocument(doc.id));
-    actions.append(view, download, del);
+    const tagBtn = document.createElement('button');
+    tagBtn.type = 'button';
+    tagBtn.textContent = 'Taggar';
+    tagBtn.addEventListener('click', () => editTags(doc));
+    actions.append(view, download, tagBtn, del);
     cell('col-actions').appendChild(actions);
     return row;
 }
@@ -182,6 +194,24 @@ async function viewDocument(id) {
     await openDocumentPopup({documentId: id});
 }
 
+async function editTags(doc) {
+    const current = (doc.tags || []).join(', ');
+    const input = window.prompt('Taggar (kommaseparerat):', current);
+    if (input === null) return;
+    const tags = input.split(',').map(t => t.trim()).filter(Boolean);
+    try {
+        const res = await fetch(DOC_API + '/' + encodeURIComponent(doc.id) + '/tags', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
+            body: JSON.stringify({tags})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        await loadDocuments();
+    } catch (error) {
+        setDocumentsStatus('Kunde inte uppdatera taggar: ' + error.message, 'err');
+    }
+}
 async function deleteDocument(id) {
     if (!confirm('Ta bort dokumentet och alla dess vektorer från arkivet?')) return;
     try {

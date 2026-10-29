@@ -342,7 +342,22 @@ public class QdrantClient {
                 .toBodilessEntity();
     }
 
-    /** Hämtar payloaden för alla punkter i kollektionen (endast angivna fält, utan vektorer). */
+    /** Uppdaterar payload-fältet 'tags' för alla punkter vars documentId matchar. */
+    public void updateTags(String collection, String documentId, List<String> tags) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("payload", Map.of("tags", tags == null ? List.of() : tags));
+        body.put("filter", Map.of("must", List.of(
+                Map.of("key", "documentId", "match", Map.of("value", documentId)))));
+        try {
+            restClient.post()
+                    .uri("/collections/{collection}/points/payload?wait=true", collection)
+                    .body(body)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            throw new IllegalStateException("Kunde inte uppdatera taggar: " + e.getMessage(), e);
+        }
+    }
     public List<Map<String, Object>> scrollPayloads(String collection, List<String> fields) {
         return scrollPayloads(collection, fields, null);
     }

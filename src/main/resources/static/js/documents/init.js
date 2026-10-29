@@ -12,6 +12,7 @@ function switchDocumentsTab(name) {
 }
 
 docsSearch.addEventListener('input', renderDocuments);
+docsFilterCollection.addEventListener('change', () => { localStorage.setItem('docs_filter_collection', docsFilterCollection.value); renderDocuments(); });
 docsFilterTag.addEventListener('change', () => { localStorage.setItem('docs_filter_tag', docsFilterTag.value); renderDocuments(); });
 docsSort.addEventListener('change', () => { localStorage.setItem('docs_sort', docsSort.value); renderDocuments(); });
 documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
