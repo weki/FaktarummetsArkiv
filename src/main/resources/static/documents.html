@@ -26,7 +26,6 @@
         <div class="tabs">
             <button type="button" class="tab-btn active" data-tab="documents">Dokument</button>
             <button type="button" class="tab-btn" data-tab="upload">Ladda upp</button>
-            <button type="button" class="tab-btn" data-tab="collections">Kollektioner</button>
         </div>
         <div class="tab-panel active" data-panel="documents">
             <div id="docListView">
@@ -104,22 +103,6 @@
                 </div>
             </form>
         </div>
-        <div class="tab-panel" data-panel="collections">
-            <div class="card-box">
-            <p class="tab-hint">Välj vilka kollektioner i vektordatabasen som ska ingå i sökningarna.</p>
-            <div class="doc-form">
-                <div class="row">
-                    <input type="text" id="newCollectionInput" placeholder="Skapa ny kollektion...">
-                    <button id="createCollectionBtn" type="button">Skapa</button>
-                </div>
-            </div>
-            <div id="collectionList" class="collection-list"></div>
-            <div class="modal-actions">
-                <span id="collectionsStatus" class="status"></span>
-                <button id="collectionsSave" type="button">Spara urval</button>
-            </div>
-            </div>
-        </div>
     </div>
 </main>
 </div>
@@ -148,7 +131,6 @@
 <script src="/js/shared/model-status.js"></script>
 <script src="/js/shared/doc-viewer.js"></script>
 <script src="/js/documents/list.js"></script>
-<script src="/js/documents/collections.js"></script>
 <script src="/js/documents/upload.js"></script>
 <script src="/js/documents/init.js"></script>
 </body>

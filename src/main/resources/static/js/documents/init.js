@@ -8,7 +8,6 @@ function switchDocumentsTab(name) {
     documentsPage.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.dataset.panel === name);
     });
-    if (name === 'collections') loadCollectionsTab();
     if (name === 'upload') loadUploadOptions();
 }
 
