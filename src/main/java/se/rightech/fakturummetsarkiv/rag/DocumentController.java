@@ -22,14 +22,20 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.util.stream.Collectors;
 
 @RestController
@@ -129,6 +135,78 @@ public class DocumentController {
                 .contentType(MediaType.TEXT_PLAIN)
                 .header(HttpHeaders.CONTENT_DISPOSITION, textDisposition.toString())
                 .body(new ByteArrayResource(bytes));
+    }
+
+    public record IdsRequest(List<String> ids) {
+    }
+
+    /** Sänder ned valda dokument som en zip-fil (originalfil eller text om ingen fil finns). */
+    @PostMapping(path = "/download-zip", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<StreamingResponseBody> downloadZip(@RequestBody IdsRequest request) {
+        List<String> ids = request == null || request.ids() == null ? List.of()
+                : request.ids().stream().filter(id -> id != null && !id.isBlank()).distinct().toList();
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("Inga dokument valda");
+        }
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename("fakturummets-arkiv.zip", StandardCharsets.UTF_8)
+                .build();
+        StreamingResponseBody body = out -> {
+            ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out));
+            Set<String> usedNames = new HashSet<>();
+            for (String id : ids) {
+                DocumentService.DocumentDetail detail;
+                try {
+                    detail = documentService.detail(id);
+                } catch (RuntimeException ignored) {
+                    continue; // dokument borttaget under tiden
+                }
+                byte[] data;
+                String name;
+                if (detail.path() != null && !detail.path().isBlank()) {
+                    Path file = pdfService.resolveWithinRoots(detail.path());
+                    data = Files.readAllBytes(file);
+                    name = detail.name();
+                } else {
+                    String text = detail.content().stream()
+                            .map(DocumentService.DocumentChunk::text)
+                            .collect(Collectors.joining("\n\n"));
+                    data = text.getBytes(StandardCharsets.UTF_8);
+                    name = detail.name().toLowerCase().endsWith(".txt") ? detail.name() : detail.name() + ".txt";
+                }
+                zip.putNextEntry(new ZipEntry(uniqueZipName(usedNames, name)));
+                zip.write(data);
+                zip.closeEntry();
+            }
+            zip.finish();
+            zip.flush();
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(body);
+    }
+
+    private static String uniqueZipName(Set<String> used, String rawName) {
+        String name = rawName == null ? "" : rawName.replace('\\', '/');
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        if (name.isBlank()) {
+            name = "dokument";
+        }
+        if (used.add(name)) {
+            return name;
+        }
+        int dot = name.lastIndexOf('.');
+        String base = dot > 0 ? name.substring(0, dot) : name;
+        String ext = dot > 0 ? name.substring(dot) : "";
+        int i = 1;
+        while (!used.add(base + " (" + i + ")" + ext)) {
+            i++;
+        }
+        return base + " (" + i + ")" + ext;
     }
 
     @GetMapping("/{id}/pdf")

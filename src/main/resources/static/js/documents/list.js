@@ -3,6 +3,7 @@ const documentsStatus = document.getElementById('documentsStatus');
 const docList = document.getElementById('docList');
 const docsSelectAll = document.getElementById('docsSelectAll');
 const docsBulkDownload = document.getElementById('docsBulkDownload');
+const docsBulkMeta = document.getElementById('docsBulkMeta');
 const docsBulkDelete = document.getElementById('docsBulkDelete');
 const docsBulkCount = document.getElementById('docsBulkCount');
 const docsSearch = document.getElementById('docsSearch');
@@ -212,6 +213,7 @@ function updateBulkBar() {
     docsBulkCount.textContent = n ? n + (n === 1 ? ' markerat' : ' markerade') : '';
     document.getElementById('docsBulk').hidden = n === 0;
     docsBulkDownload.disabled = !n;
+    docsBulkMeta.disabled = !n;
     docsBulkDelete.disabled = !n;
     const visible = visibleDocuments();
     docsSelectAll.checked = visible.length > 0 && visible.every(d => selectedDocIds.has(d.id));
@@ -232,15 +234,41 @@ document.getElementById('docsBulkClear').addEventListener('click', () => {
     renderDocuments();
 });
 
-docsBulkDownload.addEventListener('click', () => {
-    for (const id of Array.from(selectedDocIds)) {
+docsBulkDownload.addEventListener('click', async () => {
+    if (!selectedDocIds.size) return;
+    docsBulkDownload.disabled = true;
+    setDocumentsStatus('Paketar zip...', '');
+    try {
+        const res = await fetch(DOC_API + '/download-zip', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: Array.from(selectedDocIds)})
+        });
+        if (!res.ok) {
+            let message = 'HTTP ' + res.status;
+            try { message = (await res.json()).error || message; } catch (ignored) { }
+            throw new Error(message);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = DOC_API + '/' + encodeURIComponent(id) + '/download';
-        a.download = '';
+        a.href = url;
+        a.download = 'fakturummets-arkiv.zip';
         document.body.appendChild(a);
         a.click();
         a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setDocumentsStatus('Zip med ' + selectedDocIds.size + ' dokument hämtad', 'ok');
+    } catch (error) {
+        setDocumentsStatus('Nedladdning misslyckades: ' + error.message, 'err');
+    } finally {
+        updateBulkBar();
     }
+});
+
+docsBulkMeta.addEventListener('click', () => {
+    const docs = allDocuments.filter(doc => selectedDocIds.has(doc.id));
+    if (docs.length) openMetadataEditor(docs);
 });
 
 docsBulkDelete.addEventListener('click', async () => {

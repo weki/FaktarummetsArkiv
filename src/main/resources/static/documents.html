@@ -47,7 +47,8 @@
                 </div>
                 <div class="docs-bulk" id="docsBulk" hidden>
                     <span id="docsBulkCount" class="docs-bulk-count"></span>
-                    <button type="button" id="docsBulkDownload" class="btn-ghost" disabled>Ladda ner</button>
+                    <button type="button" id="docsBulkDownload" class="btn-ghost" disabled>Ladda ner (zip)</button>
+                    <button type="button" id="docsBulkMeta" class="btn-ghost" disabled>Metadata</button>
                     <button type="button" id="docsBulkDelete" class="danger" disabled>Ta bort</button>
                     <button type="button" id="docsBulkClear" class="btn-ghost">Avmarkera</button>
                 </div>
@@ -129,6 +130,10 @@
             <p class="meta">Källsystem — klicka på ett befintligt värde eller skriv ett nytt:</p>
             <div id="metaCollectionChips" class="tag-suggestions"></div>
             <input type="text" id="metaCollectionNew" placeholder="Ny källsystem...">
+            <p id="metaBulkNote" class="collection-stale-note" hidden>
+                Bulkredigering: valt källsystem och valda taggar tillämpas på <strong>alla markerade dokument</strong>.
+                Taggar läggs till (befintliga taggar behålls). Vill du byta ut taggar exakt, redigera ett dokument i taget.
+            </p>
             <p class="meta">Taggar — klicka för att välja/davälj befintliga, eller lägg till nya:</p>
             <div id="metaTagChips" class="tag-suggestions"></div>
             <div class="row">
