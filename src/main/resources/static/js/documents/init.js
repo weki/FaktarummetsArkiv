@@ -17,12 +17,6 @@ docsSort.addEventListener('change', () => { localStorage.setItem('docs_sort', do
 documentsPage.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchDocumentsTab(btn.dataset.tab));
 });
-uploadCollection.addEventListener('change', () => {
-    if (uploadCollection.value !== '__new__') {
-        newCollectionName.value = '';
-    }
-    toggleNewCollectionField();
-});
 
 setDocumentsStatus('Laddar...', '');
 loadDocuments();

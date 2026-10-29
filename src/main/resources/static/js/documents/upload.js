@@ -1,9 +1,6 @@
 /* Uppladdning av PDF-filer. */
 const uploadForm = document.getElementById('uploadForm');
 const uploadBtn = document.getElementById('uploadBtn');
-const uploadCollection = document.getElementById('uploadCollection');
-const newCollectionField = document.getElementById('newCollectionField');
-const newCollectionName = document.getElementById('newCollectionName');
 const uploadTags = document.getElementById('uploadTags');
 const uploadFolderBtn = document.getElementById('uploadFolderBtn');
 const uploadFolderInput = document.getElementById('uploadFolderInput');
@@ -15,28 +12,8 @@ const uploadProgressDetail = document.getElementById('uploadProgressDetail');
 const tagSuggestions = document.getElementById('tagSuggestions');
 
 async function loadUploadOptions() {
-    const [collections] = await Promise.all([loadCollections(true), loadTags()]);
-    const current = uploadCollection.value;
-    uploadCollection.innerHTML = '';
-    for (const name of collections) {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        uploadCollection.appendChild(option);
-    }
-    const create = document.createElement('option');
-    create.value = '__new__';
-    create.textContent = '＋ Ny kollektion…';
-    uploadCollection.appendChild(create);
-    if (current && Array.from(uploadCollection.options).some(o => o.value === current)) {
-        uploadCollection.value = current;
-    }
-    toggleNewCollectionField();
+    await loadTags();
     renderTagSuggestions();
-}
-
-function toggleNewCollectionField() {
-    newCollectionField.classList.toggle('hidden', uploadCollection.value !== '__new__');
 }
 
 function renderTagSuggestions() {
@@ -124,14 +101,6 @@ uploadForm.addEventListener('submit', async (event) => {
         setDocumentsStatus('Välj minst en fil', 'err');
         return;
     }
-    let collection = uploadCollection.value;
-    if (collection === '__new__') {
-        collection = newCollectionName.value.trim();
-        if (!collection) {
-            setDocumentsStatus('Ange namn på den nya kollektionen', 'err');
-            return;
-        }
-    }
     const tags = uploadTags.value.split(',').map(t => t.trim()).filter(Boolean);
     const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
     uploadBtn.disabled = true;
@@ -149,7 +118,7 @@ uploadForm.addEventListener('submit', async (event) => {
             setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
                 totalBytes ? (base / totalBytes) * 100 : 100,
                 formatBytes(base) + ' av ' + formatBytes(totalBytes));
-            const added = await uploadFile(file, collection, tags, (loaded) => {
+            const added = await uploadFile(file, '', tags, (loaded) => {
                 const pct = totalBytes ? ((base + loaded) / totalBytes) * 100 : 100;
                 setUploadProgress('', 'Fil ' + (i + 1) + ' av ' + files.length + ' · ' + file.name,
                     pct, formatBytes(base + loaded) + ' av ' + formatBytes(totalBytes));
@@ -161,9 +130,7 @@ uploadForm.addEventListener('submit', async (event) => {
         setUploadProgress('processing', 'Alla filer skickade', 100,
             'Bearbetar, chunkar och indexerar i arkivet...');
         uploadForm.reset();
-        newCollectionName.value = '';
         uploadTags.value = '';
-        toggleNewCollectionField();
         qdrantCollections = null;
         await Promise.all([loadUploadOptions(), loadDocuments()]);
         const addedCount = uploaded.filter(d => !d.skipped).length;
