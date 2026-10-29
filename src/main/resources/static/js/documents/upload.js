@@ -11,11 +11,37 @@ const uploadProgressPct = document.getElementById('uploadProgressPct');
 const uploadProgressFill = document.getElementById('uploadProgressFill');
 const uploadProgressDetail = document.getElementById('uploadProgressDetail');
 const tagSuggestions = document.getElementById('tagSuggestions');
+const collectionSuggestions = document.getElementById('collectionSuggestions');
 
 async function loadUploadOptions() {
-    await loadTags();
+    await Promise.all([loadCollections(true), loadTags()]);
+    renderCollectionSuggestions();
     renderTagSuggestions();
 }
+
+function renderCollectionSuggestions() {
+    collectionSuggestions.innerHTML = '';
+    if (!qdrantCollections || !qdrantCollections.length) return;
+    const label = document.createElement('span');
+    label.className = 'meta';
+    label.textContent = 'Befintliga källsystem:';
+    collectionSuggestions.appendChild(label);
+    const current = uploadCollectionName.value.trim();
+    for (const name of qdrantCollections) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = name;
+        if (name === current) button.className = 'tag-active';
+        button.setAttribute('aria-pressed', String(name === current));
+        button.addEventListener('click', () => {
+            uploadCollectionName.value = uploadCollectionName.value.trim() === name ? '' : name;
+            renderCollectionSuggestions();
+        });
+        collectionSuggestions.appendChild(button);
+    }
+}
+
+uploadCollectionName.addEventListener('input', renderCollectionSuggestions);
 
 function renderTagSuggestions() {
     tagSuggestions.innerHTML = '';
