@@ -6,7 +6,6 @@ const docsBulkDownload = document.getElementById('docsBulkDownload');
 const docsBulkDelete = document.getElementById('docsBulkDelete');
 const docsBulkCount = document.getElementById('docsBulkCount');
 const docsSearch = document.getElementById('docsSearch');
-const docsFilterCollection = document.getElementById('docsFilterCollection');
 const docsFilterTag = document.getElementById('docsFilterTag');
 const docsSort = document.getElementById('docsSort');
 
@@ -31,8 +30,6 @@ async function loadDocuments() {
         for (const id of Array.from(selectedDocIds)) if (!valid.has(id)) selectedDocIds.delete(id);
         persistSelectedDocIds();
         refreshDocFilters();
-        const sc = localStorage.getItem('docs_filter_collection');
-        if (sc && Array.from(docsFilterCollection.options).some(o=>o.value===sc)) docsFilterCollection.value=sc;
         const st = localStorage.getItem('docs_filter_tag');
         if (st && Array.from(docsFilterTag.options).some(o=>o.value===st)) docsFilterTag.value=st;
         const ss = localStorage.getItem('docs_sort');
@@ -44,13 +41,10 @@ async function loadDocuments() {
 }
 
 function refreshDocFilters() {
-    const collections = new Set();
     const tags = new Set();
     for (const doc of allDocuments) {
-        if (doc.collection) collections.add(doc.collection);
         for (const tag of (doc.tags || [])) tags.add(tag);
     }
-    fillFilterSelect(docsFilterCollection, 'Alla kollektioner', collections);
     fillFilterSelect(docsFilterTag, 'Alla taggar', tags);
 }
 
@@ -72,11 +66,9 @@ function fillFilterSelect(select, allLabel, values) {
 
 function visibleDocuments() {
     const term = docsSearch.value.trim().toLowerCase();
-    const collection = docsFilterCollection.value;
     const tag = docsFilterTag.value;
     const documents = allDocuments.filter(doc => {
         if (term && !(doc.name || '').toLowerCase().includes(term)) return false;
-        if (collection && doc.collection !== collection) return false;
         if (tag && !(doc.tags || []).includes(tag)) return false;
         return true;
     });
