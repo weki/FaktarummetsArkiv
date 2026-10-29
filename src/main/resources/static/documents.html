@@ -118,6 +118,30 @@
 </div>
 
 
+<div id="metaOverlay" class="overlay hidden">
+    <div class="modal">
+        <div class="modal-head">
+            <h2 id="metaModalTitle">Metadata</h2>
+            <button id="metaModalClose" type="button" class="icon-btn" title="Stäng">×</button>
+        </div>
+        <div class="doc-form">
+            <p class="meta">Källsystem — klicka på ett befintligt värde eller skriv ett nytt:</p>
+            <div id="metaCollectionChips" class="tag-suggestions"></div>
+            <input type="text" id="metaCollectionNew" placeholder="Ny källsystem...">
+            <p class="meta">Taggar — klicka för att välja/davälj befintliga, eller lägg till nya:</p>
+            <div id="metaTagChips" class="tag-suggestions"></div>
+            <div class="row">
+                <input type="text" id="metaTagNew" placeholder="Ny tagg...">
+                <button id="metaTagAdd" type="button">Lägg till</button>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <span id="metaStatus" class="status"></span>
+            <button id="metaSave" type="button">Spara</button>
+        </div>
+    </div>
+</div>
+
 <script src="/js/shared/common.js"></script>
 <script src="/js/shared/threads-store.js"></script>
 <script src="/js/shared/gpu-poller.js"></script>
@@ -126,6 +150,7 @@
 <script src="/js/shared/model-status.js"></script>
 <script src="/js/shared/doc-viewer.js"></script>
 <script src="/js/documents/list.js"></script>
+<script src="/js/documents/metadata.js"></script>
 <script src="/js/documents/upload.js"></script>
 <script src="/js/documents/init.js"></script>
 </body>

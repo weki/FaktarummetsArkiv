@@ -181,15 +181,12 @@ function documentRow(doc) {
     del.textContent = 'Ta bort';
     del.setAttribute('aria-label', 'Ta bort ' + doc.name);
     del.addEventListener('click', () => deleteDocument(doc.id));
-    const tagBtn = document.createElement('button');
-    tagBtn.type = 'button';
-    tagBtn.textContent = 'Taggar';
-    tagBtn.addEventListener('click', () => editTags(doc));
-    const collectionBtn = document.createElement('button');
-    collectionBtn.type = 'button';
-    collectionBtn.textContent = 'Källsystem';
-    collectionBtn.addEventListener('click', () => editCollection(doc));
-    actions.append(view, download, collectionBtn, tagBtn, del);
+    const metaBtn = document.createElement('button');
+    metaBtn.type = 'button';
+    metaBtn.textContent = 'Metadata';
+    metaBtn.setAttribute('aria-label', 'Redigera källsystem och taggar för ' + doc.name);
+    metaBtn.addEventListener('click', () => openMetadataEditor(doc));
+    actions.append(view, download, metaBtn, del);
     cell('col-actions').appendChild(actions);
     return row;
 }
@@ -198,43 +195,6 @@ async function viewDocument(id) {
     await openDocumentPopup({documentId: id});
 }
 
-async function editCollection(doc) {
-    const current = doc.collection || '';
-    const input = window.prompt('Källsystem (t.ex. Honeywell, Aspen, Genua):', current);
-    if (input === null) return;
-    const collection = input.trim();
-    try {
-        const res = await fetch(DOC_API + '/' + encodeURIComponent(doc.id) + '/collection', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
-            body: JSON.stringify({collection})
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-        await loadDocuments();
-    } catch (error) {
-        setDocumentsStatus('Kunde inte uppdatera källsystem: ' + error.message, 'err');
-    }
-}
-
-async function editTags(doc) {
-    const current = (doc.tags || []).join(', ');
-    const input = window.prompt('Taggar (kommaseparerat):', current);
-    if (input === null) return;
-    const tags = input.split(',').map(t => t.trim()).filter(Boolean);
-    try {
-        const res = await fetch(DOC_API + '/' + encodeURIComponent(doc.id) + '/tags', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
-            body: JSON.stringify({tags})
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-        await loadDocuments();
-    } catch (error) {
-        setDocumentsStatus('Kunde inte uppdatera taggar: ' + error.message, 'err');
-    }
-}
 async function deleteDocument(id) {
     if (!confirm('Ta bort dokumentet och alla dess vektorer från arkivet?')) return;
     try {

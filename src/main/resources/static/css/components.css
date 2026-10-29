@@ -166,3 +166,11 @@
     background: var(--accent-soft);
     filter: none;
 }
+
+/* Markerade chips i metadataredigeraren (vald källsystem eller tagg). */
+.tag-active,
+.tag-suggestions button.tag-active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
