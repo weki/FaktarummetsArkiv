@@ -174,3 +174,24 @@
     background: var(--accent-soft);
     color: var(--accent);
 }
+
+/* Utfasade källsystem-val i trådens omfattingsdialog (namn som inte längre finns). */
+.collection-item-stale {
+    border-color: rgba(245, 158, 11, .5);
+    background: rgba(245, 158, 11, .07);
+}
+
+.collection-item-stale .name {
+    color: var(--warn);
+}
+
+.collection-stale-note {
+    margin: 8px 0 4px;
+    padding: 8px 12px;
+    border: 1px solid rgba(245, 158, 11, .4);
+    border-radius: var(--radius-sm);
+    background: rgba(245, 158, 11, .08);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}

@@ -35,37 +35,54 @@ async function loadThreadDocCollections() {
     try {
         const res = await fetch(DOC_API + '/collections');
         const collections = await res.json().catch(() => []);
+        const available = new Set(collections);
         const thread = threads.find(t => t.id === threadDocTargetId);
         const selected = new Set(thread?.collections || []);
         threadDocCollectionList.innerHTML = '';
-        if (!collections.length) {
+        if (!collections.length && !selected.size) {
             const empty = document.createElement('div');
             empty.className = 'collection-item';
             const text = document.createElement('span');
             text.className = 'name';
-            text.textContent = 'Inga kollektioner hittades';
+            text.textContent = 'Inga källsystem hittades';
             empty.appendChild(text);
             threadDocCollectionList.appendChild(empty);
             return;
         }
         for (const name of collections) {
-            const label = document.createElement('label');
-            label.className = 'collection-item';
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = name;
-            checkbox.checked = selected.has(name);
-            const text = document.createElement('span');
-            text.className = 'name';
-            text.textContent = name;
-            label.appendChild(checkbox);
-            label.appendChild(text);
-            threadDocCollectionList.appendChild(label);
+            threadDocCollectionList.appendChild(collectionItem(name, name, selected.has(name), false));
+        }
+        // Tidigare valda källsystem som inte längre finns i arkivet (t.ex. efter namnbyte).
+        const stale = Array.from(selected).filter(name => !available.has(name));
+        if (stale.length) {
+            const note = document.createElement('div');
+            note.className = 'collection-stale-note';
+            note.textContent = 'Nedanför vala källsystem finns inte längre i arkivet '
+                + '(de kan ha bytt namn). Valen ger inga sökträffar – avmarkera dem och välj de nuvarande i stället.';
+            threadDocCollectionList.appendChild(note);
+            for (const name of stale) {
+                threadDocCollectionList.appendChild(collectionItem(name, name + ' (finns inte längre)', true, true));
+            }
         }
     } catch (error) {
         threadDocStatus.textContent = 'Kunde inte hämta kollektioner: ' + error.message;
         threadDocStatus.className = 'status err';
     }
+}
+
+function collectionItem(value, labelText, checked, stale) {
+    const label = document.createElement('label');
+    label.className = 'collection-item' + (stale ? ' collection-item-stale' : '');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = value;
+    checkbox.checked = checked;
+    const text = document.createElement('span');
+    text.className = 'name';
+    text.textContent = labelText;
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    return label;
 }
 
 
