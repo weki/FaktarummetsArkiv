@@ -210,8 +210,9 @@ public class DocumentService {
         }
         String embeddingModel = model;
 
-        qdrantClient.ensureCollection(collection);
-        requireCompatibleCollection(collection, embeddingModel);
+        String qdrantCollection = qdrant.collection();
+        qdrantClient.ensureCollection(qdrantCollection);
+        requireCompatibleCollection(qdrantCollection, embeddingModel);
 
         List<double[]> vectors = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i += EMBED_BATCH) {
@@ -267,7 +268,7 @@ public class DocumentService {
             for (int i = 0; i < points.size(); i += UPSERT_BATCH) {
                 List<QdrantClient.Point> batch =
                         new ArrayList<>(points.subList(i, Math.min(i + UPSERT_BATCH, points.size())));
-                qdrantClient.upsert(collection, batch);
+                qdrantClient.upsert(qdrantCollection, batch);
             }
         } catch (RuntimeException e) {
             // Undvik ett halvindexerat dokument om något batch misslyckas.
@@ -279,7 +280,7 @@ public class DocumentService {
             throw e;
         }
 
-        log.info("Indexerade dokument {} ({} textstycken) i kollektionen '{}'", documentId, chunks.size(), collection);
+        log.info("Indexerade dokument {} ({} textstycken) i kollektionen '{}'", documentId, chunks.size(), qdrantCollection);
         return new DocumentInfo(documentId, title, chunks.size(), characters, path, collection, tags,
                 Instant.ofEpochMilli(createdAt), false, null);
     }

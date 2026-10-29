@@ -160,10 +160,11 @@ class DocumentServiceTest {
 
     @Test
     void uploadsToNamedCollection() throws IOException {
-        service.addFile("manual.pdf", twoPagePdf(), "manuals", List.of());
+        DocumentService.DocumentInfo info = service.addFile("manual.pdf", twoPagePdf(), "manuals", List.of());
 
-        verify(qdrantClient).ensureCollection("manuals");
-        verify(qdrantClient).upsert(eq("manuals"), any());
+        assertThat(info.collection()).isEqualTo("manuals");
+        verify(qdrantClient).ensureCollection("docs");
+        verify(qdrantClient).upsert(eq("docs"), any());
     }
 
     @Test
