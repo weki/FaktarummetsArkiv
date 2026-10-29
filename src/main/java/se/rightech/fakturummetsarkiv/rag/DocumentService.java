@@ -84,6 +84,14 @@ public class DocumentService {
             throw new IllegalArgumentException("Filen är tom");
         }
         String title = filename == null || filename.isBlank() ? "Dokument" : filename.trim();
+        // Behåll bara filnamnet, inte sökvägen (viktigt vid mappuppladdning)
+        int slash = Math.max(title.lastIndexOf('/'), title.lastIndexOf('\\'));
+        if (slash >= 0) {
+            title = title.substring(slash + 1);
+        }
+        if (title.isBlank()) {
+            title = "Dokument";
+        }
         String target = resolveCollection(collection);
         List<String> cleanTags = cleanTags(tags);
 
