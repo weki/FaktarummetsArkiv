@@ -77,7 +77,7 @@ public StreamResult streamChat(String question, String sessionId,
             throw new IllegalArgumentException("Ingen fråga angiven");
         }
         WorkspaceSettings settings = settingsStore.get();
-        List<String> effectiveCollections = (collections != null && !collections.isEmpty()) ? collections : settings.collections();
+        List<String> effectiveCollections = (collections != null && !collections.isEmpty()) ? collections : List.of();
         List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
         List<Map<String, String>> history = useHistory(settings)
                 ? Citations.stripAssistantHistory(trimHistory(

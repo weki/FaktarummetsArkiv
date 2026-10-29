@@ -101,21 +101,10 @@
         </div>
         <div class="tabs">
             <button type="button" class="tab-btn active" data-tab="collections">Kollektioner</button>
-            <button type="button" class="tab-btn" data-tab="documents">Dokument</button>
         </div>
         <div class="tab-panel active" data-panel="collections">
-            <p class="tab-hint">Välj vilka kollektioner som ska ingå i sökningarna för denna tråd. Tomt = alla kollektioner.</p>
+            <p class="tab-hint">Välj vilka källsystem som ska ingå i sökningarna för denna tråd. Tomt = alla.</p>
             <div id="threadDocCollectionList" class="collection-list"></div>
-        </div>
-        <div class="tab-panel" data-panel="documents">
-            <p class="tab-hint">Välj specifika dokument för denna tråd. Tomt = alla dokument i valda kollektioner.</p>
-            <div class="docs-toolbar">
-                <input id="threadDocSearch" type="search" placeholder="Sök på namn..." autocomplete="off">
-                <select id="threadDocFilterCollection">
-                    <option value="">Alla kollektioner</option>
-                </select>
-            </div>
-            <div id="threadDocList" class="doc-list"></div>
         </div>
         <div class="modal-actions">
             <span id="threadDocStatus" class="status"></span>

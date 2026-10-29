@@ -137,7 +137,7 @@ class ChatServiceTest {
         }, null, token -> {
         }, null);
 
-        verify(retrievalService).retrieve("Hur aktiverar jag OPC UA på en server?", List.of("docs"), 5, null, null);
+        verify(retrievalService).retrieve("Hur aktiverar jag OPC UA på en server?", List.of(), 5, null, null);
     }
 
     @Test
@@ -154,7 +154,7 @@ class ChatServiceTest {
         }, null);
 
         verify(queryRewriter, never()).rewrite(anyString(), any(), anyString(), anyString());
-        verify(retrievalService).retrieve("hur aktiverar jag det?", List.of("docs"), 5, null, null);
+        verify(retrievalService).retrieve("hur aktiverar jag det?", List.of(), 5, null, null);
     }
 
     @Test
