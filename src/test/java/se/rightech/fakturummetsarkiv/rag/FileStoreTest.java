@@ -24,7 +24,7 @@ class FileStoreTest {
 
         assertThat(path).startsWith(uploadDir.toAbsolutePath().normalize());
         assertThat(Files.exists(path)).isTrue();
-        assertThat(path.getFileName().toString()).endsWith("-manual.pdf");
+        assertThat(path.getFileName().toString()).isEqualTo("manual.pdf");
     }
 
     @Test
@@ -32,7 +32,7 @@ class FileStoreTest {
         Path path = store().store("../../etc/my fil (v1).pdf", "x".getBytes());
 
         assertThat(path).startsWith(uploadDir.toAbsolutePath().normalize());
-        assertThat(path.getFileName().toString()).endsWith("-my_fil__v1_.pdf");
+        assertThat(path.getFileName().toString()).isEqualTo("my_fil__v1_.pdf");
     }
 
     @Test

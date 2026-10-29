@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
 
 @Component
 public class FileStore {
@@ -25,10 +24,7 @@ public class FileStore {
         Path directory = properties.uploadPath();
         Files.createDirectories(directory);
         String safe = sanitize(filename);
-        Path target = directory.resolve(UUID.randomUUID() + "-" + safe).normalize();
-        if (!target.startsWith(directory)) {
-            throw new IllegalArgumentException("Ogiltigt filnamn");
-        }
+        Path target = uniqueTarget(directory, safe);
         try {
             Files.write(target, bytes);
         } catch (IOException e) {
@@ -36,6 +32,31 @@ public class FileStore {
             throw e;
         }
         return target;
+    }
+
+    private static Path uniqueTarget(Path directory, String safe) {
+        Path target = directory.resolve(safe).normalize();
+        if (!target.startsWith(directory)) {
+            throw new IllegalArgumentException("Ogiltigt filnamn");
+        }
+        if (!Files.exists(target)) {
+            return target;
+        }
+        int dot = safe.lastIndexOf('.');
+        String base = dot > 0 ? safe.substring(0, dot) : safe;
+        String ext = dot > 0 ? safe.substring(dot) : "";
+        int i = 1;
+        while (true) {
+            String candidate = base + " (" + i + ")" + ext;
+            Path t = directory.resolve(candidate).normalize();
+            if (!t.startsWith(directory)) {
+                throw new IllegalArgumentException("Ogiltigt filnamn");
+            }
+            if (!Files.exists(t)) {
+                return t;
+            }
+            i++;
+        }
     }
 
     /** Raderar en sparad originalfil, men bara inom uppladdningsmappen. */
