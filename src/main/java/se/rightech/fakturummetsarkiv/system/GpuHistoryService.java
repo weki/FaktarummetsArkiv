@@ -12,7 +12,9 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -174,14 +176,27 @@ public class GpuHistoryService {
             try {
                 Path f = historyFile();
                 Path tmp = f.resolveSibling(f.getFileName().toString() + ".tmp");
-                try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                Path parent = f.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                     tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
                     for (Map<String, Object> m : raw) {
                         w.write(mapper.writeValueAsString(m));
                         w.newLine();
                     }
+                    w.flush();
                 }
-                Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                if (!Files.exists(tmp)) {
+                    throw new IOException("Temporärfilen skapades inte: " + tmp);
+                }
+                try {
+                    Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException | NoSuchFileException moveException) {
+                    Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
+                }
             } catch (Exception e) {
                 log.warn("Kunde inte spara GPU-historik", e);
             }
