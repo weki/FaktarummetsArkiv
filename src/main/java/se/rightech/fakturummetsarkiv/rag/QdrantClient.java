@@ -342,6 +342,24 @@ public class QdrantClient {
                 .toBodilessEntity();
     }
 
+    /** Uppdaterar payload-fältet 'collection' (källsystem) för alla punkter vars documentId matchar. */
+    public void updateCollection(String collection, String documentId, String sourceSystem) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("payload", Map.of("collection", sourceSystem == null || sourceSystem.isBlank()
+                ? collection : sourceSystem.trim()));
+        body.put("filter", Map.of("must", List.of(
+                Map.of("key", "documentId", "match", Map.of("value", documentId)))));
+        try {
+            restClient.post()
+                    .uri("/collections/{collection}/points/payload?wait=true", collection)
+                    .body(body)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            throw new IllegalStateException("Kunde inte uppdatera källsystem: " + e.getMessage(), e);
+        }
+    }
+
     /** Uppdaterar payload-fältet 'tags' för alla punkter vars documentId matchar. */
     public void updateTags(String collection, String documentId, List<String> tags) {
         Map<String, Object> body = new LinkedHashMap<>();

@@ -73,6 +73,15 @@ public class DocumentController {
         return documentService.collections();
     }
 
+    @PostMapping(path = "/{id}/collection", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Boolean> updateCollection(@PathVariable String id, @RequestBody CollectionRequest request) {
+        documentService.updateCollection(id, request == null ? null : request.collection());
+        return Map.of("updated", true);
+    }
+
+    public record CollectionRequest(String collection) {
+    }
+
     @PostMapping(path = "/{id}/tags", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Boolean> updateTags(@PathVariable String id, @RequestBody TagsRequest request) {
         documentService.updateTags(id, request == null ? List.of() : request.tags());

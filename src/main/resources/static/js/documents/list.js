@@ -185,13 +185,36 @@ function documentRow(doc) {
     tagBtn.type = 'button';
     tagBtn.textContent = 'Taggar';
     tagBtn.addEventListener('click', () => editTags(doc));
-    actions.append(view, download, tagBtn, del);
+    const collectionBtn = document.createElement('button');
+    collectionBtn.type = 'button';
+    collectionBtn.textContent = 'Källsystem';
+    collectionBtn.addEventListener('click', () => editCollection(doc));
+    actions.append(view, download, collectionBtn, tagBtn, del);
     cell('col-actions').appendChild(actions);
     return row;
 }
 
 async function viewDocument(id) {
     await openDocumentPopup({documentId: id});
+}
+
+async function editCollection(doc) {
+    const current = doc.collection || '';
+    const input = window.prompt('Källsystem (t.ex. Honeywell, Aspen, Genua):', current);
+    if (input === null) return;
+    const collection = input.trim();
+    try {
+        const res = await fetch(DOC_API + '/' + encodeURIComponent(doc.id) + '/collection', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'FakturummetsArkiv'},
+            body: JSON.stringify({collection})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        await loadDocuments();
+    } catch (error) {
+        setDocumentsStatus('Kunde inte uppdatera källsystem: ' + error.message, 'err');
+    }
 }
 
 async function editTags(doc) {

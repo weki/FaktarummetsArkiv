@@ -444,6 +444,14 @@ public class DocumentService {
         return new ArrayList<>(result);
     }
 
+    /** Uppdaterar källsystem (collection-payload) för ett dokument. */
+    public void updateCollection(String documentId, String sourceSystem) {
+        if (documentId == null || documentId.isBlank()) {
+            throw new IllegalArgumentException("Inget dokument-id angivet");
+        }
+        qdrantClient.updateCollection(qdrant.collection(), documentId, sourceSystem);
+    }
+
     /** Uppdaterar taggar för ett dokument (alla dess chunks). */
     public void updateTags(String documentId, List<String> tags) {
         if (documentId == null || documentId.isBlank()) {
