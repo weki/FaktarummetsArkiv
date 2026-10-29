@@ -1,35 +1,3 @@
-/* Grundstil som tidigare ärvdes från app.css bara element-selektorer. */
-:where(.settings-page) aside {
-    width: 300px;
-    flex: none;
-    background: linear-gradient(180deg, var(--panel), #0e1628);
-    border-right: 1px solid var(--border);
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-:where(.settings-page) main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    max-width: 920px;
-    margin: 0 auto;
-    width: 100%;
-}
-
-@media (max-width: 820px) {
-    :where(.settings-page) aside {
-        width: 100%;
-        max-height: 38vh;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        padding: 14px;
-    }
-}
-
 .settings-page {
     display: block;
     min-height: 100vh;
@@ -85,8 +53,8 @@
 
 .settings-shell {
     display: grid;
-    grid-template-columns: 250px minmax(0, 1fr);
-    gap: 28px;
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: 24px;
     max-width: 1280px;
     margin: 0 auto;
     padding: 28px;
@@ -95,7 +63,10 @@
 .settings-sidebar {
     align-self: start;
     position: sticky;
-    top: 96px;
+    top: 100px;
+    min-width: 0;
+    max-height: calc(100vh - 116px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -535,4 +506,97 @@
     color: var(--muted);
     font-size: 12px;
     line-height: 1.45;
+}
+
+
+/* Kluster: inställningar som hör ihop samlas under en rubrik med en färgad markering i kanten. */
+.setting-cluster {
+    position: relative;
+    margin: 14px 20px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: rgba(11, 17, 32, .28);
+    overflow: hidden;
+}
+
+.setting-cluster:first-child {
+    margin-top: 16px;
+}
+
+.cluster-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 11px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(56, 189, 248, .05);
+}
+
+.cluster-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.cluster-pill {
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(56, 189, 248, .4);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+
+.cluster-note {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.cluster-rows .setting-row {
+    padding: 14px 16px;
+}
+
+/* Rader som bara gäller när en annan inställning är på. */
+.setting-row.is-dependent {
+    padding-left: 38px;
+    position: relative;
+}
+
+.setting-row.is-dependent::before {
+    content: "";
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 50%;
+    width: 12px;
+    border-left: 2px solid var(--border-strong);
+    border-bottom: 2px solid var(--border-strong);
+    border-bottom-left-radius: 8px;
+    pointer-events: none;
+}
+
+.setting-row.is-blocked {
+    opacity: .55;
+}
+
+.settings-group > .settings-rows > .setting-row {
+    border-top: 1px solid rgba(36, 51, 82, .65);
+}
+
+@media (max-width: 900px) {
+    .setting-cluster { margin: 12px; }
+    .setting-row.is-dependent { padding-left: 30px; }
+    .setting-row.is-dependent::before { left: 14px; }
+    .settings-sidebar { max-height: none; overflow: visible; }
 }

@@ -29,6 +29,192 @@
     const PER_ROLE_CTX_KEYS = new Set(PER_ROLE.filter(role => role.ctx).map(role => role.ctx));
     const PRIMARY_MODEL_KEYS = new Set(['ollama.model', 'ollama.chat-num-ctx', 'ollama.embedding-model']);
 
+    /* Visningsstruktur. Bara presentation: nycklarna och backend är oförändrade.
+       Inställningar som hör ihop samlas i ett markerat kluster med rubrik och förklaring.
+       Nycklar som saknas här visas som vanligt i sin ursprungliga grupp. */
+    const DISPLAY = {
+        models: {
+            order: 10, label: 'Modeller',
+            description: 'Huvudmodell, kontext och thinking. Roller utan eget värde ärver huvudmodellen.',
+            clusters: [
+                {id: 'main', title: 'Huvudmodell och kontext',
+                    note: 'Hör ihop: byte av modell eller kontextfönster laddar om modellen i Ollama.',
+                    keys: ['ollama.model', 'ollama.chat-num-ctx']},
+                {id: 'embedding', title: 'Embedding',
+                    note: 'Måste ge samma vektordimension som Qdrant. Byte kräver omindexering.',
+                    keys: ['ollama.embedding-model']},
+                {id: 'thinking', title: 'Thinking per roll',
+                    note: 'Låter modellen resonera före svaret. Av för hjälpsteg ger snabbare svar.',
+                    keys: ['chat.thinking', 'ollama.validator-thinking', 'ollama.refine-thinking',
+                        'ollama.gate-thinking', 'ollama.rewrite-thinking', 'ollama.followup-thinking']}
+            ]
+        },
+        search: {
+            order: 20, label: 'Sökning',
+            description: 'Hur frågan blir en sökning och vilka källor som skickas till modellen.',
+            clusters: [
+                {id: 'query', title: 'Sökfråga',
+                    note: 'Hör ihop: sökgaten avgör om sökning behövs och omformuleringen gör frågan fristående.',
+                    keys: ['chat.smart-search', 'rag.gate.mode', 'chat.rewrite-query', 'rag.search-language']},
+                {id: 'sources', title: 'Urval av källor',
+                    note: 'Hör ihop: antal träffar, grannstycken och källtecken delar på samma utrymme i modellens kontext.',
+                    keys: ['qdrant.top-k', 'rag.similarity-threshold', 'rag.neighbor-chunks', 'rag.max-source-chars']},
+                {id: 'hybrid', title: 'Hybridsökning',
+                    note: 'Lägger nyckelordssökning till vektorsökningen. Hjälper på exakta termer.',
+                    keys: ['rag.hybrid.enabled', 'rag.hybrid.keyword-limit', 'rag.hybrid.rrf-k']},
+                {id: 'rerank', title: 'Rerankning',
+                    note: 'En modell rangordnar om kandidaterna. Kostar en extra modellkörning per fråga.',
+                    keys: ['rag.rerank.enabled', 'rag.rerank.candidates', 'rag.rerank.max-chars']}
+            ]
+        },
+        answer: {
+            order: 30, label: 'Svar',
+            description: 'Svarsstil, historik och kontroll av att svaret stöds av källorna.',
+            clusters: [
+                {id: 'style', title: 'Svarsstil',
+                    keys: ['chat.mode', 'chat.answer-language', 'chat.answer-temperature']},
+                {id: 'history', title: 'Historik',
+                    note: 'Tidigare meddelanden som följer med i frågan.',
+                    keys: ['rag.max-history', 'rag.max-history-chars']},
+                {id: 'grounding', title: 'Kontroll av svaret',
+                    note: 'Valideringen jämför svaret med källorna. Modell och thinking för den väljs under Modeller.',
+                    keys: ['chat.validate-grounding']}
+            ]
+        },
+        gpu: {
+            order: 40, label: 'GPU',
+            description: 'GPU- och modellstatus från Ollama-maskinen, historik och VRAM-budget.',
+            clusters: [
+                {id: 'connection', title: 'Anslutning',
+                    note: 'Adressen till gpu-stats på Ollama-maskinen.',
+                    keys: ['gpu.stats-url', 'gpu.poll-interval-ms']},
+                {id: 'history', title: 'Historik',
+                    note: 'Sparas på servern så att graferna överlever omladdning och omstart.',
+                    keys: ['gpu.history-enabled', 'gpu.history-hours', 'gpu.history-sample-seconds']},
+                {id: 'budget', title: 'VRAM-budget',
+                    keys: ['ollama.vram-gb']},
+                {id: 'restart', title: 'Omstart av Ollama',
+                    note: 'Avstängd som standard. Kräver token och en säker sidovagn.',
+                    keys: ['gpu.restart-enabled', 'gpu.restart-token']}
+            ]
+        },
+        indexing: {
+            order: 50, label: 'Indexering',
+            description: 'Hur dokument delas upp. Gäller nya dokument; gamla behöver indexeras om.',
+            clusters: [
+                {id: 'chunking', title: 'Chunkning',
+                    note: 'Hör ihop: överlappet ska vara klart mindre än chunkstorleken.',
+                    keys: ['rag.chunk-size', 'rag.chunk-overlap']}
+            ]
+        },
+        limits: {
+            order: 60, label: 'Gränser och sökvägar',
+            description: 'Uppladdning, requeststorlek och arkivsökvägar. Ändras i konfigurationen.',
+            clusters: [
+                {id: 'upload', title: 'Uppladdning',
+                    keys: ['spring.servlet.multipart.max-file-size', 'spring.servlet.multipart.max-request-size',
+                        'server.tomcat.max-swallow-size', 'spring.codec.max-in-memory-size']},
+                {id: 'paths', title: 'Sökvägar',
+                    keys: ['archive.upload-dir', 'archive.pdf-roots']}
+            ]
+        },
+        infrastructure: {
+            order: 70, label: 'Infrastruktur',
+            description: 'Anslutningar och vektorinställningar. Ändras i konfigurationen och kräver omstart.',
+            clusters: [
+                {id: 'connections', title: 'Anslutningar',
+                    keys: ['ollama.base-url', 'ollama.timeout', 'qdrant.base-url', 'qdrant.collection', 'qdrant.timeout']},
+                {id: 'vectors', title: 'Vektorer och embedding',
+                    note: 'Hör ihop med embeddingmodellen: ändring kräver omindexering.',
+                    keys: ['qdrant.vector-size', 'qdrant.distance', 'qdrant.query-prefix', 'qdrant.passage-prefix']}
+            ]
+        }
+    };
+    const ADVANCED = '__advanced';
+    const PLACEMENT = new Map();
+    for (const [groupId, def] of Object.entries(DISPLAY)) {
+        for (const cluster of def.clusters) {
+            for (const key of cluster.keys) PLACEMENT.set(key, {group: groupId, cluster: cluster.id});
+        }
+    }
+
+    function placement(setting) {
+        if (PER_ROLE_MODEL_KEYS.has(setting.key) || PER_ROLE_CTX_KEYS.has(setting.key)) {
+            return {group: 'models', cluster: ADVANCED};
+        }
+        return PLACEMENT.get(setting.key) || {group: setting.group, cluster: null};
+    }
+
+    function viewGroups() {
+        const result = new Map();
+        for (const group of snapshot.groups) {
+            result.set(group.id, {id: group.id, label: group.label, description: group.description, order: group.order});
+        }
+        for (const [id, def] of Object.entries(DISPLAY)) {
+            result.set(id, {id, label: def.label, description: def.description, order: def.order});
+        }
+        return Array.from(result.values()).sort((a, b) => a.order - b.order);
+    }
+
+    function groupSettings(groupId, query) {
+        const matching = snapshot.settings.filter(setting => {
+            const place = placement(setting);
+            return place.group === groupId && place.cluster !== ADVANCED && matches(setting, query);
+        });
+        const advanced = groupId === 'models'
+            ? advancedSettings().filter(setting => !query || matches(setting, query)) : [];
+        return {matching, advanced};
+    }
+
+    function renderCluster(def, items) {
+        const wrap = document.createElement('div');
+        wrap.className = 'setting-cluster';
+        wrap.dataset.cluster = def.id;
+        wrap.setAttribute('role', 'group');
+        const head = document.createElement('div');
+        head.className = 'cluster-head';
+        const title = document.createElement('h3');
+        title.className = 'cluster-title';
+        title.textContent = def.title;
+        title.id = 'cluster-' + def.id + '-' + Math.random().toString(36).slice(2, 7);
+        wrap.setAttribute('aria-labelledby', title.id);
+        head.appendChild(title);
+        if (items.length > 1) {
+            const pill = document.createElement('span');
+            pill.className = 'cluster-pill';
+            pill.textContent = 'Hör ihop';
+            head.appendChild(pill);
+        }
+        if (def.note) {
+            const note = document.createElement('p');
+            note.className = 'cluster-note';
+            note.textContent = def.note;
+            head.appendChild(note);
+        }
+        wrap.appendChild(head);
+        const body = document.createElement('div');
+        body.className = 'cluster-rows';
+        for (const item of items) body.appendChild(renderSetting(item));
+        wrap.appendChild(body);
+        return wrap;
+    }
+
+    function renderRows(rows, groupId, matching) {
+        const def = DISPLAY[groupId];
+        const placed = new Set();
+        if (def) {
+            for (const cluster of def.clusters) {
+                const items = cluster.keys.map(findSetting).filter(item => item && matching.includes(item));
+                if (items.length === 0) continue;
+                rows.appendChild(renderCluster(cluster, items));
+                items.forEach(item => placed.add(item));
+            }
+        }
+        for (const setting of matching) {
+            if (!placed.has(setting)) rows.appendChild(renderSetting(setting));
+        }
+    }
+
     let snapshot = null;
     let models = [];
     let dirty = new Map();
@@ -71,7 +257,6 @@
 
     function render() {
         if (!snapshot) return;
-        const groups = snapshot.groups.slice().sort((a, b) => a.order - b.order);
         content.innerHTML = '';
         nav.innerHTML = '';
         fileLabel.textContent = snapshot.file || 'settings.json';
@@ -80,21 +265,9 @@
         const query = filter.trim().toLowerCase();
         let visible = 0;
 
-        for (const group of groups) {
-            const settings = snapshot.settings.filter(setting => setting.group === group.id);
-            let matching;
-            let advanced = [];
-            if (group.id === 'models') {
-                matching = settings.filter(setting => PRIMARY_MODEL_KEYS.has(setting.key)
-                    && matches(setting, query));
-                advanced = advancedSettings().filter(setting => !query || matches(setting, query));
-            } else if (group.id === 'context') {
-                matching = settings.filter(setting => !PER_ROLE_CTX_KEYS.has(setting.key)
-                    && matches(setting, query));
-            } else {
-                matching = settings.filter(setting => matches(setting, query));
-            }
-            if (query && matching.length === 0 && advanced.length === 0) continue;
+        for (const group of viewGroups()) {
+            const {matching, advanced} = groupSettings(group.id, query);
+            if (matching.length === 0 && advanced.length === 0) continue;
             visible += matching.length + advanced.length;
 
             const link = document.createElement('a');
@@ -113,9 +286,7 @@
                 </div>
                 <div class="settings-rows"></div>`;
             const rows = section.querySelector('.settings-rows');
-            for (const setting of matching) {
-                rows.appendChild(renderSetting(setting));
-            }
+            renderRows(rows, group.id, matching);
             if (group.id === 'models') {
                 const warnings = modelWarnings();
                 if (warnings.length > 0) {
@@ -297,6 +468,7 @@
         const row = document.createElement('article');
         row.className = 'setting-row';
         row.dataset.key = setting.key;
+        if (setting.dependsOn) row.classList.add('is-dependent');
         if (dirty.has(setting.key)) row.classList.add('is-dirty');
         if (errors.has(setting.key)) row.classList.add('has-error');
 
@@ -544,21 +716,9 @@
         if (!snapshot) return;
         const query = filter.trim().toLowerCase();
         for (const link of nav.querySelectorAll('a')) {
-            const group = link.dataset.group;
-            let count;
-            if (group === 'models') {
-                count = snapshot.settings.filter(setting => setting.group === 'models'
-                    && PRIMARY_MODEL_KEYS.has(setting.key) && matches(setting, query)).length
-                    + advancedSettings().filter(setting => matches(setting, query)).length;
-            } else if (group === 'context') {
-                count = snapshot.settings.filter(setting => setting.group === 'context'
-                    && !PER_ROLE_CTX_KEYS.has(setting.key) && matches(setting, query)).length;
-            } else {
-                count = snapshot.settings.filter(setting => setting.group === group
-                    && matches(setting, query)).length;
-            }
+            const {matching, advanced} = groupSettings(link.dataset.group, query);
             const badge = link.lastElementChild;
-            if (badge) badge.textContent = count;
+            if (badge) badge.textContent = matching.length + advanced.length;
         }
     }
 
@@ -650,7 +810,7 @@
 
     async function resetAll() {
         if (!snapshot) return;
-        if (!window.confirm('Återställa alla UI-överridningar till standardvärden?')) return;
+        if (!window.confirm('Återställa alla UI-överstyrningar till standardvärden?')) return;
         try {
             const response = await fetch(`${API}/reset`, {
                 method: 'POST',
@@ -663,7 +823,7 @@
             dirty.clear();
             errors.clear();
             setStatus('Alla återställda', 'ok');
-            toast('Alla UI-överridningar återställdes.');
+            toast('Alla UI-överstyrningar återställdes.');
             render();
         } catch (error) {
             toast(error.message || 'Kunde inte återställa inställningarna.', 'error');

@@ -21,11 +21,20 @@
         return fetch('/api/settings', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (json) {
-                if (json && typeof json['gpu.poll-interval-ms'] !== 'undefined') {
-                    var v = parseInt(json['gpu.poll-interval-ms'], 10);
-                    if (!isNaN(v) && v >= 1000 && v <= 10000) {
-                        state.pollMs = v;
+                if (!json) return;
+                var raw;
+                if (Array.isArray(json.settings)) {
+                    for (var i = 0; i < json.settings.length; i++) {
+                        if (json.settings[i].key === 'gpu.poll-interval-ms') {
+                            raw = json.settings[i].value != null ? json.settings[i].value : json.settings[i].defaultValue;
+                        }
                     }
+                } else {
+                    raw = json['gpu.poll-interval-ms'];
+                }
+                var v = parseInt(raw, 10);
+                if (!isNaN(v) && v >= 1000 && v <= 10000) {
+                    state.pollMs = v;
                 }
             })
             .catch(function () { });
