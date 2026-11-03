@@ -91,7 +91,7 @@ public class SettingsSchema {
                 decimal("video.ollama.repeat-penalty", "video", "Upprepningsstraff", "Straff för upprepningar i videomodellen.", 1.1, 1, 2, 0.05, ApplyMode.LIVE, null, null),
                 integer("video.ollama.max-retries", "video", "Omförsök", "Antal omförsök vid fel/tomt svar.", 1, 0, 10, 1, ApplyMode.LIVE, null, null),
                 integer("video.ollama.max-summary-chars", "video", "Max tecken till sammanfattning", "Max antal tecken av delanalyser som skickas till sammanfattning.", 15000, 1000, 200000, 1000, ApplyMode.LIVE, null, null),
-                text("video.ollama.keep-alive", "video", "Keep-alive", "Hur länge videomodellen hålls laddad (t.ex. 0, 5m).", "0", ApplyMode.RESTART, null, null),
+                text("video.ollama.keep-alive", "video", "Keep-alive", "Hur länge videomodellen hålls laddad under jobbet (t.ex. 5m). Avlastas efter jobbet.", "5m", ApplyMode.RESTART, null, null),
                 text("video.answer-language", "video", "Analyspråk", "Språk för videoanalysens sammanfattning.", "English", ApplyMode.LIVE, null, null),
                 readOnly(text("video.ollama.base-url", "video", "Ollama URL (video)", "Adress till Ollama för videoanalys.", "http://localhost:11434", ApplyMode.RESTART, null, null)),
                 readOnly(path("video.output-dir", "video", "Analysmapp", "Mapp där delanalyser sparas.", "analyser", ApplyMode.RESTART)),
