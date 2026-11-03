@@ -59,6 +59,16 @@ public class ModelConfigurationLogger implements ApplicationRunner {
                 effective.hasOwnModel("followup"), false);
         logRole("rerank", effective.effectiveModel("rerank"), effective.effectiveNumCtx("rerank"),
                 effective.hasOwnModel("rerank"), false);
+        boolean videoEnabled = "true".equalsIgnoreCase(String.valueOf(effective.value("video.enabled")));
+        if (videoEnabled) {
+            int videoCtx = 16384;
+            try {
+                Object v = effective.value("video.ollama.num-ctx");
+                if (v != null) videoCtx = Integer.parseInt(String.valueOf(v));
+            } catch (NumberFormatException ignored) {
+            }
+            logRole("video", effective.string("video.ollama.model"), videoCtx, true, true);
+        }
 
         Map<String, Set<Integer>> ctxsByModel = new HashMap<>();
         add(ctxsByModel, chat, chatCtx);
@@ -142,6 +152,9 @@ public class ModelConfigurationLogger implements ApplicationRunner {
         add(models, effective.effectiveModel("rewrite"));
         add(models, effective.effectiveModel("followup"));
         add(models, effective.effectiveModel("rerank"));
+        if ("true".equalsIgnoreCase(String.valueOf(effective.value("video.enabled")))) {
+            add(models, effective.string("video.ollama.model"));
+        }
         return List.copyOf(models);
     }
 
