@@ -129,6 +129,7 @@ function renderJobs() {
     }));
     videoJobList.querySelectorAll('[data-delete]').forEach(b => b.addEventListener('click', async () => {
         await fetch(VIDEO_API + '/' + b.dataset.delete, { method: 'DELETE' });
+        if (currentJobId === b.dataset.delete) { draftView.hidden = true; currentJobId = null; }
         refreshJobs();
     }));
 }

@@ -159,14 +159,17 @@ public class VideoJobController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> cancel(@PathVariable String id) {
-        boolean ok = jobService.cancel(id);
-        if (!ok) {
-            VideoJob job = jobService.get(id);
-            if (job == null) return ResponseEntity.notFound().build();
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Jobbet kan inte avbrytas."));
+    public ResponseEntity<?> cancelOrDelete(@PathVariable String id) {
+        VideoJob job = jobService.get(id);
+        if (job == null) return ResponseEntity.notFound().build();
+        if (job.status == VideoJob.Status.QUEUED || job.status == VideoJob.Status.ANALYZING) {
+            boolean ok = jobService.cancel(id);
+            if (!ok) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Jobbet kan inte avbrytas."));
+            return ResponseEntity.ok(Map.of("id", id, "status", "CANCELLED"));
         }
-        return ResponseEntity.ok(Map.of("id", id, "status", "CANCELLED"));
+        boolean ok = jobService.delete(id);
+        if (!ok) return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Jobbet kunde inte raderas."));
+        return ResponseEntity.ok(Map.of("id", id, "status", "DELETED"));
     }
 
     private Map<String, Object> toSummary(VideoJob job) {

@@ -90,6 +90,33 @@ public class VideoJobService {
         return false;
     }
 
+    /** Tar bort ett färdigt/misslyckat/avbrutet jobb ur minnet och raderar dess körmapp på disk. */
+    public boolean delete(String id) {
+        VideoJob job = jobs.get(id);
+        if (job == null) return false;
+        if (job.status == VideoJob.Status.QUEUED || job.status == VideoJob.Status.ANALYZING) {
+            return false; // använd cancel för pågående jobb
+        }
+        jobs.remove(id);
+        if (job.savedDir != null) {
+            try {
+                deleteDir(job.savedDir);
+            } catch (Exception e) {
+                log.warn("Kunde inte radera körmapp {}: {}", job.savedDir, e.getMessage());
+            }
+        }
+        return true;
+    }
+
+    private static void deleteDir(java.nio.file.Path dir) throws java.io.IOException {
+        if (!java.nio.file.Files.exists(dir)) return;
+        try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(dir)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try { java.nio.file.Files.deleteIfExists(p); } catch (java.io.IOException ignored) { }
+            });
+        }
+    }
+
     @PreDestroy
     public void shutdown() {
         executor.shutdown();
