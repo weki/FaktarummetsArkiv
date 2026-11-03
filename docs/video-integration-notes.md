@@ -1,44 +1,42 @@
 # Video integration notes
 
-## Baslinje (Fas 0)
+## Mål (uppdaterat)
+Modulen producerar ett **procedurutkast** (titel, syfte, förkrav, numrerade steg med exakt inmatning, tidpunkt och bildruta per steg) från en skärminspelning. Resultatet sparas **inte** i vektordatabasen (ingen Qdrant/embeddings/chat). Modulen ligger i samma projekt men är avgränsad via paketet `video` och kan flyttas senare (t.ex. in i DocuForge).
+
+## Baslinje
 - Branch: `feature/video-module` från `main` (commit `f6edeec`).
-- `./gradlew test` (exkl. `eval`-taggade tester) är grön på baslinjen.
-- `data/gpu-history.jsonl` är runtime-data och hålls utanför commit.
+- `./gradlew test` (exkl. `eval`) är grön.
 
-## SettingsSchema-kontrakt (Fas 0)
-- `SettingsContractTest.correlatesProfileKeysAndDefaultsWithoutInventingSettings` kräver
-  att varje icke-`spring.*`/`server.*`-nyckel i `SettingsSchema` finns i snapshot,
-  och att alla nycklar i `application.properties` som ska vara inställningar registreras i schemat.
-- Slutsats: alla nya `video.*`-nycklar (Fas 4) måste registreras i `SettingsSchema`,
-  annars blir de inte synliga i GUI:t och tester kan brytas.
-- `spring.*`/`server.*`-nycklar (uppladdningsgränser m.m.) är redan `readOnly(..., RESTART)`.
+## Modulgräns
+- Paket `se.rightech.fakturummetsarkiv.video` (publikt API) och `video.internal`.
+- Regler verifieras av `VideoModuleBoundaryTest` (ArchUnit).
+- `VideoDescriber` är bean endast när `video.enabled=true`.
 
-## Modulgräns (Fas 1)
-- Nytt paket `se.rightech.fakturummetsarkiv.video` (publikt API) och
-  `se.rightech.fakturummetsarkiv.video.internal` (allt annat).
-- Regler verifieras av `VideoModuleBoundaryTest` (ArchUnit):
-  1. Klasser i `video` (utanför `video.internal`) får inte bero på
-     `rag`, `chat`, `grounding`, `llm`, `system` eller `markdown`.
-  2. Klasser utanför `video` får inte bero på `video.internal`.
-- `video` får vara bean endast när `video.enabled=true` (`@ConditionalOnProperty`).
+## Publikt API
+- `VideoDescriber.draft(Path, String, VideoOptions, Consumer<String>) -> ProcedureDraft`
+- `ProcedureDraft`, `ProcedureStep`, `StepKind`, `VideoOptions`, `VideoAnalysisException`
 
-## Grannprojekt (videointerpreter)
-- Källkod i `/home/weki/IdeaProjects/videointerpreter`.
-- Relevanta klasser att porta: `VideoAnalysisService`, `FrameExtractorService`,
-  `VideoOllamaClient`, `OllamaChatRequest`, `AnalysisResult`, `AnalysisResultStore`,
-  `VideoAnalysisController` (portas inte – ersätts av jobb-API).
-- Beroenden (speglas i `build.gradle`): `javacv 1.5.11`, `ffmpeg 7.1-1.5.11:linux-x86_64`,
-  `javacpp 1.5.11:linux-x86_64`, `tesseract-platform 5.5.0-1.5.11`.
-- Konfiguration: se grannprojektets `application.properties` (modell `qwen3-vl:8b-instruct`,
-  `ollama.num-ctx=16384`, `video.max-dim=1280`, `video.chunk-size=4`, etc.).
+## Kvalitetsbeslut
+- OCR-whitelist borttagen (behåller å/ä/ö och specialtecken).
+- Varje behållen bildruta sparas som JPEG i körmappens `frames/` (frame-XXXXs.jpg).
+- Standard `video.max-frames=300`.
+- Per-chunk strukturerad JSON-output; slutpass för titel/syfte/förkrav/varningar.
+- `inputText` bevaras ordagrant genom slutpasset (modellen får inte skriva om det).
+- Videomodellen avlastas efter jobbet (keep_alive=0).
 
-## Fallgropar (se TODO-listan)
-1. `ollama.model` i detta projekt är textmodellen `qwen3:8b` – alla video-inställningar
-   måste använda prefixet `video.ollama.*`.
-2. `RetrievalService.dedupKey` kollapsar videosegment från samma fil – måste inkludera
-   `chunkIndex`/`startSecond`.
-3. Sökfrågan går på engelska (`rag.search-language=en`) – standard: indexera segmenttext
-   på engelska.
-4. VRAM: videomodellen avlastas efter jobbet; ett jobb åt gången.
-5. `DocumentController.upload` använder `file.getBytes()` – stora videor måste streamas.
-6. Uppladdningsgränser (`max-file-size=100MB` som standard) måste höjas.
+## Konfiguration
+- Alla nycklar under `video.*`, `video.enabled=false` som standard.
+- Se `application.properties` och `SettingsSchema` (grupp "Video").
+
+## Grannprojekt
+- `/home/weki/IdeaProjects/videointerpreter` (källa för portad kod).
+- `/home/weki/IdeaProjects/DocuForge/procedure-schema.json` (målformat för fas 7, göras senare).
+
+## Fallgropar
+1. `ollama.model` är textmodellen `qwen3:8b` – video använder `video.ollama.model`.
+2. OCR-whitelist tappade specialtecken – borttagen.
+3. Glesa bildrutor – höjt standardtak till 300.
+4. Ingen bild per steg tidigare – sparas nu i `frames/`.
+5. VRAM – ett jobb åt gången, avlastning efter jobb.
+6. Stora filer – streama (fas 6).
+7. Uppladdningsgräns 100 MB – höjs i fas 6.

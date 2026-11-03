@@ -81,10 +81,14 @@ public class VideoOllamaClient {
     }
 
     public String analyzeFrames(List<String> base64Images, String prompt) {
-        return analyzeFrames(base64Images, prompt, null);
+        return analyzeFrames(base64Images, prompt, null, null);
     }
 
     public String analyzeFrames(List<String> base64Images, String prompt, Consumer<String> progress) {
+        return analyzeFrames(base64Images, prompt, null, progress);
+    }
+
+    public String analyzeFrames(List<String> base64Images, String prompt, Object format, Consumer<String> progress) {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
 
@@ -94,7 +98,7 @@ public class VideoOllamaClient {
         userMessage.put("images", base64Images);
         messages.add(userMessage);
 
-        return chat(messages, base64Images.size(), maxOutputTokens, progress);
+        return chat(messages, base64Images.size(), maxOutputTokens, format, progress);
     }
 
     public String summarizeAnalyses(List<String> partialAnalyses, String originalPrompt) {
@@ -123,11 +127,11 @@ public class VideoOllamaClient {
         messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
         messages.add(Map.of("role", "user", "content", sb.toString()));
 
-        return chat(messages, 0, maxSummaryOutputTokens, progress);
+        return chat(messages, 0, maxSummaryOutputTokens, null, progress);
     }
 
     private String chat(List<Map<String, Object>> messages, int imageCount, int numPredict,
-                        Consumer<String> progress) {
+                        Object format, Consumer<String> progress) {
         Map<String, Object> options = new LinkedHashMap<>();
         options.put("temperature", 0.0);
         options.put("num_ctx", numCtx);
@@ -142,7 +146,8 @@ public class VideoOllamaClient {
                 messages,
                 options,
                 keepAlive,
-                false
+                false,
+                format
         );
 
         String lastError = null;
@@ -252,6 +257,20 @@ public class VideoOllamaClient {
                 log.warn("Svaret nådde slutet av kontextfönstret (num_ctx={}). "
                         + "Höj video.ollama.num-ctx om svaret blev avhugget.", numCtx);
             }
+        }
+    }
+
+    /** Avlastar videomodellen (keep_alive=0) så att chattmodellen får plats igen. */
+    public void unload() {
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("model", model);
+            body.put("prompt", "");
+            body.put("keep_alive", 0);
+            restClient.post().uri("/api/generate").body(body).retrieve().toBodilessEntity();
+            log.info("Videomodellen {} avlastad.", model);
+        } catch (Exception e) {
+            log.warn("Kunde inte avlasta videomodellen: {}", e.getMessage());
         }
     }
 

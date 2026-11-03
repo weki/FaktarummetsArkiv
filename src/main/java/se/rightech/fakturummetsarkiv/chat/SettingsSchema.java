@@ -98,6 +98,8 @@ public class SettingsSchema {
                 bool("video.save-partials", "video", "Spara delanalyser", "Spara delanalyser på disk.", true, ApplyMode.LIVE, null, null),
                 integer("video.max-frames", "video", "Max bildrutor", "Max antal bildrutor som extraheras.", 100, 1, 1000, 1, ApplyMode.LIVE, null, null),
                 integer("video.max-dim", "video", "Max bildbredd (modell)", "Största sidan på bild som skickas till modellen.", 768, 128, 4096, 64, ApplyMode.LIVE, null, null),
+                integer("video.frame-image-max-dim", "video", "Max bildbredd (sparad bild)", "Största sidan på sparad bildruta.", 1600, 128, 4096, 64, ApplyMode.LIVE, null, null),
+                integer("video.keep-runs-days", "video", "Spara körrappor (dagar)", "Hur länge körmappar behålls.", 30, 1, 365, 1, ApplyMode.LIVE, null, null),
                 bool("video.ocr-enabled", "video", "OCR", "Kör OCR på bildrutor.", true, ApplyMode.LIVE, null, null),
                 text("video.ocr-lang", "video", "OCR-språk", "Tesseract-språk.", "eng+swe", ApplyMode.RESTART, null, null),
                 integer("video.ocr-max-dim", "video", "Max bildbredd (OCR)", "Största sidan på bild för OCR.", 1600, 128, 4096, 64, ApplyMode.LIVE, null, null),

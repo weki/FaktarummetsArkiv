@@ -39,7 +39,7 @@ public class FrameExtractorService {
     // Mellansteg vid nedskalning till diff-signaturen, annars blir 1080p -> 32x32 brusigt.
     private static final int DIFF_PRESCALE = 256;
 
-    @Value("${video.max-frames:100}")
+    @Value("${video.max-frames:300}")
     private int maxFrames;
 
     /** Största sidan (px) på bilden som skickas till modellen. */
@@ -74,7 +74,11 @@ public class FrameExtractorService {
      * @param extractedText OCR-text från en större version av samma bildruta
      * @param second        sekund i videon som bildrutan hör till
      */
-    public record AnalyzedFrame(String base64Image, String extractedText, int second) {}
+    public record AnalyzedFrame(String base64Image, String extractedText, int second, java.nio.file.Path framePath) {
+        public AnalyzedFrame(String base64Image, String extractedText, int second) {
+            this(base64Image, extractedText, second, null);
+        }
+    }
 
     public FrameExtractorService() {
         float[] sharpenMatrix = {
@@ -86,6 +90,13 @@ public class FrameExtractorService {
     }
 
     public List<AnalyzedFrame> extractFrames(File videoFile) throws Exception {
+        return extractFrames(videoFile, null);
+    }
+
+    public List<AnalyzedFrame> extractFrames(File videoFile, java.nio.file.Path framesDir) throws Exception {
+        if (framesDir != null) {
+            java.nio.file.Files.createDirectories(framesDir);
+        }
         List<AnalyzedFrame> analyzedFrames = new ArrayList<>();
         TessBaseAPI tessApi = initTesseract();
 
@@ -102,7 +113,7 @@ public class FrameExtractorService {
             log.info("Startar extrahering. Längd: {} s, FPS: {}, max: {} rutor, tröskel: {}",
                     totalSeconds, fps, maxFrames, frameDiffThreshold);
 
-            extractByTimestamp(grabber, totalSeconds, tessApi, analyzedFrames);
+            extractByTimestamp(grabber, totalSeconds, tessApi, analyzedFrames, framesDir);
 
             if (analyzedFrames.isEmpty()) {
                 log.warn("Tidshopp gav inga rutor, faller tillbaka till sekventiell avkodning.");
@@ -111,7 +122,7 @@ public class FrameExtractorService {
                 } catch (Exception e) {
                     log.warn("Kunde inte starta om grabber: {}", e.getMessage());
                 }
-                extractSequential(grabber, fps, tessApi, analyzedFrames);
+                extractSequential(grabber, fps, tessApi, analyzedFrames, framesDir);
             }
 
             grabber.stop();
@@ -124,7 +135,7 @@ public class FrameExtractorService {
     }
 
     private void extractByTimestamp(FFmpegFrameGrabber grabber, int totalSeconds,
-                                    TessBaseAPI tessApi, List<AnalyzedFrame> out) {
+                                    TessBaseAPI tessApi, List<AnalyzedFrame> out, java.nio.file.Path framesDir) {
         Java2DFrameConverter converter = new Java2DFrameConverter();
         BufferedImage lastSignature = null;
         int lastKeptSecond = -1;
@@ -167,14 +178,14 @@ public class FrameExtractorService {
             if (lastSignature == null || forceKeep || diff(lastSignature, signature) > frameDiffThreshold) {
                 lastSignature = signature;
                 lastKeptSecond = sec;
-                addFrame(full, sec, tessApi, out);
+                addFrame(full, sec, tessApi, out, framesDir);
             }
         }
         log.info("Tidshopp: {} kandidater, {} behölls.", candidates, out.size());
     }
 
     private void extractSequential(FFmpegFrameGrabber grabber, double fps,
-                                   TessBaseAPI tessApi, List<AnalyzedFrame> out) {
+                                   TessBaseAPI tessApi, List<AnalyzedFrame> out, java.nio.file.Path framesDir) {
         int totalFrames = grabber.getLengthInVideoFrames();
         double safeFps = fps > 0 ? fps : 1.0;
         int sampleInterval = Math.max(1, (int) Math.ceil(safeFps));
@@ -209,12 +220,13 @@ public class FrameExtractorService {
             if (lastSignature == null || forceKeep || diff(lastSignature, signature) > frameDiffThreshold) {
                 lastSignature = signature;
                 lastKeptSecond = sec;
-                addFrame(full, sec, tessApi, out);
+                addFrame(full, sec, tessApi, out, framesDir);
             }
         }
     }
 
-    private void addFrame(BufferedImage full, int second, TessBaseAPI tessApi, List<AnalyzedFrame> out) {
+    private void addFrame(BufferedImage full, int second, TessBaseAPI tessApi, List<AnalyzedFrame> out,
+                          java.nio.file.Path framesDir) {
         if (out.isEmpty()) {
             log.info("Första bildrutan: original {}x{}, till modellen {}x{}",
                     full.getWidth(), full.getHeight(),
@@ -226,9 +238,24 @@ public class FrameExtractorService {
             // OCR körs på en större, oskärpt bild för bästa textläsning.
             String ocrText = runOcr(tessApi, scaleToMax(full, ocrMaxDim), second);
 
+            java.nio.file.Path framePath = null;
+            if (framesDir != null) {
+                try {
+                    java.awt.image.BufferedImage forFrame = scaleToMax(full, ocrMaxDim);
+                    String fileName = String.format("frame-%04ds.jpg", second);
+                    framePath = framesDir.resolve(fileName);
+                    try (java.io.OutputStream os = java.nio.file.Files.newOutputStream(framePath)) {
+                        ImageIO.write(forFrame, "jpg", os);
+                    }
+                } catch (Exception fe) {
+                    log.warn("Kunde inte spara bildruta vid {}s: {}", second, fe.getMessage());
+                    framePath = null;
+                }
+            }
+
             try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
                 ImageIO.write(forModel, "jpg", baos);
-                out.add(new AnalyzedFrame(Base64.getEncoder().encodeToString(baos.toByteArray()), ocrText, second));
+                out.add(new AnalyzedFrame(Base64.getEncoder().encodeToString(baos.toByteArray()), ocrText, second, framePath));
             }
         } catch (Exception e) {
             log.warn("Kunde inte bearbeta bildruta vid {}s: {}", second, e.getMessage());
@@ -291,7 +318,6 @@ public class FrameExtractorService {
                 log.warn("Leptonica kunde inte läsa bildruta vid {}s för OCR.", second);
                 return "";
             }
-            tessApi.SetVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.:/\\ ");
             tessApi.SetVariable("preserve_interword_spaces", "1");
             tessApi.SetImage(pix);
             textPtr = tessApi.GetUTF8Text();
