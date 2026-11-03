@@ -35,9 +35,11 @@ public class VideoJobController {
     private static final Set<String> ALLOWED_EXT = Set.of("mp4", "mkv", "webm", "mov");
 
     private final VideoJobService jobService;
+    private final DocuForgeExporter exporter;
 
-    public VideoJobController(VideoJobService jobService) {
+    public VideoJobController(VideoJobService jobService, DocuForgeExporter exporter) {
         this.jobService = jobService;
+        this.exporter = exporter;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -135,6 +137,25 @@ public class VideoJobController {
             if (probed != null) type = MediaType.parseMediaType(probed);
         } catch (Exception ignored) { }
         return ResponseEntity.ok().contentType(type).body(resource);
+    }
+
+    @GetMapping(value = "/{id}/export", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> export(@PathVariable String id) {
+        VideoJob job = jobService.get(id);
+        if (job == null || job.draft == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+        byte[] zip;
+        try {
+            zip = exporter.toZip(job.draft);
+        } catch (DocuForgeExporter.ExportException e) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).build();
+        }
+        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(zip);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"procedur.zip\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(resource);
     }
 
     @DeleteMapping("/{id}")

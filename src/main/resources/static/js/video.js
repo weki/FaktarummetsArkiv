@@ -185,6 +185,19 @@ function renderDraft(draft, jobId) {
         a.href = url; a.download = (draft.title || 'procedur') + '.md';
         a.click(); URL.revokeObjectURL(url);
     };
+    document.getElementById('draftExport').onclick = async () => {
+        try {
+            const res = await fetch(VIDEO_API + '/' + jobId + '/export');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'procedur.zip';
+            a.click(); URL.revokeObjectURL(url);
+        } catch (err) {
+            setVideoStatus('Export misslyckades: ' + err.message, 'err');
+        }
+    };
     document.getElementById('draftDelete').onclick = async () => {
         await fetch(VIDEO_API + '/' + jobId, { method: 'DELETE' });
         draftView.hidden = true;

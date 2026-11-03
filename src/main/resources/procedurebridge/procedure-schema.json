@@ -1,0 +1,385 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://docuforge.local/schemas/procedure-v1.json",
+  "title": "DocuForge Procedure Schema",
+  "description": "Schema for DocuForge Standard Operating Procedure (SOP) YAML files",
+  "type": "object",
+  "required": [
+    "metadata",
+    "sections"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Document metadata",
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique document identifier (e.g. 'sop-1024')",
+          "pattern": "^[a-zA-Z0-9\\-_.]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Document title",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "document_type": {
+          "type": "string",
+          "description": "Document type",
+          "default": "Standardprocedur (SOP)"
+        },
+        "department": {
+          "type": "string",
+          "description": "Department responsible for the procedure"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author name"
+        },
+        "date": {
+          "type": "string",
+          "description": "Document date (ISO-8601)",
+          "format": "date"
+        },
+        "confidentiality": {
+          "type": "string",
+          "description": "Confidentiality classification",
+          "enum": [
+            "Internt bruk",
+            "Konfidentiellt",
+            "Hemligt",
+            "Offentlig"
+          ],
+          "default": "Internt bruk"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags for categorization (max 12, max 30 chars each)",
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "maxLength": 30,
+            "pattern": "^[\\p{L}\\p{N}\\s\\-_/.]+$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "sections": {
+      "type": "object",
+      "description": "Document sections",
+      "properties": {
+        "purpose": {
+          "$ref": "#/definitions/section"
+        },
+        "scope": {
+          "$ref": "#/definitions/section"
+        },
+        "roles": {
+          "type": "object",
+          "description": "Roles and responsibilities section",
+          "properties": {
+            "title": {
+              "type": "string",
+              "default": "Ansvar"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "role",
+                  "description"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "prerequisites": {
+          "type": "object",
+          "description": "Prerequisites and equipment section",
+          "properties": {
+            "title": {
+              "type": "string",
+              "default": "Utrustning & Förutsättningar"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "procedure": {
+          "type": "object",
+          "description": "Step-by-step procedure section",
+          "properties": {
+            "title": {
+              "type": "string",
+              "default": "Steg-för-steg-instruktion"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/step"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "contingency": {
+          "type": "object",
+          "description": "Contingency/deviation handling section",
+          "properties": {
+            "title": {
+              "type": "string",
+              "default": "Avvikelsehantering"
+            },
+            "description": {
+              "type": "string"
+            },
+            "action": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "references": {
+          "type": "array",
+          "description": "Referenced files, systems or documents",
+          "items": {
+            "type": "object",
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "description": "Where the reference is located (e.g. a folder or system)"
+              },
+              "description": {
+                "type": "string",
+                "description": "Why the reference is relevant"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "troubleshooting": {
+          "type": "array",
+          "description": "Troubleshooting entries for known problems",
+          "items": {
+            "type": "object",
+            "required": [
+              "issue",
+              "cause",
+              "resolution"
+            ],
+            "properties": {
+              "issue": {
+                "type": "string",
+                "minLength": 1
+              },
+              "cause": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "appendix": {
+          "type": "array",
+          "description": "Appendices with supplementary material",
+          "items": {
+            "type": "object",
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "section": {
+      "type": "object",
+      "description": "Generic section with title and content",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "index_keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "description": "A procedure step with optional subprocedures",
+      "required": [
+        "id",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique step identifier (e.g. 'step-1')",
+          "pattern": "^[a-zA-Z0-9\\-_]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Step title",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Step description"
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to execute"
+        },
+        "subprocedures": {
+          "type": "array",
+          "description": "Nested subprocedures (recursive)",
+          "items": {
+            "$ref": "#/definitions/subprocedure"
+          }
+        },
+        "images": {
+          "type": "array",
+          "description": "Images associated with this step",
+          "items": {
+            "$ref": "#/definitions/image"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "description": "Warnings for this step",
+          "items": {
+            "type": "string"
+          }
+        },
+        "critical": {
+          "type": "boolean",
+          "description": "Whether this step is critical",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "subprocedure": {
+      "type": "object",
+      "description": "A nested subprocedure that can contain steps and further subprocedures",
+      "required": [
+        "id",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique subprocedure identifier (e.g. 'subproc-1')",
+          "pattern": "^[a-zA-Z0-9\\-_]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Subprocedure title",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Subprocedure description"
+        },
+        "steps": {
+          "type": "array",
+          "description": "Steps within this subprocedure",
+          "items": {
+            "$ref": "#/definitions/step"
+          }
+        },
+        "subprocedures": {
+          "type": "array",
+          "description": "Nested subprocedures (recursive)",
+          "items": {
+            "$ref": "#/definitions/subprocedure"
+          }
+        },
+        "images": {
+          "type": "array",
+          "description": "Images associated with this subprocedure",
+          "items": {
+            "$ref": "#/definitions/image"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "image": {
+      "type": "object",
+      "description": "An image associated with a step or subprocedure",
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Image filename (must be a valid PNG or JPEG)",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(png|jpe?g)$"
+        },
+        "caption": {
+          "type": "string",
+          "description": "Image caption"
+        },
+        "width": {
+          "type": "string",
+          "description": "Image width as percentage of text width (20-100)",
+          "pattern": "^(20|30|40|50|60|70|80|90|100)$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
