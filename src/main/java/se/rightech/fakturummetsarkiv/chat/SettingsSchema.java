@@ -83,7 +83,7 @@ public class SettingsSchema {
                 bool("gpu.restart-enabled", "gpu", "Tillåt omstart av Ollama", "Aktivera endast om sidovagnen stödjer det säkert.", false, ApplyMode.LIVE, null, null),
                 text("gpu.restart-token", "gpu", "Omstartstoken", "Hemlig token till sidovagnen.", "", ApplyMode.LIVE, null, null),
 
-                bool("video.enabled", "video", "Aktivera videoanalys", "Slår på videoanalysmodulen. Kräver omstart.", false, ApplyMode.RESTART, null, null),
+                bool("video.enabled", "video", "Aktivera videoanalys", "Slår på videoanalysmodulen. Kräver omstart.", true, ApplyMode.RESTART, null, null),
                 model("video.ollama.model", "video", "Videomodell", "Modell som analyserar bildrutor. Tomt värde ärver huvudmodellen.", "qwen3-vl:8b-instruct"),
                 integer("video.ollama.num-ctx", "video", "Kontext: video", "Kontextfönster för videomodellen.", 16384, 512, 131072, 512, ApplyMode.MODEL_RELOAD, null, "Ändrat kontextfönster laddar om modellen."),
                 integer("video.ollama.max-output-tokens", "video", "Max utdatatokens (delanalys)", "Tak för genererade tokens per delanalys.", 800, 0, 100000, 50, ApplyMode.LIVE, null, null),
