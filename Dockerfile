@@ -8,8 +8,12 @@ RUN ./gradlew bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd --system --uid 10001 --create-home app && mkdir -p /app/archive && chown -R app:app /app
+# Tesseract-språkdata för videoanalys (eng + swe). Versionen måste passa den
+# Tesseract-version som org.bytedeco:tesseract bundlar; kontrollera vid uppgradering.
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-swe     && rm -rf /var/lib/apt/lists/*
+RUN useradd --system --uid 10001 --create-home app && mkdir -p /app/archive /app/analyser && chown -R app:app /app
 COPY --from=build /workspace/build/libs/*.jar /app/app.jar
 USER app
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -368,3 +368,18 @@ dokument tas bort raderas även originalfilen.
 ## Licens
 
 Licens är inte vald ännu. Fråga ägaren innan projektet återanvänds eller publiceras.
+
+## Video → procedurutkast
+
+Modulen analyserar en skärminspelning och producerar ett procedurutkast (titel, syfte, förkrav, numrerade steg med exakt inmatning, tidpunkt och bildruta per steg). Resultatet sparas inte i vektordatabasen; det är ett underlag som granskas och sedan används i DocuForge.
+
+Krav:
+- Ollama med modellen `qwen3-vl:8b-instruct` (`ollama pull qwen3-vl:8b-instruct`)
+- Tesseract med språkdata `eng` och `swe` (`TESSDATA_PREFIX` måste peka på rätt mapp)
+- Sätt `video.enabled=true` i konfigurationen (standard är `false`)
+- Modulen kräver mycket VRAM: videomodellen avlastas efter varje jobb; bara ett jobb åt gången
+
+Nycklar (alla under `video.*`, se Inställningar i GUI:t):
+`video.enabled`, `video.ollama.model`, `video.ollama.num-ctx`, `video.max-frames` (standard 300), `video.max-dim`, `video.frame-image-max-dim`, `video.ocr-lang`, `video.chunk-size`, `video.output-dir`, `video.answer-language`.
+
+API: `/api/video-jobs` (POST multipart, GET, SSE `/events`, GET `/{id}/draft`, GET `/{id}/frames/{file}`, DELETE).
