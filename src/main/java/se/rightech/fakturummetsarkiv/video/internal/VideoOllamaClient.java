@@ -61,7 +61,7 @@ public class VideoOllamaClient {
     private String keepAlive;
 
     @SuppressWarnings("deprecation")
-    public VideoOllamaClient(@Value("${video.ollama.base-url:${OLLAMA_BASE_URL:http://localhost:11434}}") String baseUrl) {
+    public VideoOllamaClient(@Value("${video.ollama.base-url:${ollama.base-url:http://localhost:11434}}") String baseUrl) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(900000);
