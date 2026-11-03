@@ -214,7 +214,12 @@ public class EffectiveSettings {
             case "spring.servlet.multipart.max-file-size", "spring.servlet.multipart.max-request-size",
                  "server.tomcat.max-swallow-size", "spring.codec.max-in-memory-size" ->
                     environment == null ? null : environment.getProperty(key);
-            default -> throw new IllegalArgumentException("Okänd inställning: " + key);
+            default -> {
+                if (key != null && key.startsWith("video.")) {
+                    yield environment == null ? null : environment.getProperty(key);
+                }
+                throw new IllegalArgumentException("Okänd inställning: " + key);
+            }
         };
     }
 
