@@ -39,18 +39,18 @@ public class FrameExtractorService {
     // Mellansteg vid nedskalning till diff-signaturen, annars blir 1080p -> 32x32 brusigt.
     private static final int DIFF_PRESCALE = 256;
 
-    @Value("${video.max-frames:300}")
+    @Value("${video.max-frames:250}")
     private int maxFrames;
 
     /** Största sidan (px) på bilden som skickas till modellen. */
-    @Value("${video.max-dim:768}")
+    @Value("${video.max-dim:1280}")
     private int maxDim;
 
     /** Största sidan (px) på bilden som OCR körs på. Större än max-dim ger bättre textläsning. */
     @Value("${video.ocr-max-dim:1600}")
     private int ocrMaxDim;
 
-    @Value("${video.frame-diff-threshold:3.0}")
+    @Value("${video.frame-diff-threshold:0.5}")
     private double frameDiffThreshold;
 
     @Value("${video.max-static-seconds:3}")
