@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Video – Fakturummets Arkiv</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/layout.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/documents.css">
+    <link rel="stylesheet" href="/css/responsive.css">
+</head>
+<body>
+<div class="app-layout">
+<nav id="sidebar" data-page="video"></nav>
+
+<main id="videoPage" class="page-main">
+    <div class="page-inner">
+        <div class="page-head">
+            <div class="page-head-left">
+                <h2>Video → procedurutkast</h2>
+            </div>
+            <span id="videoStatus" class="status"></span>
+        </div>
+
+        <div class="tab-panel active" data-panel="upload">
+            <form id="videoUploadForm" class="doc-form">
+                <label class="dropzone" id="videoDropzone">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                    <span><strong>Välj en videofil</strong> eller släpp den här</span>
+                    <input type="file" id="videoFileInput" accept=".mp4,.mkv,.webm,.mov,video/*">
+                </label>
+                <div class="row row-wrap">
+                    <label>Hint (valfritt): <input type="text" id="videoHint" placeholder="t.ex. 'skapa ny användare i systemet'"></label>
+                    <label>Språk: <select id="videoLanguage">
+                        <option value="Swedish">Svenska</option>
+                        <option value="English">Engelska</option>
+                    </select></label>
+                </div>
+                <div class="row">
+                    <button type="submit" id="videoSubmitBtn" class="primary-btn" disabled>Analysera</button>
+                    <span id="videoUploadStatus" class="status"></span>
+                </div>
+            </form>
+        </div>
+
+        <h3>Pågående och tidigare jobb</h3>
+        <div id="videoJobList" class="table-card"></div>
+
+        <div id="draftView" hidden>
+            <h3 id="draftTitle"></h3>
+            <p id="draftPurpose" class="meta"></p>
+            <div id="draftWarnings"></div>
+            <h4>Förkrav</h4>
+            <ul id="draftPrereqs"></ul>
+            <h4>Steg</h4>
+            <ol id="draftSteps"></ol>
+            <div class="row">
+                <button type="button" id="draftDownloadMd" class="btn-ghost">Ladda ner Markdown</button>
+                <button type="button" id="draftDelete" class="danger">Radera</button>
+            </div>
+        </div>
+    </div>
+</main>
+</div>
+
+<script src="/js/shared/common.js"></script>
+<script src="/js/shared/threads-store.js"></script>
+<script src="/js/shared/sidebar.js"></script>
+<script src="/js/video.js"></script>
+</body>
+</html>

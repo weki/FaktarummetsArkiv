@@ -37,6 +37,7 @@ function buildSidebar(nav) {
         + '<div id="threadList" class="thread-list"></div>'
         + '<div class="sidebar-foot">'
         + link('/documents.html', 'documentsLink', 'Dokument', 'docs', 'documents')
+        + link('/video.html', 'videoLink', 'Video', 'docs', 'video')
         + link('/settings.html', 'settingsLink', 'Inställningar', 'settings', 'settings')
         + '<div id="gpuSidebarCard" class="gpu-sidebar-card" style="display:none" role="button" tabindex="0" aria-label="Öppna GPU-panel"></div>'
         + '<div class="model-row"><div id="modelStatus" class="model-status" role="status"><span class="dot"></span>'
