@@ -8,3 +8,4 @@ application-local.properties
 .env
 *.pdf
 *.log
+analyser/
