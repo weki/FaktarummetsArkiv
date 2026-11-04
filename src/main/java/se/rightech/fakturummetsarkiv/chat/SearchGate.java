@@ -146,8 +146,10 @@ public class SearchGate {
                 }
                 String first = raw.split("\\s+", 2)[0].replaceAll("[^A-Za-z]", "").toUpperCase(Locale.ROOT);
                 if ("DIRECT".equals(first)) {
-                    return new Decision(!isDirectCandidate(question), question,
-                            !isDirectCandidate(question) ? SearchGate.Mode.SEARCH : SearchGate.Mode.DIRECT);
+                    boolean forceSearch = !isDirectCandidate(question)
+                            && (isArchiveRelated(question) || isFollowUp(question));
+                    return new Decision(forceSearch, question,
+                            forceSearch ? SearchGate.Mode.SEARCH : SearchGate.Mode.DIRECT);
                 }
                 String query = raw.replaceAll("\\s+", " ").trim();
                 if (query.length() > 200) {
@@ -173,7 +175,8 @@ public class SearchGate {
             else if ("SEARCH".equals(first)) parsedMode = SearchGate.Mode.SEARCH;
             else if ("BOTH".equals(first)) parsedMode = SearchGate.Mode.BOTH;
             else parsedMode = parseAttachmentDefault();
-            if (parsedMode == SearchGate.Mode.DIRECT && !isDirectCandidate(question) && isArchiveRelated(question)) {
+            if (parsedMode == SearchGate.Mode.DIRECT && !isDirectCandidate(question)
+                    && (isArchiveRelated(question) || isFollowUp(question))) {
                 parsedMode = hasAttachment ? SearchGate.Mode.ATTACHMENT : SearchGate.Mode.SEARCH;
             }
             boolean search = (parsedMode == SearchGate.Mode.SEARCH || parsedMode == SearchGate.Mode.BOTH);
@@ -342,6 +345,19 @@ public class SearchGate {
             if (lower.contains(t)) return true;
         }
         return false;
+    }
+
+    static boolean isFollowUp(String question) {
+        if (question == null) return false;
+        String lower = question.toLowerCase(Locale.ROOT);
+        if (lower.contains("och") || lower.contains("då") || lower.contains("sedan")
+                || lower.contains("then") || lower.contains("next") || lower.contains("mer")
+                || lower.contains("continue") || lower.contains("fortsätt")) {
+            return true;
+        }
+        String normalized = normalize(question);
+        int words = normalized.isEmpty() ? 0 : normalized.split("\\s+").length;
+        return words <= 3; // short follow-up like "och då?" or "vad menar du?"
     }
 
     static boolean isDirectCandidate(String question) {
