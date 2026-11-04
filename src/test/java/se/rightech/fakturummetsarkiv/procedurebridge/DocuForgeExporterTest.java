@@ -29,7 +29,7 @@ class DocuForgeExporterTest {
         assertThat(yaml).contains("Skapa användare");
         assertThat(yaml).contains("step-1");
         assertThat(yaml).contains("anna.andersson");
-        assertThat(yaml).contains("Osäkert steg");
+        assertThat(yaml).contains("Uncertain step");
     }
 
     @Test

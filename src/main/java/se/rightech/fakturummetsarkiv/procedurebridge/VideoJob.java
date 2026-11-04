@@ -20,8 +20,10 @@ public class VideoJob {
     public volatile Instant finishedAt;
     public volatile String error;
     public volatile Path savedDir;
+    public volatile String runId;
     public volatile ProcedureDraft draft;
     public final List<org.springframework.web.servlet.mvc.method.annotation.SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    public volatile java.util.concurrent.Future<?> future;
 
     public VideoJob(String id, String filename) {
         this.id = id;

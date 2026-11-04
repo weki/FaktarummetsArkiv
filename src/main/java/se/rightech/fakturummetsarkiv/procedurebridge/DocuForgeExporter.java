@@ -34,17 +34,14 @@ public class DocuForgeExporter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
-    private final JsonSchema schema;
+    private final ProcedureSchemaValidator validator;
+
+    public DocuForgeExporter(ProcedureSchemaValidator validator) {
+        this.validator = validator;
+    }
 
     public DocuForgeExporter() {
-        try {
-            ClassPathResource res = new ClassPathResource("procedurebridge/procedure-schema.json");
-            JsonNode schemaNode = JSON.readTree(res.getInputStream());
-            JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
-            this.schema = factory.getSchema(schemaNode);
-        } catch (IOException e) {
-            throw new IllegalStateException("Kunde inte ladda procedure-schema.json: " + e.getMessage(), e);
-        }
+        this(new ProcedureSchemaValidator());
     }
 
     public static class ExportException extends RuntimeException {
@@ -60,39 +57,30 @@ public class DocuForgeExporter {
             throw new ExportException("Kunde inte serialisera YAML: " + e.getMessage());
         }
         // Validate
-        try {
-            JsonNode instance = YAML.readTree(yaml);
-            Set<ValidationMessage> errors = schema.validate(instance);
-            if (!errors.isEmpty()) {
-                StringBuilder sb = new StringBuilder("YAML validerades inte mot schemat:");
-                for (ValidationMessage m : errors) sb.append("\n - ").append(m.getMessage());
-                throw new ExportException(sb.toString());
-            }
-        } catch (ExportException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new ExportException("Validering misslyckades: " + e.getMessage());
+        ProcedureSchemaValidator.ValidationResult vr = validator.validate(yaml, null);
+        if (!vr.valid()) {
+            throw new ExportException("YAML validerades inte mot schemat:\n - " + String.join("\n - ", vr.errors()));
         }
         return yaml;
     }
 
     public String toReviewMarkdown(ProcedureDraft draft) {
         StringBuilder sb = new StringBuilder();
-        sb.append("# Granskningsrapport – ").append(draft.title()).append("\n\n");
-        sb.append("Källfil: ").append(draft.sourceFilename()).append("\n");
-        sb.append("Modell: ").append(draft.model()).append("\n\n");
+        sb.append("# Review report – ").append(draft.title()).append("\n\n");
+        sb.append("Source file: ").append(draft.sourceFilename()).append("\n");
+        sb.append("Model: ").append(draft.model()).append("\n\n");
         if (draft.warnings() != null && !draft.warnings().isEmpty()) {
-            sb.append("## Varningar\n");
+            sb.append("## Warnings\n");
             for (String w : draft.warnings()) sb.append("- ").append(w).append("\n");
             sb.append("\n");
         }
-        sb.append("## Steg\n");
+        sb.append("## Steps\n");
         for (ProcedureStep s : draft.steps()) {
             sb.append(s.number()).append(". ").append(s.title())
                     .append(" (").append(formatTime(s.startSecond())).append("–").append(formatTime(s.endSecond())).append(")\n");
-            if (s.uncertain()) sb.append("   ⚠ OSÄKERT – verifiera mot inspelningen\n");
+            if (s.uncertain()) sb.append("   ⚠ UNCERTAIN - verify against the recording\n");
             if (s.inputText() != null && !s.inputText().isBlank())
-                sb.append("   Inmatning: ").append(s.inputText()).append("\n");
+                sb.append("   Input: ").append(s.inputText()).append("\n");
         }
         return sb.toString();
     }
@@ -130,7 +118,7 @@ public class DocuForgeExporter {
     private Map<String, Object> buildModel(ProcedureDraft draft) {
         Map<String, Object> root = new LinkedHashMap<>();
         Map<String, Object> metadata = new LinkedHashMap<>();
-        String title = draft.title() == null || draft.title().isBlank() ? "Procedurutkast" : draft.title();
+        String title = draft.title() == null || draft.title().isBlank() ? "Procedure draft" : draft.title();
         if (title.length() > 200) title = title.substring(0, 200);
         metadata.put("title", title);
         root.put("metadata", metadata);
@@ -138,18 +126,18 @@ public class DocuForgeExporter {
         Map<String, Object> sections = new LinkedHashMap<>();
         if (draft.purpose() != null && !draft.purpose().isBlank()) {
             Map<String, Object> purpose = new LinkedHashMap<>();
-            purpose.put("title", "Syfte");
+            purpose.put("title", "Purpose");
             purpose.put("content", draft.purpose());
             sections.put("purpose", purpose);
         }
         if (draft.prerequisites() != null && !draft.prerequisites().isEmpty()) {
             Map<String, Object> prereq = new LinkedHashMap<>();
-            prereq.put("title", "Förkrav");
+            prereq.put("title", "Prerequisites");
             prereq.put("items", draft.prerequisites());
             sections.put("prerequisites", prereq);
         }
         Map<String, Object> procedure = new LinkedHashMap<>();
-        procedure.put("title", "Procedur");
+        procedure.put("title", "Procedure");
         List<Map<String, Object>> steps = new ArrayList<>();
         for (ProcedureStep s : draft.steps()) {
             Map<String, Object> step = new LinkedHashMap<>();
@@ -160,7 +148,7 @@ public class DocuForgeExporter {
             if (s.instruction() != null) desc.append(s.instruction());
             if (s.expectedResult() != null && !s.expectedResult().isBlank()) {
                 if (desc.length() > 0) desc.append("\n\n");
-                desc.append("Förväntat resultat: ").append(s.expectedResult());
+                desc.append("Expected result: ").append(s.expectedResult());
             }
             if (desc.length() > 0) step.put("description", desc.toString());
             if (s.inputText() != null && !s.inputText().isBlank()) {
@@ -172,7 +160,7 @@ public class DocuForgeExporter {
                 step.put("images", List.of(img));
             }
             if (s.uncertain()) {
-                step.put("warnings", List.of("Osäkert steg – verifiera mot inspelningen."));
+                step.put("warnings", List.of("Uncertain step - verify against the recording."));
             }
             steps.add(step);
         }

@@ -182,6 +182,7 @@ public class VideoJobController {
         m.put("finishedAt", job.finishedAt == null ? null : job.finishedAt.toString());
         m.put("error", job.error);
         m.put("savedDir", job.savedDir == null ? null : job.savedDir.toString());
+        m.put("runId", job.runId);
         return m;
     }
 

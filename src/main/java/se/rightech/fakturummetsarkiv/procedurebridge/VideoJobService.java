@@ -39,11 +39,15 @@ public class VideoJobService {
         VideoJob job = new VideoJob(UUID.randomUUID().toString(), originalFilename);
         jobs.put(job.id, job);
         VideoOptions options = new VideoOptions(language, hint);
-        executor.submit(() -> run(job, videoFile, originalFilename, options));
+        job.future = executor.submit(() -> run(job, videoFile, originalFilename, options));
         return job;
     }
 
     private void run(VideoJob job, Path videoFile, String originalFilename, VideoOptions options) {
+        if (job.status == VideoJob.Status.CANCELLED) {
+            try { Files.deleteIfExists(videoFile); } catch (Exception ignored) { }
+            return;
+        }
         job.status = VideoJob.Status.ANALYZING;
         job.progressMessage = "Startar analys...";
         job.send("status", Map.of("status", job.status.name(), "message", job.progressMessage));
@@ -54,17 +58,23 @@ public class VideoJobService {
             });
             job.draft = draft;
             job.savedDir = draft.savedDir();
+            if (draft.savedDir() != null) job.runId = draft.savedDir().getFileName().toString();
             job.status = VideoJob.Status.DONE;
             job.progressMessage = "Klar";
             job.finishedAt = java.time.Instant.now();
             job.send("result", Map.of("status", job.status.name(), "savedDir",
-                    job.savedDir == null ? "" : job.savedDir.toString()));
+                    job.savedDir == null ? "" : job.savedDir.toString(),
+                    "runId", job.runId == null ? "" : job.runId));
         } catch (Exception e) {
-            log.error("Videojobb {} misslyckades: {}", job.id, e.getMessage(), e);
-            job.status = VideoJob.Status.FAILED;
-            job.error = e.getMessage();
-            job.finishedAt = java.time.Instant.now();
-            job.send("error", Map.of("error", job.error == null ? "okänt fel" : job.error));
+            if (job.status == VideoJob.Status.CANCELLED) {
+                log.info("Videojobb {} avbröts.", job.id);
+            } else {
+                log.error("Videojobb {} misslyckades: {}", job.id, e.getMessage(), e);
+                job.status = VideoJob.Status.FAILED;
+                job.error = e.getMessage();
+                job.finishedAt = java.time.Instant.now();
+                job.send("error", Map.of("error", job.error == null ? "okänt fel" : job.error));
+            }
         } finally {
             try { Files.deleteIfExists(videoFile); } catch (Exception ignored) { }
             job.send("done", job.status.name());
@@ -84,6 +94,7 @@ public class VideoJobService {
         if (job.status == VideoJob.Status.QUEUED || job.status == VideoJob.Status.ANALYZING) {
             job.status = VideoJob.Status.CANCELLED;
             job.finishedAt = java.time.Instant.now();
+            if (job.future != null) job.future.cancel(true);
             job.send("status", Map.of("status", job.status.name()));
             return true;
         }

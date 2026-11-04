@@ -83,6 +83,10 @@ public class ProcedureDraftService implements VideoDescriber {
         int totalChunks;
         if (frames.size() <= chunkSize) {
             totalChunks = 1;
+            if (Thread.currentThread().isInterrupted()) {
+                videoOllamaClient.unload();
+                throw new VideoAnalysisException("Avbruten av användaren.");
+            }
             String analysis = analyzeChunk(frames, 1, 1, hint, sink);
             if (isFailure(analysis)) {
                 failed = 1;
@@ -97,6 +101,10 @@ public class ProcedureDraftService implements VideoDescriber {
             totalChunks = (int) Math.ceil((double) frames.size() / chunkSize);
             int chunkNo = 0;
             for (int i = 0; i < frames.size(); i += chunkSize) {
+                if (Thread.currentThread().isInterrupted()) {
+                    videoOllamaClient.unload();
+                    throw new VideoAnalysisException("Avbruten av användaren.");
+                }
                 List<FrameExtractorService.AnalyzedFrame> chunkFrames =
                         frames.subList(i, Math.min(i + chunkSize, frames.size()));
                 chunkNo++;
@@ -221,7 +229,7 @@ public class ProcedureDraftService implements VideoDescriber {
         sb.append("- frameSecond: the second of the image that best shows the result of the step.\n");
         sb.append("- uncertain: true if OCR/model was unsure.\n");
         sb.append("- If no action occurs, return { \"steps\": [] }.\n");
-        sb.append("Return only JSON, no markdown.");
+        sb.append("Write all text fields in English. Return only JSON, no markdown.");
         return sb.toString();
     }
 
@@ -322,7 +330,7 @@ public class ProcedureDraftService implements VideoDescriber {
             sb.append(" (").append(formatTime(s.startSecond())).append(")\n");
         }
         if (hint != null && !hint.isBlank()) sb.append("\nContext: ").append(hint).append("\n");
-        sb.append("\nProduce a JSON object with: \"title\" (short procedure title), \"purpose\" (one sentence), ")
+        sb.append("\nWrite all text fields in English. Produce a JSON object with: \"title\" (short procedure title), \"purpose\" (one sentence), ")
                 .append("\"prerequisites\" (array of strings), \"warnings\" (array of strings, include uncertain steps), ")
                 .append("\"stepTitles\" (array of improved short titles, same length and order as steps; ")
                 .append("do NOT change any inputText). Return only JSON.");
@@ -384,6 +392,8 @@ public class ProcedureDraftService implements VideoDescriber {
             data.put("purpose", draft.purpose());
             data.put("prerequisites", draft.prerequisites());
             data.put("warnings", draft.warnings());
+            data.put("sourceFilename", draft.sourceFilename());
+            data.put("model", draft.model());
             List<Map<String, Object>> steps = new ArrayList<>();
             for (ProcedureStep s : draft.steps()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -415,28 +425,28 @@ public class ProcedureDraftService implements VideoDescriber {
             sb.append("# ").append(title).append("\n\n");
             if (purpose != null && !purpose.isBlank()) sb.append(purpose).append("\n\n");
             if (!prerequisites.isEmpty()) {
-                sb.append("## Förkrav\n");
+                sb.append("## Prerequisites\n");
                 for (String p : prerequisites) sb.append("- ").append(p).append("\n");
                 sb.append("\n");
             }
             if (!warnings.isEmpty()) {
-                sb.append("## Varningar\n");
+                sb.append("## Warnings\n");
                 for (String w : warnings) sb.append("- ").append(w).append("\n");
                 sb.append("\n");
             }
-            sb.append("## Steg\n");
+            sb.append("## Steps\n");
             for (ProcedureStep s : steps) {
                 sb.append(s.number()).append(". **").append(s.title()).append("** (")
                         .append(formatTime(s.startSecond())).append(")\n");
                 sb.append("   ").append(s.instruction()).append("\n");
                 if (s.inputText() != null && !s.inputText().isBlank()) {
-                    sb.append("   Inmatning: `").append(s.inputText()).append("`\n");
+                    sb.append("   Input: `").append(s.inputText()).append("`\n");
                 }
                 if (s.expectedResult() != null && !s.expectedResult().isBlank()) {
-                    sb.append("   Förväntat: ").append(s.expectedResult()).append("\n");
+                    sb.append("   Expected: ").append(s.expectedResult()).append("\n");
                 }
-                if (s.uncertain()) sb.append("   ⚠ Osäkert steg\n");
-                if (s.frameImage() != null) sb.append("   Bild: ").append(s.frameImage().getFileName()).append("\n");
+                if (s.uncertain()) sb.append("   ⚠ Uncertain step\n");
+                if (s.frameImage() != null) sb.append("   Image: ").append(s.frameImage().getFileName()).append("\n");
             }
             java.nio.file.Files.writeString(runDir.resolve("procedure-draft.md"), sb.toString());
         } catch (Exception e) {
