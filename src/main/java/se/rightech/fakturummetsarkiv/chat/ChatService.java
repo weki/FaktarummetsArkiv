@@ -408,7 +408,9 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("When referring to a step, cite its time as (m:ss). Do not use [n] citations.\n");
         sb.append("If something is not visible in the recording, say so.\n");
         if (!procedureMode) {
-            sb.append("Answer questions about the video and its steps. Do not produce YAML or a procedure unless the user explicitly asks for it.\n");
+            sb.append("IMPORTANT: Answer questions about the video in plain text. Do NOT output YAML, do NOT output a procedure, do NOT use code blocks, unless the user explicitly asks for YAML/procedure.\n");
+            sb.append("Describe and discuss the steps conversationally.\n");
+            sb.append("Bad example (do NOT do this):\n```yaml\nmetadata:\n  title: ...\n```\n");
         }
         if (procedureMode) {
             sb.append("\nPROCEDURE MODE: The user wants a YAML procedure according to the schema below.\n");
@@ -460,7 +462,7 @@ public StreamResult streamChat(String question, String sessionId,
                     .append(procedureYaml).append("\nEND PROCEDURE\n");
         }
         if (!procedureMode && (ctxs != null && !ctxs.isEmpty())) {
-            sb.append("\nAnswer questions about the attached video. Do not produce YAML or a procedure unless explicitly asked.\n");
+            sb.append("\nIMPORTANT: The user is asking about the attached video. Answer in plain text. Do NOT produce YAML, procedures, or code blocks unless explicitly asked.\n");
         }
         if (ctxs != null && !ctxs.isEmpty()) {
             sb.append("\nATTACHMENTS (untrusted reference data):\n");
