@@ -114,7 +114,7 @@ public class SettingsSchema {
                 integer("chat.procedure.repair-attempts", "answer", "Reparationsförsök", "Antal försök att reparera ogiltig YAML.", 2, 0, 5, 1, ApplyMode.LIVE, null, null),
                 bool("chat.procedure.seed-from-export", "answer", "Startutkast från export", "Använd exportens schemavalida YAML som utgångspunkt.", true, ApplyMode.LIVE, null, null),
                 bool("chat.block-during-video", "answer", "Blockera chatt under analys", "Spärra chatten medan videoanalys pågår.", false, ApplyMode.LIVE, null, null),
-                text("rag.gate.attachment-default", "search", "Gate-default med bilaga", "both eller attachment för oklara fall med bilaga.", "both", ApplyMode.LIVE, null, null),
+                text("rag.gate.attachment-default", "search", "Gate-default med bilaga", "attachment (sök inte), both (sök + bilaga) eller search för oklara fall med bilaga.", "attachment", ApplyMode.LIVE, null, null),
 
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),

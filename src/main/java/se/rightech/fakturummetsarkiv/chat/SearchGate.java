@@ -252,9 +252,9 @@ public class SearchGate {
 
                 Decide if the user's message needs a document search, only the attachment, both, or is small talk.
                 - Reply DIRECT only for clear small talk: greetings, thanks, goodbye.
-                - Reply ATTACHMENT when the question is about the attached video/analysis/procedure (explain, change, translate, shorten, add warning, create YAML, tags) and needs no archive knowledge.
-                - Reply SEARCH when the question is about facts in the archive and not the attachment.
-                - Reply BOTH when the question connects the attachment to the archive (compare, verify, find existing docs, check requirements) or is unclear.
+                - Reply ATTACHMENT when the question is about the attached video/analysis/procedure (explain, change, translate, shorten, add warning, create YAML, tags) and needs no archive knowledge. Prefer ATTACHMENT over BOTH when in doubt.
+                - Reply SEARCH when the question is clearly about facts in the archive and not the attachment.
+                - Reply BOTH only when the question explicitly connects the attachment to the archive (compare, verify, find existing docs, check requirements).
                 - For SEARCH or BOTH, after the mode word write a colon and a concise search query (3-12 keywords) in the SEARCH LANGUAGE.
                 - For DIRECT or ATTACHMENT, write nothing else.
 
