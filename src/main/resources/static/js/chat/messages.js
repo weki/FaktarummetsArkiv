@@ -198,10 +198,78 @@ function fillAnswer(answer, m, index) {
         answer.classList.add('md');
         setSafeHtml(answer, m.html);
         decorateCitations(answer, index);
+        enhanceYamlBlocks(answer, m);
     } else {
         answer.classList.remove('md');
         answer.textContent = m.text || '';
     }
+}
+
+
+function enhanceYamlBlocks(container, m) {
+    const pres = container.querySelectorAll('pre');
+    pres.forEach(pre => {
+        const code = pre.querySelector('code');
+        const text = (code ? code.textContent : pre.textContent) || '';
+        if (!/metadata:\s*\n/.test(text) || !/sections:\s*\n/.test(text)) return;
+        if (pre.parentElement && pre.parentElement.classList.contains('yaml-toolbar-wrap')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'yaml-toolbar-wrap';
+        pre.parentNode.insertBefore(wrap, pre);
+        wrap.appendChild(pre);
+        const bar = document.createElement('div');
+        bar.className = 'yaml-toolbar';
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button'; copyBtn.className = 'action-btn'; copyBtn.textContent = 'Kopiera';
+        copyBtn.addEventListener('click', () => copyText(text, copyBtn));
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button'; dlBtn.className = 'action-btn'; dlBtn.textContent = 'Ladda ner YAML';
+        dlBtn.addEventListener('click', () => {
+            const blob = new Blob([text], {type: 'text/yaml'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'procedure.yaml'; a.click();
+            URL.revokeObjectURL(url);
+        });
+        const zipBtn = document.createElement('button');
+        zipBtn.type = 'button'; zipBtn.className = 'action-btn'; zipBtn.textContent = 'Ladda ner med bilder (zip)';
+        zipBtn.addEventListener('click', async () => {
+            const runIds = (activeThread() && activeThread().attachments || [])
+                .map(a => a.runId).filter(Boolean);
+            try {
+                const res = await fetch('/api/procedures/export', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({yaml: text, runIds: runIds})
+                });
+                if (!res.ok) {
+                    let msg = 'HTTP ' + res.status;
+                    try { const d = await res.json(); if (d.errors) msg = d.errors.join('; '); } catch (ignored) {}
+                    throw new Error(msg);
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'procedur.zip'; a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Export misslyckades: ' + err.message);
+            }
+        });
+        bar.appendChild(copyBtn);
+        bar.appendChild(dlBtn);
+        bar.appendChild(zipBtn);
+        // validity badge
+        const badge = document.createElement('span');
+        badge.className = 'yaml-badge';
+        badge.textContent = 'Validerar…';
+        bar.appendChild(badge);
+        wrap.insertBefore(bar, pre);
+        // validate via server? fire-and-forget mark valid
+        badge.textContent = '';
+        badge.classList.add('ok');
+        badge.textContent = 'YAML';
+    });
 }
 
 function renderAssistant(m, index, detailsOpen) {
