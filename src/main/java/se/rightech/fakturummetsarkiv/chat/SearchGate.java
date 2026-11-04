@@ -50,6 +50,8 @@ public class SearchGate {
 
             Decide if the user's message needs a document search.
             - Reply DIRECT only for clear small talk: greetings, thanks, goodbye or similar social phrases.
+            - Reply DIRECT also for general knowledge questions that are not about this company's documents, manuals,
+              invoices, technical configurations or archive content (e.g. programming constructs, math, general facts).
             - For EVERYTHING else, including short follow-ups like "and then?" or "vad menar du?", reply with a
               concise search query (3-12 keywords) optimized for semantic retrieval in the archive.
             - Write the search query in the SEARCH LANGUAGE specified below, regardless of the message language.
@@ -58,6 +60,8 @@ public class SearchGate {
             Examples:
             Message: hej                        -> DIRECT
             Message: tack                       -> DIRECT
+            Message: kan du ge ett exempel på en for loop -> DIRECT
+            Message: vad är 2+2?                -> DIRECT
             Message: vad är OPC UA?              -> OPC UA definition overview
             Message: och då? (after OPC UA)      -> OPC UA next steps
             Message: what does invoice 42 say?   -> invoice 42 content details
@@ -169,7 +173,7 @@ public class SearchGate {
             else if ("SEARCH".equals(first)) parsedMode = SearchGate.Mode.SEARCH;
             else if ("BOTH".equals(first)) parsedMode = SearchGate.Mode.BOTH;
             else parsedMode = parseAttachmentDefault();
-            if (parsedMode == SearchGate.Mode.DIRECT && !isDirectCandidate(question)) {
+            if (parsedMode == SearchGate.Mode.DIRECT && !isDirectCandidate(question) && isArchiveRelated(question)) {
                 parsedMode = hasAttachment ? SearchGate.Mode.ATTACHMENT : SearchGate.Mode.SEARCH;
             }
             boolean search = (parsedMode == SearchGate.Mode.SEARCH || parsedMode == SearchGate.Mode.BOTH);
@@ -328,6 +332,18 @@ public class SearchGate {
     }
 
     /** Kort social fras utan frågetecken, t.ex. en hälsning som inte finns i listan. */
+    static boolean isArchiveRelated(String question) {
+        if (question == null) return false;
+        String lower = question.toLowerCase(Locale.ROOT);
+        String[] terms = {"arkiv", "dokument", "manual", "faktura", "procedur", "källa",
+                "källor", "rapport", "konfiguration", "inställning", "sop", "instruktion",
+                "honeywell", "aspen", "genua", "experion", "opc", "dokumentation"};
+        for (String t : terms) {
+            if (lower.contains(t)) return true;
+        }
+        return false;
+    }
+
     static boolean isDirectCandidate(String question) {
         if (question == null || question.contains("?")) {
             return false;
