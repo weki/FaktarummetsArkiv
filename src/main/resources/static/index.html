@@ -39,6 +39,8 @@
         <form id="chatForm" class="composer">
             <label for="question" class="sr-only">Din fråga</label>
             <textarea id="question" rows="2" placeholder="Ställ en fråga om dokumenten…" autocomplete="off" autofocus></textarea>
+            <button type="button" id="videoAttachBtn" class="btn-ghost" title="Ladda upp video">Video</button>
+            <input type="file" id="videoAttachInput" accept=".mp4,.mkv,.webm,.mov,video/*" hidden>
             <button id="sendBtn" type="submit" class="send-btn">
                 Skicka
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -127,6 +129,7 @@
 <script src="/js/chat/export.js"></script>
 <script src="/js/chat/scope-dialog.js"></script>
 <script src="/js/chat/stream.js"></script>
+<script src="/js/chat/attachments.js"></script>
 <script src="/js/chat/input.js"></script>
 <script src="/js/chat/init.js"></script>
 </body>

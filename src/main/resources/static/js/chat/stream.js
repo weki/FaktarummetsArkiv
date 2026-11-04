@@ -73,7 +73,9 @@ chatForm.addEventListener('submit', async (event) => {
                 message: question,
                 sessionId: thread.id,
                 collections: thread.collections,
-                documentIds: thread.documentIds
+                documentIds: thread.documentIds,
+                attachments: thread.attachments || [],
+                procedureYaml: thread.procedure ? thread.procedure.yaml : null
             })
         });
         if (!response.ok || !response.body) {
@@ -107,6 +109,7 @@ chatForm.addEventListener('submit', async (event) => {
                 } else if (evt.event === 'search') {
                     const info = JSON.parse(evt.data) || {};
                     draft.searchQuery = info.query || '';
+                    draft.searchMode = info.mode || (info.needed === false ? 'DIRECT' : 'SEARCH');
                     if (info.needed === false) {
                         draft.searched = false;
                         ui.setPhase('Svarar direkt…');
@@ -142,6 +145,17 @@ chatForm.addEventListener('submit', async (event) => {
                     draft.validation = JSON.parse(evt.data);
                     ui.setVerdict(draft);
                     ui.setDraft(draft);
+                } else if (evt.event === 'procedure') {
+                    try {
+                        const info = JSON.parse(evt.data) || {};
+                        thread.procedure = {yaml: info.yaml, valid: info.valid, errors: info.errors || [], updatedAt: Date.now()};
+                        saveThreads();
+                    } catch (ignored) { }
+                } else if (evt.event === 'attachmentMissing') {
+                    try {
+                        const info = JSON.parse(evt.data) || {};
+                        if (ui && ui.setPhase) ui.setPhase('Bilagan finns inte längre');
+                    } catch (ignored) { }
                 } else if (evt.event === 'followups') {
                     followUps = JSON.parse(evt.data) || [];
                 } else if (evt.event === 'error') {
@@ -160,6 +174,7 @@ chatForm.addEventListener('submit', async (event) => {
                         refined: wasRefined,
                         originalText: originalText || null,
                         searched: draft.searched,
+                        searchMode: draft.searchMode || null,
                         searchQuery: draft.searchQuery || null,
                         durationMs: Math.round(performance.now() - startedAt)
                     };

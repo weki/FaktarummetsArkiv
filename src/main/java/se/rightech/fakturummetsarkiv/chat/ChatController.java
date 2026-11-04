@@ -73,7 +73,12 @@ public class ChatController {
     }
 
     public record ChatRequest(String message, String mode, String sessionId,
-                             List<String> collections, List<String> documentIds) {
+                             List<String> collections, List<String> documentIds,
+                             List<AttachmentRef> attachments, String procedureYaml) {
+        public ChatRequest(String message, String mode, String sessionId,
+                           List<String> collections, List<String> documentIds) {
+            this(message, mode, sessionId, collections, documentIds, null, null);
+        }
     }
 
     @GetMapping("/auth")
@@ -140,6 +145,7 @@ public class ChatController {
                 ChatService.StreamResult result = chatService.streamChat(
                         request.message(), request.sessionId(),
                         request.collections(), request.documentIds(),
+                        request.attachments(), request.procedureYaml(),
                         content -> sendEvent(emitter, scope, "content", json(content), MediaType.TEXT_PLAIN),
                         thought -> sendEvent(emitter, scope, "thought", json(thought), MediaType.TEXT_PLAIN),
                         sources -> {
@@ -150,8 +156,10 @@ public class ChatController {
                         text -> sendEvent(emitter, scope, "final", json(text), MediaType.TEXT_PLAIN),
                         plan -> sendEvent(emitter, scope, "search", Map.of(
                                 "needed", plan.needed(),
-                                "query", plan.query() == null ? "" : plan.query()),
-                                MediaType.APPLICATION_JSON));
+                                "query", plan.query() == null ? "" : plan.query(),
+                                "mode", plan.mode() == null ? (plan.needed() ? "SEARCH" : "DIRECT") : plan.mode()),
+                                MediaType.APPLICATION_JSON),
+                        proc -> sendEvent(emitter, scope, "procedure", proc, MediaType.APPLICATION_JSON));
 
                 WorkspaceSettings settings = settingsStore.get();
                 Set<Integer> sourceNumbers = sourceNumbers(collectedSources);
@@ -160,7 +168,7 @@ public class ChatController {
                 sendEvent(emitter, scope, "sources", citingSources(collectedSources, result.answer()),
                         MediaType.APPLICATION_JSON);
 
-                boolean validate = result.searched()
+                boolean validate = result.searched() && !"BOTH".equals(result.mode())
                         && (settings.validateGrounding() == null || settings.validateGrounding());
                 CompletableFuture<GroundingResult> validationFuture = validate
                         ? CompletableFuture.supplyAsync(ollamaClient.within(scope, () -> groundingValidator.validate(

@@ -67,6 +67,7 @@ class ChatServiceTest {
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any()))
                 .thenReturn(List.of(Map.of("title", "dok", "text", "innehall", "score", 0.9)));
         when(searchGate.decide(anyString(), any(), any(), any())).thenReturn(new SearchGate.Decision(true, "q"));
+        when(searchGate.decide(anyString(), any(), any(), any(), any(), anyBoolean())).thenReturn(new SearchGate.Decision(true, "q"));
         respondWith("<" + "think>fundera<" + "/think>Hej", "!");
 
         List<Map<String, Object>> sources = new ArrayList<>();
@@ -162,6 +163,7 @@ class ChatServiceTest {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
         when(searchGate.decide(eq("hej"), any(), any(), any())).thenReturn(new SearchGate.Decision(false, "hej"));
+        when(searchGate.decide(eq("hej"), any(), any(), any(), any(), anyBoolean())).thenReturn(new SearchGate.Decision(false, "hej"));
         when(searchGate.needsSearch("hej")).thenReturn(false);
         respondWith("Hej");
 
