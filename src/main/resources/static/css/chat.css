@@ -458,3 +458,33 @@ a.citation.active, .answer.md a.citation.active { background: var(--accent); bor
 .shortcuts dt { white-space: nowrap; }
 .shortcuts dd { margin: 0; color: var(--muted); }
 .shortcuts form { display: flex; justify-content: flex-end; }
+
+/* Video progress panel in chat */
+.video-progress-panel {
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    background: var(--panel-2);
+}
+.video-progress-title { font-weight: 600; margin-bottom: 8px; }
+.video-progress-bar-wrap {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--panel-3);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.video-progress-bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent);
+    border-radius: 999px;
+    animation: video-progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes video-progress-indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+}
+.video-progress-text { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.composer.disabled-during-video { opacity: 0.6; pointer-events: none; }
