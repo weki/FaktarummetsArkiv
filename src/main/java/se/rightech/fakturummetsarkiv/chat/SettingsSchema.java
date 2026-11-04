@@ -108,6 +108,14 @@ public class SettingsSchema {
                 decimal("video.frame-diff-threshold", "video", "Skillnadströskel", "Hur mycket en bildruta måste ändras för att behållas.", 0.5, 0, 255, 0.5, ApplyMode.LIVE, null, null),
                 integer("video.max-static-seconds", "video", "Max statiska sekunder", "Behåll alltid en bildruta minst var N:te sekund.", 3, 1, 60, 1, ApplyMode.LIVE, null, null),
 
+                integer("chat.attachments.max", "answer", "Max bilagor", "Max antal video-bilagor per förfrågan.", 3, 0, 10, 1, ApplyMode.LIVE, null, null),
+                integer("chat.attachments.max-context-chars", "answer", "Bilagetext (tecken)", "Max tecken bilagetext i kontexten.", 12000, 0, 100000, 100, ApplyMode.LIVE, null, null),
+                integer("chat.procedure.max-yaml-chars", "answer", "Max YAML (tecken)", "Max längd på pinned procedur-YAML.", 60000, 0, 500000, 1000, ApplyMode.LIVE, null, null),
+                integer("chat.procedure.repair-attempts", "answer", "Reparationsförsök", "Antal försök att reparera ogiltig YAML.", 2, 0, 5, 1, ApplyMode.LIVE, null, null),
+                bool("chat.procedure.seed-from-export", "answer", "Startutkast från export", "Använd exportens schemavalida YAML som utgångspunkt.", true, ApplyMode.LIVE, null, null),
+                bool("chat.block-during-video", "answer", "Blockera chatt under analys", "Spärra chatten medan videoanalys pågår.", false, ApplyMode.LIVE, null, null),
+                text("rag.gate.attachment-default", "search", "Gate-default med bilaga", "both eller attachment för oklara fall med bilaga.", "both", ApplyMode.LIVE, null, null),
+
                 readOnly(path("archive.upload-dir", "indexing", "Uppladdningsmapp", "Mapp där originaldokument sparas.", "archive", ApplyMode.RESTART)),
                 readOnly(text("archive.pdf-roots", "limits", "Arkivsökvägar", "Kommaavgränsade PDF-rötter som får visas och laddas ner.", "", ApplyMode.RESTART, null, null)),
                 readOnly(text("spring.servlet.multipart.max-file-size", "limits", "Max filstorlek", "Största tillåtna uppladdning.", "100MB", ApplyMode.RESTART, null, null)),

@@ -215,7 +215,9 @@ public class EffectiveSettings {
                  "server.tomcat.max-swallow-size", "spring.codec.max-in-memory-size" ->
                     environment == null ? null : environment.getProperty(key);
             default -> {
-                if (key != null && key.startsWith("video.")) {
+                if (key != null && (key.startsWith("video.") || key.startsWith("chat.attachments.")
+                        || key.startsWith("chat.procedure.") || key.equals("rag.gate.attachment-default")
+                        || key.equals("chat.block-during-video"))) {
                     yield environment == null ? null : environment.getProperty(key);
                 }
                 throw new IllegalArgumentException("Okänd inställning: " + key);
