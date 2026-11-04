@@ -128,12 +128,23 @@ async function uploadVideoAttachment(file) {
                 try {
                     const d = JSON.parse(ev.data);
                     const att = thread.attachments.find(a => a.jobId === jobId);
-                    if (att) { att.runId = d.runId || att.runId; att.status = 'DONE'; }
+                    let runId = (d && d.runId) || (att && att.runId) || null;
+                    if (!runId) {
+                        // fallback: fetch job to get runId
+                        fetch(VIDEO_API + '/' + jobId).then(r => r.json()).then(j => {
+                            if (j && j.runId) {
+                                if (att) att.runId = j.runId;
+                                saveThreads();
+                                appendVideoAnalysisMessage(thread, att, Object.assign({}, d, {runId: j.runId}));
+                            }
+                        }).catch(() => {});
+                        return;
+                    }
+                    if (att) { att.runId = runId; att.status = 'DONE'; }
                     saveThreads();
                     renderChatHeader();
-                    // Add analysis as assistant message
-                    appendVideoAnalysisMessage(thread, att, d);
-                } catch (ignored) {}
+                    appendVideoAnalysisMessage(thread, att, Object.assign({}, d, {runId: runId}));
+                } catch (ignored) { console.error('result handler', ignored); }
             });
             es.addEventListener('error', ev => {
                 let msg = 'Fel';
@@ -158,8 +169,11 @@ async function uploadVideoAttachment(file) {
 }
 
 function appendVideoAnalysisMessage(thread, att, data) {
-    // Fetch draft
-    const runId = att && att.runId;
+    let runId = (att && att.runId) || (data && data.runId) || null;
+    if (!runId && att && att.jobId) {
+        // last resort: fetch job
+        return;
+    }
     if (!runId) return;
     fetch(VIDEO_API.replace('video-jobs','video-runs') + '/' + runId).then(r => r.json()).then(draft => {
         const lines = [];

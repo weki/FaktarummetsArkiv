@@ -103,8 +103,17 @@ public class VideoJobController {
         try {
             emitter.send(SseEmitter.event().name("status").data(Map.of("status", job.status.name(),
                     "message", job.progressMessage)));
+            if (job.status == VideoJob.Status.DONE) {
+                emitter.send(SseEmitter.event().name("result").data(Map.of(
+                        "status", job.status.name(),
+                        "savedDir", job.savedDir == null ? "" : job.savedDir.toString(),
+                        "runId", job.runId == null ? "" : job.runId)));
+            } else if (job.status == VideoJob.Status.FAILED) {
+                emitter.send(SseEmitter.event().name("error").data(Map.of("error", job.error == null ? "okänt fel" : job.error)));
+            }
             if (job.status == VideoJob.Status.DONE || job.status == VideoJob.Status.FAILED
                     || job.status == VideoJob.Status.CANCELLED) {
+                emitter.send(SseEmitter.event().name("done").data(job.status.name()));
                 emitter.complete();
             }
         } catch (Exception ignored) { }
