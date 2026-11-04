@@ -137,7 +137,17 @@ async function uploadVideoAttachment(file) {
                                 saveThreads();
                                 appendVideoAnalysisMessage(thread, att, Object.assign({}, d, {runId: j.runId}));
                             }
-                        }).catch(() => {});
+                        }).catch(err => {
+        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta utkast: ' + err.message, sources: [], searched: false};
+        thread.messages.push(msg);
+        touchThread(thread);
+        saveThreads();
+        const messagesInner = document.getElementById('messagesInner');
+        if (messagesInner && typeof renderAssistant === 'function') {
+            messagesInner.appendChild(renderAssistant(msg, thread.messages.length - 1, false));
+        }
+        scrollToBottom(true);
+    });
                         return;
                     }
                     if (att) { att.runId = runId; att.status = 'DONE'; }
@@ -175,7 +185,10 @@ function appendVideoAnalysisMessage(thread, att, data) {
         return;
     }
     if (!runId) return;
-    fetch(VIDEO_API.replace('video-jobs','video-runs') + '/' + runId).then(r => r.json()).then(draft => {
+    fetch(VIDEO_API.replace('video-jobs','video-runs') + '/' + runId).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }).then(draft => {
         const lines = [];
         lines.push('**' + (draft.title || 'Procedurutkast') + '**');
         if (draft.purpose) lines.push('', draft.purpose);
@@ -214,7 +227,17 @@ function appendVideoAnalysisMessage(thread, att, data) {
             }
             scrollToBottom(true);
         }
-    }).catch(() => {});
+    }).catch(err => {
+        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta utkast: ' + err.message, sources: [], searched: false};
+        thread.messages.push(msg);
+        touchThread(thread);
+        saveThreads();
+        const messagesInner = document.getElementById('messagesInner');
+        if (messagesInner && typeof renderAssistant === 'function') {
+            messagesInner.appendChild(renderAssistant(msg, thread.messages.length - 1, false));
+        }
+        scrollToBottom(true);
+    });
 }
 
 function scrollToBottom(force) {
