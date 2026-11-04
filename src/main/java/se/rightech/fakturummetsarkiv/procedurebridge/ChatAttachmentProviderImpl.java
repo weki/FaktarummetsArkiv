@@ -1,6 +1,7 @@
 package se.rightech.fakturummetsarkiv.procedurebridge;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import se.rightech.fakturummetsarkiv.chat.AttachmentRef;
 import se.rightech.fakturummetsarkiv.chat.ChatAttachmentProvider;
@@ -13,9 +14,14 @@ import java.util.Optional;
 public class ChatAttachmentProviderImpl implements ChatAttachmentProvider {
 
     private final VideoRunRepository repo;
+    private final DocuForgeExporter exporter;
+    private final boolean seedFromExport;
 
-    public ChatAttachmentProviderImpl(VideoRunRepository repo) {
+    public ChatAttachmentProviderImpl(VideoRunRepository repo, DocuForgeExporter exporter,
+                                     @Value("${chat.procedure.seed-from-export:true}") boolean seedFromExport) {
         this.repo = repo;
+        this.exporter = exporter;
+        this.seedFromExport = seedFromExport;
     }
 
     @Override
@@ -26,9 +32,13 @@ public class ChatAttachmentProviderImpl implements ChatAttachmentProvider {
         String summary = buildSummary(ref.runId(), draft);
         String fullText = buildFullText(ref.runId(), draft);
         List<String> frameFiles = repo.listFrames(ref.runId());
+        String seedYaml = null;
+        if (seedFromExport && exporter != null) {
+            try { seedYaml = exporter.toYaml(draft); } catch (Exception e) { seedYaml = null; }
+        }
         return Optional.of(new AttachmentContext(ref.runId(), "video",
                 draft.sourceFilename() == null || draft.sourceFilename().isBlank() ? ref.runId() : draft.sourceFilename(),
-                summary, fullText, frameFiles));
+                summary, fullText, frameFiles, seedYaml));
     }
 
     private String buildSummary(String runId, se.rightech.fakturummetsarkiv.video.ProcedureDraft draft) {
