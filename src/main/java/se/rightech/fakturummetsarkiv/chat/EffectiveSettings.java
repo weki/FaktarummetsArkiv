@@ -166,6 +166,10 @@ public class EffectiveSettings {
             case "chat.answer-temperature" -> chat.answerTemperature();
             case "chat.answer-language" -> chat.answerLanguage();
             case "chat.thinking" -> chat.thinking();
+            case "chat.followups.enabled" -> {
+                String v = environment == null ? null : environment.getProperty("chat.followups.enabled");
+                yield v == null ? Boolean.TRUE : Boolean.parseBoolean(v);
+            }
             case "rag.max-history" -> rag.maxHistory();
             case "rag.max-history-chars" -> rag.maxHistoryChars();
             case "rag.max-source-chars" -> rag.maxSourceChars();

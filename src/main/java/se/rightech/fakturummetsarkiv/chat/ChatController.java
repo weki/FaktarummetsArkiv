@@ -175,12 +175,15 @@ public class ChatController {
                                 request.message(), collectedSources, result.answer(),
                                 effective.effectiveModel("validator"), true)), streamExecutor)
                         : CompletableFuture.completedFuture(null);
-                CompletableFuture<List<String>> followUpsFuture = CompletableFuture.supplyAsync(
-                        ollamaClient.within(scope, () -> followUpGenerator.generate(
-                                request.message(), result.answer(), collectedSources,
-                                effective.effectiveModel("chat"), effective.effectiveModel("followup"),
-                                3, null, null, settings.answerLanguage())),
-                        streamExecutor);
+                boolean followUpsEnabled = effective.bool("chat.followups.enabled");
+                CompletableFuture<List<String>> followUpsFuture = followUpsEnabled
+                        ? CompletableFuture.supplyAsync(
+                                ollamaClient.within(scope, () -> followUpGenerator.generate(
+                                        request.message(), result.answer(), collectedSources,
+                                        effective.effectiveModel("chat"), effective.effectiveModel("followup"),
+                                        3, null, null, settings.answerLanguage())),
+                                streamExecutor)
+                        : CompletableFuture.completedFuture(List.of());
 
                 GroundingResult validation = validationFuture.join();
                 if (validation != null) {
@@ -200,7 +203,9 @@ public class ChatController {
                     }
                 }
                 List<String> followUps = followUpsFuture.join();
-                sendEvent(emitter, scope, "followups", followUps, MediaType.APPLICATION_JSON);
+                if (!followUps.isEmpty()) {
+                    sendEvent(emitter, scope, "followups", followUps, MediaType.APPLICATION_JSON);
+                }
                 sendEvent(emitter, scope, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();
             } catch (Exception ex) {

@@ -56,6 +56,7 @@ public class SettingsSchema {
                 integer("rag.max-source-chars", "answer", "Källtecken", "Max antal tecken källmaterial som skickas till modellen.", 8000, 0, 100000, 100, ApplyMode.LIVE, null, null),
                 enumValue("chat.answer-language", "answer", "Svarspråk", "en, sv eller auto (samma som frågan).", "en", List.of("en", "sv", "auto")),
                 bool("chat.thinking", "answer", "Thinking för svar", "Låt chattmodellen använda thinking.", true, ApplyMode.LIVE, null, null),
+                bool("chat.followups.enabled", "answer", "Följdfrågor", "Generera förslag på följdfrågor efter svaret.", true, ApplyMode.LIVE, null, null),
 
                 bool("chat.validate-grounding", "validation", "Grundningskontroll", "Kontrollera att svaret stöds av källorna.", true, ApplyMode.LIVE, null, null),
                 bool("ollama.validator-thinking", "validation", "Thinking för validering", "Slå på thinking i valideringsmodellen.", false, ApplyMode.LIVE, null, null),
