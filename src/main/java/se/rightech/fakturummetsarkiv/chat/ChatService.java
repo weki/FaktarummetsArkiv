@@ -764,8 +764,8 @@ public StreamResult streamChat(String question, String sessionId,
         }
         sb.append("\nExamples:\n");
         sb.append("Message: hej -> DIRECT: Hej! Hur kan jag hjälpa dig?\n");
-        sb.append("Message: jag heter Anna -> DIRECT: Hej Anna! Hur kan jag hjälpa dig?\n");
-        sb.append("Message: vad heter jag? -> DIRECT: Du heter Anna.\n");
+        sb.append("Message: jag heter X -> DIRECT: Hej X! Hur kan jag hjälpa dig?\n");
+        sb.append("Message: vad heter jag? -> DIRECT: Du heter X.\n");
         sb.append("Message: kan du ge ett exempel på en forloop -> DIRECT: Här är ett exempel i Python: for i in range(5): print(i)\n");
         sb.append("Message: vilket språk är det? -> DIRECT: Det är Python.\n");
         sb.append("Message: tack -> DIRECT: Varsågod!\n");
