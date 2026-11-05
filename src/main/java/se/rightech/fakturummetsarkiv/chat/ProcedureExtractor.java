@@ -17,6 +17,8 @@ public final class ProcedureExtractor {
     private static final Pattern OPEN = Pattern.compile("^```(yaml|yml)?\\s*$");
     private static final Pattern CLOSE = Pattern.compile("^```\\s*$");
 
+    // Uses Jackson 2 (com.fasterxml) explicitly; see build.gradle dependency jackson-dataformat-yaml.
+    // Main code uses Jackson 3 (tools.jackson); this extractor keeps Jackson 2 for YAML parsing parity with DocuForgeExporter.
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
     /** Returns the last qualifying fenced block's content, or null if none. */
@@ -27,7 +29,6 @@ public final class ProcedureExtractor {
         int i = 0;
         int n = lines.length;
         while (i < n) {
-            Matcher om = OPEN.matcher(lines[i].trim());
             // require opening fence to start the (trimmed) line exactly
             if (!isOpenFence(lines[i])) {
                 i++;
@@ -61,19 +62,18 @@ public final class ProcedureExtractor {
     }
 
     private static boolean isOpenFence(String line) {
-        return line.trim().matches("^```(yaml|yml)?\\s*$");
+        return OPEN.matcher(line.trim()).matches();
     }
 
     private static String fenceLang(String line) {
-        String t = line.trim();
-        Matcher m = Pattern.compile("^```(yaml|yml)?\\s*$").matcher(t);
+        Matcher m = OPEN.matcher(line.trim());
         if (!m.matches()) return null;
         String g = m.group(1);
-        return g == null ? "" : g.toLowerCase();
+        return g == null ? "" : g.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static boolean isCloseFence(String line) {
-        return line.trim().matches("^```\\s*$");
+        return CLOSE.matcher(line.trim()).matches();
     }
 
     private static boolean qualifies(String lang, String content) {
