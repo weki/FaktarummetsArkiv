@@ -56,3 +56,4 @@ out/
 
 ### Videoanalys (genererad data) ###
 analyser/
+data/gpu-history.jsonl
