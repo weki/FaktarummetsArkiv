@@ -172,7 +172,7 @@ public StreamResult streamChat(String question, String sessionId,
         String searchQuery = gate.query();
         SearchGate.Mode gateMode = gate.mode();
         String modeStr = gateMode.name();
-        ProcedureIntent.Intent intent = ProcedureIntent.classify(question, hasProcedure, hasAttachment, null);
+        ProcedureIntent.Intent intent = ProcedureIntent.classify(question, hasProcedure, hasAttachment, sessionMemory.lastAssistant(sessionId));
         boolean procedureMode = (gateMode == SearchGate.Mode.ATTACHMENT || gateMode == SearchGate.Mode.BOTH)
                 && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT);
 

@@ -62,6 +62,15 @@ public class SessionMemory {
         }
     }
 
+    public String lastAssistant(String sessionId) {
+        List<Map<String, String>> h = history(sessionId, 1);
+        // history returns oldest...newest? check
+        for (int i = h.size() - 1; i >= 0; i--) {
+            if ("assistant".equals(h.get(i).get("role"))) return h.get(i).get("content");
+        }
+        return null;
+    }
+
     public void clear(String sessionId) {
         if (sessionId != null && !sessionId.isBlank()) {
             sessions.remove(sessionId);
