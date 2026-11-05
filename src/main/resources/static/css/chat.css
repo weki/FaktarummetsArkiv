@@ -105,6 +105,7 @@
 .verdict.bad { background: #3b1518; color: #fca5a5; }
 .verdict.info { background: #13294a; color: #bae6fd; }
 .verdict.pending { background: transparent; color: var(--accent); padding-left: 0; }
+.verdict.intent { background: #2d1b4e; color: #d8b4fe; }
 
 .status-link {
     padding: 0;

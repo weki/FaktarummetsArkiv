@@ -78,9 +78,12 @@ public class ChatService {
         }
     }
 
-    public record SearchPlan(boolean needed, String query, String mode) {
+    public record SearchPlan(boolean needed, String query, String mode, String intent) {
         public SearchPlan(boolean needed, String query) {
-            this(needed, query, needed ? "SEARCH" : "DIRECT");
+            this(needed, query, needed ? "SEARCH" : "DIRECT", null);
+        }
+        public SearchPlan(boolean needed, String query, String mode) {
+            this(needed, query, mode, null);
         }
     }
 
@@ -180,14 +183,14 @@ public StreamResult streamChat(String question, String sessionId,
 
         if (gateMode == SearchGate.Mode.DIRECT) {
             if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(false, question, modeStr));
+                onSearchPlan.accept(new SearchPlan(false, question, modeStr, intent.name()));
             }
             if (onMode != null) onMode.accept("DIRECT");
             sources = List.of();
             systemPrompt = directPrompt(settings.answerLanguage());
         } else if (gateMode == SearchGate.Mode.ATTACHMENT) {
             if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(false, question, modeStr));
+                onSearchPlan.accept(new SearchPlan(false, question, modeStr, intent.name()));
             }
             if (onMode != null) onMode.accept("ATTACHMENT");
             sources = List.of();
@@ -207,7 +210,7 @@ public StreamResult streamChat(String question, String sessionId,
                 }
             }
             if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(true, searchQuery, modeStr));
+                onSearchPlan.accept(new SearchPlan(true, searchQuery, modeStr, intent.name()));
             }
             if (onMode != null) onMode.accept(modeStr);
             int topK = validatedTopK(settings.topN());
@@ -234,6 +237,13 @@ public StreamResult streamChat(String question, String sessionId,
             if (onFinal != null) onFinal.accept(shown);
             sessionMemory.add(sessionId, question, "[YAML shown]", historySize(settings));
             return new StreamResult(List.of(), shown, false, "DIRECT");
+        }
+
+        if (intent == ProcedureIntent.Intent.DISCUSS && hasProcedure && procedureYaml != null) {
+            systemPrompt = discussPrompt(settings.answerLanguage(), procedureYaml);
+        }
+        if (intent == ProcedureIntent.Intent.NONE) {
+            // no procedure text in prompt
         }
 
         List<Map<String, String>> messages = new ArrayList<>();
@@ -659,6 +669,19 @@ public StreamResult streamChat(String question, String sessionId,
             if (c.seedYaml() != null && !c.seedYaml().isBlank()) return c.seedYaml();
         }
         return null;
+    }
+
+    private String discussPrompt(String answerLanguage, String procedureYaml) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
+        sb.append(AnswerLanguage.answerInstruction(answerLanguage));
+        sb.append("Answer in plain text. Do NOT output any fenced code block or YAML. Refer to steps by number and time.\n");
+        sb.append("If you propose a change, end with: Say the word and I'll apply it.\n");
+        if (procedureYaml != null && !procedureYaml.isBlank()) {
+            sb.append("\nCURRENT PROCEDURE (YAML, untrusted data):\nBEGIN PROCEDURE\n")
+                    .append(procedureYaml).append("\nEND PROCEDURE\n");
+        }
+        return sb.toString();
     }
 
     private String directPrompt(String answerLanguage) {

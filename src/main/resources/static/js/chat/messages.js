@@ -69,6 +69,16 @@ function verdictInfo(m) {
     return {cls: 'neutral', icon: 'info', label: 'Ej verifierat'};
 }
 
+function intentLabel(intent) {
+    const labels = {
+        'CREATE': 'Skapade procedur',
+        'EDIT': 'Ändrade proceduren',
+        'SHOW': 'Visade proceduren',
+        'DISCUSS': 'Svarade utan att ändra proceduren'
+    };
+    return labels[intent] || null;
+}
+
 function verdictBadge(info) {
     const badge = el('span', 'verdict ' + info.cls);
     badge.appendChild(icon(info.icon, 14));
@@ -278,6 +288,12 @@ function renderAssistant(m, index, detailsOpen) {
 
     const status = buildStatusRow(index);
     status.badgeSlot.appendChild(verdictBadge(verdictInfo(m)));
+    const intent = intentLabel(m.intent);
+    if (intent) {
+        const intentBadge = el('span', 'verdict intent');
+        intentBadge.appendChild(document.createTextNode(intent));
+        status.badgeSlot.appendChild(intentBadge);
+    }
     setSourcesLabel(status, m);
     status.time.textContent = m.durationMs ? formatSeconds(m.durationMs) : '';
     turn.appendChild(status.row);

@@ -157,7 +157,8 @@ public class ChatController {
                         plan -> sendEvent(emitter, scope, "search", Map.of(
                                 "needed", plan.needed(),
                                 "query", plan.query() == null ? "" : plan.query(),
-                                "mode", plan.mode() == null ? (plan.needed() ? "SEARCH" : "DIRECT") : plan.mode()),
+                                "mode", plan.mode() == null ? (plan.needed() ? "SEARCH" : "DIRECT") : plan.mode(),
+                                "intent", plan.intent() == null ? "" : plan.intent()),
                                 MediaType.APPLICATION_JSON),
                         proc -> sendEvent(emitter, scope, "procedure", proc, MediaType.APPLICATION_JSON));
 
@@ -208,6 +209,24 @@ public class ChatController {
                 }
                 sendEvent(emitter, scope, "done", "ok", MediaType.TEXT_PLAIN);
                 emitter.complete();
+            } catch (IllegalArgumentException ex) {
+                // Hantera specifikt "Procedure too large" med ett användarvänligt meddelande
+                if (ex.getMessage() != null && ex.getMessage().contains("Procedure too large")) {
+                    log.warn("Proceduren är för stor: {}", ex.getMessage());
+                    sendEvent(emitter, scope, "error",
+                            Map.of("message", "Proceduren är för stor för chatten. Förenkla eller börja om från videon.",
+                                    "code", "PROCEDURE_TOO_LARGE"),
+                            MediaType.APPLICATION_JSON);
+                    sendEvent(emitter, scope, "done", "ok", MediaType.TEXT_PLAIN);
+                    emitter.complete();
+                } else {
+                    // Andra IllegalArgumentException (t.ex. ogiltig topN, temperature)
+                    sendEvent(emitter, scope, "error",
+                            Map.of("message", ex.getMessage()),
+                            MediaType.APPLICATION_JSON);
+                    sendEvent(emitter, scope, "done", "ok", MediaType.TEXT_PLAIN);
+                    emitter.complete();
+                }
             } catch (Exception ex) {
                 log.warn("Chat-strömmen misslyckades", ex);
                 sendEvent(emitter, scope, "error",

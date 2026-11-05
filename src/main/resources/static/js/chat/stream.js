@@ -47,7 +47,7 @@ chatForm.addEventListener('submit', async (event) => {
     messagesInner.appendChild(ui.el);
     scrollToBottom(true);
 
-    const draft = {role: 'assistant', sources: [], searchQuery: '', thoughts: '', validation: null, searched: true};
+    const draft = {role: 'assistant', sources: [], searchQuery: '', thoughts: '', validation: null, searched: true, intent: ''};
     liveDraft = draft;
     let contentText = '';
     let originalText = '';
@@ -110,6 +110,7 @@ chatForm.addEventListener('submit', async (event) => {
                     const info = JSON.parse(evt.data) || {};
                     draft.searchQuery = info.query || '';
                     draft.searchMode = info.mode || (info.needed === false ? 'DIRECT' : 'SEARCH');
+                    draft.intent = info.intent || '';
                     if (info.needed === false) {
                         draft.searched = false;
                         ui.setPhase('Svarar direkt…');
@@ -160,7 +161,12 @@ chatForm.addEventListener('submit', async (event) => {
                     followUps = JSON.parse(evt.data) || [];
                 } else if (evt.event === 'error') {
                     const payload = JSON.parse(evt.data) || {};
-                    fail(payload.message || 'Kunde inte slutföra svaret.');
+                    // Hantera specifika felkoder med anpassade meddelanden
+                    if (payload.code === 'PROCEDURE_TOO_LARGE') {
+                        fail(payload.message || 'Proceduren är för stor. Förenkla eller börja om från videon.');
+                    } else {
+                        fail(payload.message || 'Kunde inte slutföra svaret.');
+                    }
                     finished = true;
                 } else if (evt.event === 'done') {
                     const message = {
@@ -176,6 +182,7 @@ chatForm.addEventListener('submit', async (event) => {
                         searched: draft.searched,
                         searchMode: draft.searchMode || null,
                         searchQuery: draft.searchQuery || null,
+                        intent: draft.intent || null,
                         durationMs: Math.round(performance.now() - startedAt)
                     };
                     thread.messages.push(message);
