@@ -605,14 +605,14 @@ public StreamResult streamChat(String question, String sessionId,
         return sb.toString();
     }
 
-    private static boolean commandsUnchanged(String before, String after) {
+    static boolean commandsUnchanged(String before, String after) {
         java.util.List<String> b = extractCommands(before);
         java.util.List<String> a = extractCommands(after);
         return b.equals(a);
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<String> extractCommands(String yaml) {
+    static java.util.List<String> extractCommands(String yaml) {
         java.util.List<String> out = new java.util.ArrayList<>();
         if (yaml == null || yaml.isBlank()) return out;
         try {
