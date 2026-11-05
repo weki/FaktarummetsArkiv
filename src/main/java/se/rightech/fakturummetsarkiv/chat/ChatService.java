@@ -183,7 +183,7 @@ public StreamResult streamChat(String question, String sessionId,
         if (isDiscuss) {
             decisionResponse = "DIRECT:";
         } else {
-            decisionResponse = llm.chat(model, decisionPrompt(settings.answerLanguage(), attachmentSummary, hasProcedure, hasAttachment),
+            decisionResponse = llm.chat(model, decisionPrompt(settings.answerLanguage(), attachmentSummary, hasProcedure, hasAttachment, history),
                     question, 0.0, effective.effectiveNumCtx("chat"), false);
         }
 
@@ -728,11 +728,11 @@ public StreamResult streamChat(String question, String sessionId,
         return sb.toString();
     }
 
-    private String decisionPrompt(String answerLanguage, String attachmentSummary, boolean hasProcedure, boolean hasAttachment) {
+    private String decisionPrompt(String answerLanguage, String attachmentSummary, boolean hasProcedure, boolean hasAttachment, List<Map<String, String>> history) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
         sb.append(AnswerLanguage.answerInstruction(answerLanguage));
-        sb.append("Based on the user's question, decide if you need to search the document archive to answer accurately.\n");
+        sb.append("Based on the user's question (and conversation history), decide if you need to search the document archive to answer accurately.\n");
         sb.append("\nSEARCH when the question is about:\n");
         sb.append("- Company documents, manuals, procedures, invoices, or technical configurations\n");
         sb.append("- Facts, specifications, or details that would be in the archive\n");
@@ -741,12 +741,23 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("- Small talk, greetings, thanks, goodbye, or social phrases\n");
         sb.append("- General knowledge, programming, math, or common sense\n");
         sb.append("- Personal opinions or feelings\n");
-        sb.append("- Questions you can answer from your own knowledge\n");
+        sb.append("- Questions you can answer from your own knowledge or conversation history\n");
         if (attachmentSummary != null && !attachmentSummary.isBlank()) {
             sb.append("- The user has attached a video/procedure analysis.\n");
         }
         if (hasProcedure) {
             sb.append("- A YAML procedure is attached.\n");
+        }
+        if (history != null && !history.isEmpty()) {
+            sb.append("\nRECENT CONVERSATION:\n");
+            int start = Math.max(0, history.size() - 6);
+            for (int i = start; i < history.size(); i++) {
+                Map<String, String> m = history.get(i);
+                String role = m.getOrDefault("role", "");
+                String content = m.getOrDefault("content", "");
+                if (content.length() > 300) content = content.substring(0, 300);
+                sb.append(role).append(": ").append(content).append("\n");
+            }
         }
         sb.append("\nExamples:\n");
         sb.append("Message: hej -> DIRECT: Hej! Hur kan jag hjälpa dig?\n");
