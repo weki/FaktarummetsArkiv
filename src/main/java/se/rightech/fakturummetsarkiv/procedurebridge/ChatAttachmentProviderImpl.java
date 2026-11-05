@@ -59,16 +59,16 @@ public class ChatAttachmentProviderImpl implements ChatAttachmentProvider {
 
     private String buildFullText(String runId, se.rightech.fakturummetsarkiv.video.ProcedureDraft draft) {
         StringBuilder sb = new StringBuilder();
-        sb.append("VIDEO ANALYSIS (run ").append(runId).append(", file \"").append(draft.sourceFilename()).append("\")\\n");
-        sb.append("Title: ").append(draft.title()).append("\\n");
-        sb.append("Purpose: ").append(draft.purpose()).append("\\n");
+        sb.append("VIDEO ANALYSIS (run ").append(runId).append(", file \"").append(draft.sourceFilename()).append("\")\n");
+        sb.append("Title: ").append(draft.title()).append("\n");
+        sb.append("Purpose: ").append(draft.purpose()).append("\n");
         if (draft.prerequisites() != null && !draft.prerequisites().isEmpty()) {
-            sb.append("Prerequisites: ").append(String.join("; ", draft.prerequisites())).append("\\n");
+            sb.append("Prerequisites: ").append(String.join("; ", draft.prerequisites())).append("\n");
         }
         if (draft.warnings() != null && !draft.warnings().isEmpty()) {
-            sb.append("Warnings: ").append(String.join("; ", draft.warnings())).append("\\n");
+            sb.append("Warnings: ").append(String.join("; ", draft.warnings())).append("\n");
         }
-        sb.append("Steps:\\n");
+        sb.append("Steps:\n");
         for (se.rightech.fakturummetsarkiv.video.ProcedureStep s : draft.steps()) {
             sb.append(s.number()).append(". [").append(formatTime(s.startSecond())).append("-").append(formatTime(s.endSecond())).append("] ")
                     .append(s.title()).append(" | kind=").append(s.kind())
@@ -76,7 +76,7 @@ public class ChatAttachmentProviderImpl implements ChatAttachmentProvider {
                     .append(" | input=\"").append(s.inputText() == null ? "" : s.inputText()).append("\"")
                     .append(" | expected=").append(s.expectedResult())
                     .append(" | frame=").append(s.frameImage() == null ? "" : s.frameImage().getFileName())
-                    .append(s.uncertain() ? " | UNCERTAIN" : "").append("\\n");
+                    .append(s.uncertain() ? " | UNCERTAIN" : "").append("\n");
         }
         return sb.toString();
     }
