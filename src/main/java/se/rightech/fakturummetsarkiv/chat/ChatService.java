@@ -226,6 +226,15 @@ public StreamResult streamChat(String question, String sessionId,
             // ensure mode sent (already sent above for most paths; DIRECT/ATTACHMENT sent)
         }
 
+        // SHOW: return pinned YAML verbatim without LLM
+        if (intent == ProcedureIntent.Intent.SHOW && hasProcedure && procedureYaml != null) {
+            String shown = "```yaml\n" + procedureYaml + "\n```";
+            if (onContent != null) onContent.accept(shown);
+            if (onFinal != null) onFinal.accept(shown);
+            sessionMemory.add(sessionId, question, "[YAML shown]", historySize(settings));
+            return new StreamResult(List.of(), shown, false, "DIRECT");
+        }
+
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.addAll(history);
