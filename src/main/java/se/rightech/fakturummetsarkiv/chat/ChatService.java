@@ -237,8 +237,22 @@ public StreamResult streamChat(String question, String sessionId,
             if (onSources != null) {
                 onSources.accept(sources);
             }
-            systemPrompt = systemPrompt(sources, sourceBlock.text(), settings.answerLanguage(),
-                    attachmentContexts, procedureYaml, hasProcedure, false, procedureMode);
+            // Om sökningen inte gav några källor, fall tillbaka till DIRECT
+            if (sources.isEmpty()) {
+                search = false;
+                searchQuery = null;
+                systemPrompt = directPrompt(settings.answerLanguage());
+                if (!attachmentContexts.isEmpty() || hasProcedure) {
+                    systemPrompt = attachmentPrompt(settings.answerLanguage(), attachmentContexts, procedureYaml, hasProcedure, procedureMode, seedYaml(attachmentContexts));
+                }
+                if (onSearchPlan != null) {
+                    onSearchPlan.accept(new SearchPlan(false, question, "DIRECT", intent.name()));
+                }
+                if (onMode != null) onMode.accept("DIRECT");
+            } else {
+                systemPrompt = systemPrompt(sources, sourceBlock.text(), settings.answerLanguage(),
+                        attachmentContexts, procedureYaml, hasProcedure, false, procedureMode);
+            }
         } else {
             if (onSearchPlan != null) {
                 onSearchPlan.accept(new SearchPlan(false, question, "DIRECT", intent.name()));
