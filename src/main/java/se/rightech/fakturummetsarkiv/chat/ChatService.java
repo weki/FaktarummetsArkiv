@@ -140,9 +140,13 @@ public StreamResult streamChat(String question, String sessionId,
         boolean hasAttachment = !attachmentContexts.isEmpty() || hasProcedure;
 
         // History with YAML omission when a pinned procedure exists
+        List<Map<String, String>> rawHistory = useHistory(settings)
+                ? sessionMemory.history(sessionId, historySize(settings)) : List.of();
+        if (hasProcedure && !rawHistory.isEmpty()) {
+            rawHistory = omitYamlInHistory(rawHistory);
+        }
         List<Map<String, String>> history = useHistory(settings)
-                ? Citations.stripAssistantHistory(trimHistory(
-                        sessionMemory.history(sessionId, historySize(settings)), effective.integer("rag.max-history-chars")))
+                ? Citations.stripAssistantHistory(trimHistory(rawHistory, effective.integer("rag.max-history-chars")))
                 : List.of();
 
         String model = effective.effectiveModel("chat");
@@ -308,6 +312,20 @@ public StreamResult streamChat(String question, String sessionId,
             sessionMemory.add(sessionId, question, Citations.strip(answer), historySize(settings));
         }
         return new StreamResult(sources, answer, search, modeStr);
+    }
+
+    static List<Map<String, String>> omitYamlInHistory(List<Map<String, String>> history) {
+        List<Map<String, String>> out = new ArrayList<>();
+        for (Map<String, String> m : history) {
+            Map<String, String> copy = new java.util.LinkedHashMap<>(m);
+            String content = copy.get("content");
+            if (content != null) {
+                content = content.replaceAll("(?s)```(?:yaml|yml)?\\s*\\n.*?```", "[YAML procedure omitted, see CURRENT PROCEDURE]");
+                copy.put("content", content);
+            }
+            out.add(copy);
+        }
+        return out;
     }
 
     /** Trimmar äldsta historiken först så att prompten inte växer obegränsat. */
