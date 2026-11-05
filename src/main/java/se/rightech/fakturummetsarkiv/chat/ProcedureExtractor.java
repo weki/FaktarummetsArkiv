@@ -61,18 +61,18 @@ public final class ProcedureExtractor {
         return candidates.get(candidates.size() - 1);
     }
 
-    private static boolean isOpenFence(String line) {
+    static boolean isOpenFence(String line) {
         return OPEN.matcher(line.trim()).matches();
     }
 
-    private static String fenceLang(String line) {
+    static String fenceLang(String line) {
         Matcher m = OPEN.matcher(line.trim());
         if (!m.matches()) return null;
         String g = m.group(1);
         return g == null ? "" : g.toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static boolean isCloseFence(String line) {
+    static boolean isCloseFence(String line) {
         return CLOSE.matcher(line.trim()).matches();
     }
 

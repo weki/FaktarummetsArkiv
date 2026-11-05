@@ -338,13 +338,92 @@ public StreamResult streamChat(String question, String sessionId,
             Map<String, String> copy = new java.util.LinkedHashMap<>(m);
             String content = copy.get("content");
             if (content != null) {
-                content = content.replaceAll("(?m)^```(?:yaml|yml)\\s*\\n[\\s\\S]*?^```\\s*$", "[YAML procedure omitted, see CURRENT PROCEDURE]");
-                copy.put("content", content);
+                String replaced = omitYamlBlocks(content);
+                if (replaced.length() < content.length()) {
+                    log.debug("omitYamlInHistory saved {} chars", content.length() - replaced.length());
+                }
+                copy.put("content", replaced);
             }
             out.add(copy);
         }
         return out;
     }
+
+    static String omitYamlBlocks(String text) {
+        if (text == null) return null;
+        String[] lines = text.split("\\n", -1);
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        int n = lines.length;
+        boolean changed = false;
+        while (i < n) {
+            if (!ProcedureExtractor.isOpenFence(lines[i])) {
+                if (i > 0) out.append("\n");
+                out.append(lines[i]);
+                i++;
+                continue;
+            }
+            // find closing fence
+            int j = i + 1;
+            boolean closed = false;
+            while (j < n) {
+                if (ProcedureExtractor.isCloseFence(lines[j])) { closed = true; break; }
+                j++;
+            }
+            if (!closed) {
+                // unbalanced: leave rest unchanged
+                for (int k = i; k < n; k++) {
+                    if (k > 0 || (out.length() > 0)) out.append("\n");
+                    out.append(lines[k]);
+                }
+                return out.toString();
+            }
+            String lang = ProcedureExtractor.fenceLang(lines[i]);
+            StringBuilder body = new StringBuilder();
+            for (int k = i + 1; k < j; k++) {
+                if (body.length() > 0) body.append("\n");
+                body.append(lines[k]);
+            }
+            String content = body.toString().trim();
+            // unmarked qualifying check via ProcedureExtractor semantics: metadata+sections
+            boolean isQualifying = false;
+            if (lang != null && (lang.equals("yaml") || lang.equals("yml"))) {
+                isQualifying = !content.isBlank();
+            } else if (lang != null && lang.isEmpty()) {
+                isQualifying = isUnmarkedProcedure(content);
+            }
+            if (isQualifying) {
+                if (out.length() > 0) out.append("\n");
+                out.append("[YAML procedure omitted, see CURRENT PROCEDURE]");
+                changed = true;
+            } else {
+                // leave block untouched
+                for (int k = i; k <= j; k++) {
+                    if (out.length() > 0) out.append("\n");
+                    out.append(lines[k]);
+                }
+            }
+            i = j + 1;
+            if (i < n) {
+                // ensure newline handling: loop will add? We append newline before next line
+            }
+        }
+        return out.toString();
+    }
+
+    private static boolean isUnmarkedProcedure(String content) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper ym = new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+            Object o = ym.readValue(content, Object.class);
+            if (!(o instanceof java.util.Map)) return false;
+            java.util.Map<?, ?> m = (java.util.Map<?, ?>) o;
+            return m.containsKey("metadata") && m.containsKey("sections");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
 
     /** Trimmar äldsta historiken först så att prompten inte växer obegränsat. */
     static List<Map<String, String>> trimHistory(List<Map<String, String>> history, int maxChars) {
