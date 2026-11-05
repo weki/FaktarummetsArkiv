@@ -290,6 +290,11 @@ public StreamResult streamChat(String question, String sessionId,
                             break;
                         }
                     }
+                    // If repair changed the YAML, reflect it in the chat answer too
+                    if (!current.equals(extracted)) {
+                        answer = answer.replace(extracted, current);
+                        if (onFinal != null) onFinal.accept(answer);
+                    }
                     Map<String, Object> info = new java.util.LinkedHashMap<>();
                     info.put("yaml", current);
                     info.put("valid", vr == null || vr.valid());
