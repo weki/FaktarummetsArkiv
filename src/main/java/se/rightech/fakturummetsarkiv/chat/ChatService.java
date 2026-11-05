@@ -719,14 +719,28 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
         sb.append(AnswerLanguage.answerInstruction(answerLanguage));
         sb.append("Based on the user's question, decide if you need to search the document archive to answer accurately.\n");
-        sb.append("- If the question is about company documents, manuals, procedures, invoices, or technical configurations, search.\n");
-        sb.append("- If the question is general knowledge, small talk, programming, or math, answer directly.\n");
+        sb.append("\nSEARCH when the question is about:\n");
+        sb.append("- Company documents, manuals, procedures, invoices, or technical configurations\n");
+        sb.append("- Facts, specifications, or details that would be in the archive\n");
+        sb.append("- Anything the user explicitly asks to look up in documents\n");
+        sb.append("\nDIRECT when the question is:\n");
+        sb.append("- Small talk, greetings, thanks, goodbye, or social phrases\n");
+        sb.append("- General knowledge, programming, math, or common sense\n");
+        sb.append("- Personal opinions or feelings\n");
+        sb.append("- Questions you can answer from your own knowledge\n");
         if (attachmentSummary != null && !attachmentSummary.isBlank()) {
             sb.append("- The user has attached a video/procedure analysis.\n");
         }
         if (hasProcedure) {
             sb.append("- A YAML procedure is attached.\n");
         }
+        sb.append("\nExamples:\n");
+        sb.append("Message: hej -> DIRECT: Hej! Hur kan jag hjälpa dig?\n");
+        sb.append("Message: tack -> DIRECT: Varsågod!\n");
+        sb.append("Message: det är dags att gå och lägga sig -> DIRECT: God natt!\n");
+        sb.append("Message: vad är 2+2? -> DIRECT: 4\n");
+        sb.append("Message: vad är OPC UA? -> SEARCH: OPC UA definition overview\n");
+        sb.append("Message: vilka taggar har dokumenten? -> SEARCH: document tags metadata\n");
         sb.append("\nRespond with exactly one of:\n");
         sb.append("SEARCH: <concise search query in English>\n");
         sb.append("DIRECT: <your answer>\n");
