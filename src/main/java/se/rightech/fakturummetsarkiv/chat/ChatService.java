@@ -160,11 +160,9 @@ public StreamResult streamChat(String question, String sessionId,
         String searchQuery = gate.query();
         SearchGate.Mode gateMode = gate.mode();
         String modeStr = gateMode.name();
-        String lowerQ = question == null ? "" : question.toLowerCase(java.util.Locale.ROOT);
-        boolean mentionsProcedure = lowerQ.contains("yaml") || lowerQ.contains("procedur") || lowerQ.contains("sop")
-                || lowerQ.contains("steg-för-steg") || lowerQ.contains("step-by-step") || lowerQ.contains("step by step");
+        ProcedureIntent.Intent intent = ProcedureIntent.classify(question, hasProcedure, hasAttachment, null);
         boolean procedureMode = (gateMode == SearchGate.Mode.ATTACHMENT || gateMode == SearchGate.Mode.BOTH)
-                && (hasProcedure || mentionsProcedure) && (hasAttachment || hasProcedure);
+                && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT);
 
 
         if (gateMode == SearchGate.Mode.DIRECT) {
@@ -250,8 +248,8 @@ public StreamResult streamChat(String question, String sessionId,
         if (onFinal != null) {
             onFinal.accept(answer);
         }
-        // Procedure extraction/validation (+ optional repair)
-        if (onProcedure != null) {
+        // Procedure extraction/validation (+ optional repair) only for CREATE/EDIT
+        if (onProcedure != null && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT)) {
             try {
                 String extracted = ProcedureExtractor.extract(answer);
                 if (extracted != null) {
