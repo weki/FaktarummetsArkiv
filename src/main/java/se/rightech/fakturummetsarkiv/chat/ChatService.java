@@ -482,15 +482,38 @@ public StreamResult streamChat(String question, String sessionId,
     }
 
     private static boolean commandsUnchanged(String before, String after) {
-        // crude check: extract command: lines
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile("command:\\s*\"([^\"]*)\"");
-        java.util.regex.Matcher mb = p.matcher(before);
-        java.util.regex.Matcher ma = p.matcher(after);
-        java.util.List<String> b = new java.util.ArrayList<>();
-        java.util.List<String> a = new java.util.ArrayList<>();
-        while (mb.find()) b.add(mb.group(1));
-        while (ma.find()) a.add(ma.group(1));
+        java.util.List<String> b = extractCommands(before);
+        java.util.List<String> a = extractCommands(after);
         return b.equals(a);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<String> extractCommands(String yaml) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (yaml == null || yaml.isBlank()) return out;
+        try {
+            com.fasterxml.jackson.dataformat.yaml.YAMLMapper mapper = new com.fasterxml.jackson.dataformat.yaml.YAMLMapper();
+            Object root = mapper.readValue(yaml, Object.class);
+            collectCommands(root, out);
+        } catch (Exception e) {
+            // fall back to regex for double-quoted command
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("command:\\s*\"([^\"]*)\"");
+            java.util.regex.Matcher m = p.matcher(yaml);
+            while (m.find()) out.add(m.group(1));
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void collectCommands(Object node, java.util.List<String> out) {
+        if (node instanceof java.util.Map) {
+            java.util.Map<?, ?> m = (java.util.Map<?, ?>) node;
+            Object cmd = m.get("command");
+            if (cmd != null) out.add(String.valueOf(cmd));
+            for (Object v : m.values()) collectCommands(v, out);
+        } else if (node instanceof java.util.List) {
+            for (Object v : (java.util.List<?>) node) collectCommands(v, out);
+        }
     }
 
 
