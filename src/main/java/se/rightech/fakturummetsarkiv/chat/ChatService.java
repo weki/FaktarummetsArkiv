@@ -733,6 +733,9 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
         sb.append(AnswerLanguage.answerInstruction(answerLanguage));
         sb.append("Based on the user's question (and conversation history), decide if you need to search the document archive to answer accurately.\n");
+        sb.append("\nIMPORTANT: When answering DIRECT, ALWAYS use the RECENT CONVERSATION to answer follow-up questions. ");
+        sb.append("If the user told you their name, remember it. If they asked about a topic earlier, refer to it. ");
+        sb.append("If the user asks 'vilket språk' or 'what language' after a code example, answer with the programming language of the example, not the natural language.\n");
         sb.append("\nSEARCH when the question is about:\n");
         sb.append("- Company documents, manuals, procedures, invoices, or technical configurations\n");
         sb.append("- Facts, specifications, or details that would be in the archive\n");
@@ -761,6 +764,10 @@ public StreamResult streamChat(String question, String sessionId,
         }
         sb.append("\nExamples:\n");
         sb.append("Message: hej -> DIRECT: Hej! Hur kan jag hjälpa dig?\n");
+        sb.append("Message: jag heter Anna -> DIRECT: Hej Anna! Hur kan jag hjälpa dig?\n");
+        sb.append("Message: vad heter jag? -> DIRECT: Du heter Anna.\n");
+        sb.append("Message: kan du ge ett exempel på en forloop -> DIRECT: Här är ett exempel i Python: for i in range(5): print(i)\n");
+        sb.append("Message: vilket språk är det? -> DIRECT: Det är Python.\n");
         sb.append("Message: tack -> DIRECT: Varsågod!\n");
         sb.append("Message: det är dags att gå och lägga sig -> DIRECT: God natt!\n");
         sb.append("Message: vad är 2+2? -> DIRECT: 4\n");
