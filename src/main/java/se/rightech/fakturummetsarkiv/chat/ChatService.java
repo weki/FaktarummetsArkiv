@@ -126,14 +126,22 @@ public StreamResult streamChat(String question, String sessionId,
         List<String> effectiveDocumentIds = (documentIds != null && !documentIds.isEmpty()) ? documentIds : settings.documentIds();
 
         // Load attachments (video runs) via provider
+        int maxAttachments = effective.integer("chat.attachments.max");
+        if (maxAttachments <= 0) maxAttachments = Integer.MAX_VALUE;
         List<ChatAttachmentProvider.AttachmentContext> attachmentContexts = new ArrayList<>();
         if (attachments != null) {
             for (AttachmentRef ref : attachments) {
                 if (ref == null) continue;
+                if (attachmentContexts.size() >= maxAttachments) break;
                 if (attachmentProvider.isPresent()) {
                     attachmentProvider.get().load(ref).ifPresent(attachmentContexts::add);
                 }
             }
+        }
+        // Cap procedure YAML chars
+        int maxYaml = effective.integer("chat.procedure.max-yaml-chars");
+        if (maxYaml > 0 && procedureYaml != null && procedureYaml.length() > maxYaml) {
+            procedureYaml = procedureYaml.substring(0, maxYaml) + "\\n# ... truncated";
         }
         String attachmentSummary = buildAttachmentSummary(attachmentContexts);
         boolean hasProcedure = procedureYaml != null && !procedureYaml.isBlank();
