@@ -473,9 +473,18 @@ public StreamResult streamChat(String question, String sessionId,
         String base = systemPrompt(sources, sourceBlock, answerLanguage);
         StringBuilder sb = new StringBuilder(base);
         if (procedureMode) {
-            sb.append("\nPROCEDURE MODE ACTIVE. Follow the procedure rules. Schema and frames below.\n");
+            sb.append("\nPROCEDURE MODE: The user wants a YAML procedure according to the schema below.\n");
+            sb.append("Rules: write ONE fenced ```yaml block with the whole document. No extra fields.\n");
+            sb.append("id: step-N. confidentiality only if user specified.\n");
+            sb.append("Do not fill author, department, date, id unless user provided them.\n");
+            sb.append("command must be exact text from the analysis. images[].file only from AVAILABLE FRAMES.\n");
+            sb.append("All content in English.\n");
+            sb.append("\nAVAILABLE FRAMES:\n");
+            for (ChatAttachmentProvider.AttachmentContext c : ctxs) {
+                if (c.frameFiles() != null) for (String f : c.frameFiles()) sb.append(f).append("\n");
+            }
             if (procedureSchemaMinified != null && !procedureSchemaMinified.isBlank()) {
-                sb.append("SCHEMA: ").append(procedureSchemaMinified).append("\n");
+                sb.append("\nSCHEMA (minified JSON):\n").append(procedureSchemaMinified).append("\n");
             }
         }
         if (hasProcedure && procedureYaml != null && !procedureYaml.isBlank()) {
