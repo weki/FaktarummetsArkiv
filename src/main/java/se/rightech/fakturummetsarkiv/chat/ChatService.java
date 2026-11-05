@@ -141,7 +141,7 @@ public StreamResult streamChat(String question, String sessionId,
         // Cap procedure YAML chars
         int maxYaml = effective.integer("chat.procedure.max-yaml-chars");
         if (maxYaml > 0 && procedureYaml != null && procedureYaml.length() > maxYaml) {
-            procedureYaml = procedureYaml.substring(0, maxYaml) + "\\n# ... truncated";
+            procedureYaml = procedureYaml.substring(0, maxYaml) + "\n# ... truncated";
         }
         String attachmentSummary = buildAttachmentSummary(attachmentContexts);
         boolean hasProcedure = procedureYaml != null && !procedureYaml.isBlank();
