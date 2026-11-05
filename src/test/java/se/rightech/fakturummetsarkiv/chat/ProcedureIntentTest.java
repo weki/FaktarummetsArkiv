@@ -69,7 +69,12 @@ class ProcedureIntentTest {
             Arguments.of("Vi kan ta det senare", true, true, null, ProcedureIntent.Intent.NONE),
             Arguments.of("Delarna ser bra ut", true, true, null, ProcedureIntent.Intent.NONE),
             Arguments.of("Vad är en SOP?", false, true, null, ProcedureIntent.Intent.NONE),
-            Arguments.of("Skriv ett mejl till Anna om videon", false, true, null, ProcedureIntent.Intent.NONE)
+            Arguments.of("Skriv ett mejl till Anna om videon", false, true, null, ProcedureIntent.Intent.NONE),
+
+            // Rättning: skriv/write utan "ut" är EDIT, inte SHOW
+            Arguments.of("Skriv proceduren för operatörer", true, true, null, ProcedureIntent.Intent.EDIT),
+            Arguments.of("Skriv om proceduren", true, true, null, ProcedureIntent.Intent.EDIT),
+            Arguments.of("Write the procedure for operators", true, true, null, ProcedureIntent.Intent.EDIT)
         );
     }
 

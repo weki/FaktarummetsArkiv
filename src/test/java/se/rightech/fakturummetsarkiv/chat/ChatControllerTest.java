@@ -31,14 +31,4 @@ class ChatControllerTest {
         assertThat(response).containsOnlyKeys("error");
         assertThat(response.get("error")).isEqualTo("Ogiltig indata");
     }
-
-    @Test
-    void procedureTooLargeThrowsBadRequest() {
-        // Verifierar att "Procedure too large" kastas som IllegalArgumentException
-        // som hanteras som 400 Bad Request av @ExceptionHandler
-        assertThatThrownBy(() -> {
-            throw new IllegalArgumentException("Procedure too large, max 10000 characters");
-        }).isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("Procedure too large");
-    }
 }

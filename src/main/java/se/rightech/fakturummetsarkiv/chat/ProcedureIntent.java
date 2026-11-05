@@ -16,9 +16,9 @@ public class ProcedureIntent {
     private static final Set<String> YAML_TOKENS = Set.of("yaml");
 
     // Verbformer (explicita, inga stammar)
-    private static final Set<String> CREATE_VERBS = Set.of("skapa", "skriver", "skriv", "gör", "generera", "create", "write", "make", "generate", "draft");
-    private static final Set<String> EDIT_VERBS = Set.of("lägg", "lägga", "lägger", "ändra", "ändrar", "byt", "byter", "dela", "delar", "flytta", "flyttar", "slå", "slår", "uppdatera", "modifiera", "justera", "förenkla", "förkorta", "komplettera", "ersätt", "döp", "numrera", "merge", "split", "move", "change", "rewrite", "update", "modify", "adjust", "shorten", "simplify", "replace", "rename");
-    private static final Set<String> SHOW_VERBS = Set.of("visa", "skriv", "write", "show", "display", "print");
+    private static final Set<String> CREATE_VERBS = Set.of("skapa", "skriver", "gör", "generera", "create", "make", "generate", "draft");
+    private static final Set<String> EDIT_VERBS = Set.of("lägg", "lägga", "lägger", "ändra", "ändrar", "byt", "byter", "dela", "delar", "flytta", "flyttar", "slå", "slår", "uppdatera", "modifiera", "justera", "förenkla", "förkorta", "komplettera", "ersätt", "döp", "numrera", "skriv", "write", "merge", "split", "move", "change", "rewrite", "update", "modify", "adjust", "shorten", "simplify", "replace", "rename");
+    private static final Set<String> SHOW_VERBS = Set.of("visa", "show", "display", "print");
 
     private static final Set<String> QUESTION_WORDS = Set.of("varför", "vad", "hur", "vem", "när", "vilka", "vilket", "är", "ska", "kan", "borde", "bör", "behöver", "why", "what", "how", "who", "when", "which", "is", "should", "can", "does", "do");
 
@@ -43,8 +43,8 @@ public class ProcedureIntent {
         // (1) SHOW: visa/skriv ut/show/print + proceduren/yaml/procedur
         if (hasProcedure && hasShowVerb(tokens) && hasProcedureWord(tokens)) return Intent.SHOW;
 
-        // (2) CREATE: skapa/gör/skriv + procedurord + (hasAttachment || hasProcedure)
-        boolean createVerb = hasAnyToken(tokens, CREATE_VERBS) || containsPhrase(tokens, "ta", "fram");
+        // (2) CREATE: skapa/gör/skriv ner + procedurord + (hasAttachment || hasProcedure)
+        boolean createVerb = hasAnyToken(tokens, CREATE_VERBS) || containsPhrase(tokens, "ta", "fram") || containsPhrase(tokens, "skriv", "ner");
         boolean procWord = hasProcedureWord(tokens);
         boolean restart = (containsPhrase(tokens, "börja", "om") || containsPhrase(tokens, "start", "over") || containsPhrase(tokens, "från", "början") || containsPhrase(tokens, "from", "scratch"))
                 && (containsToken(tokens, "videon") || containsToken(tokens, "video") || containsToken(tokens, "bilagan") || containsToken(tokens, "the"));
