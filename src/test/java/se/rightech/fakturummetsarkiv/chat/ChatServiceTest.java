@@ -47,6 +47,9 @@ class ChatServiceTest {
     void defaultRewriteKeepsTheQuestion() {
         when(queryRewriter.rewrite(anyString(), any(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        // Default: LLM beslutar att söka
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("SEARCH: q");
     }
 
     @SuppressWarnings("unchecked")
@@ -128,6 +131,8 @@ class ChatServiceTest {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, true, List.of("docs"), null, 5, 0.0, 20, null));
         sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("SEARCH: hur aktiverar jag det på en server?");
         when(queryRewriter.rewrite(anyString(), any(), anyString(), anyString())).thenReturn("Hur aktiverar jag OPC UA på en server?");
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
@@ -145,6 +150,8 @@ class ChatServiceTest {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, false, false, List.of("docs"), null, 5, 0.0, 20, null));
         sessionMemory.add("s1", "Vad är OPC UA?", "OPC UA är ...", 20);
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("SEARCH: hur aktiverar jag det?");
         when(retrievalService.retrieve(anyString(), any(), anyInt(), any(), any())).thenReturn(List.of());
         respondWith("svar");
 
@@ -161,8 +168,8 @@ class ChatServiceTest {
     void answersDirectlyWithoutSearchWhenGateSaysSo() {
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
-        when(searchGate.decide(eq("hej"), any(), any(), any(), any(), anyBoolean())).thenReturn(new SearchGate.Decision(false, "hej"));
-        when(searchGate.needsSearch("hej")).thenReturn(false);
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("DIRECT: Hej");
         respondWith("Hej");
 
         List<Map<String, Object>> sources = new ArrayList<>();

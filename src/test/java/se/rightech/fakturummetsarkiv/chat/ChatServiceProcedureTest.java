@@ -65,6 +65,9 @@ class ChatServiceProcedureTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(settingsStore.get()).thenReturn(new WorkspaceSettings(
                 "chat", "gemma4:latest", "phi3.5:latest", true, true, true, List.of("docs"), null, 5, 0.0, 20, null));
+        // Default: LLM beslutar att söka
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("SEARCH: q");
     }
 
     @SuppressWarnings("unchecked")

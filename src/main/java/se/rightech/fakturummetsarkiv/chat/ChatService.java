@@ -163,56 +163,71 @@ public StreamResult streamChat(String question, String sessionId,
 
         String model = effective.effectiveModel("chat");
 
-        boolean smart = settings.smartSearch() == null || settings.smartSearch();
-        SearchGate.Decision gate = smart
-                ? searchGate.decide(question, history, effective.effectiveModel("gate"),
-                        effective.string("rag.search-language"), attachmentSummary, hasProcedure)
-                : (hasAttachment ? new SearchGate.Decision(true, question, SearchGate.Mode.BOTH)
-                        : new SearchGate.Decision(true, question));
-        boolean search = gate.search();
+        ProcedureIntent.Intent intent = ProcedureIntent.classify(question, hasProcedure, hasAttachment, sessionMemory.lastAssistant(sessionId));
+        boolean procedureMode = hasAttachment && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT);
+
+        // SHOW: return pinned YAML verbatim without LLM
+        if (intent == ProcedureIntent.Intent.SHOW && hasProcedure && procedureYaml != null) {
+            String shown = "```yaml\n" + procedureYaml + "\n```";
+            if (onContent != null) onContent.accept(shown);
+            if (onFinal != null) onFinal.accept(shown);
+            sessionMemory.add(sessionId, question, "[YAML shown]", historySize(settings));
+            return new StreamResult(List.of(), shown, false, "DIRECT");
+        }
+
+        // DISCUSS: svara i text, ingen sökning
+        boolean isDiscuss = intent == ProcedureIntent.Intent.DISCUSS && hasProcedure && procedureYaml != null;
+
+        // LLM beslutar själv om sökning behövs (hoppa för DISCUSS)
+        String decisionResponse;
+        if (isDiscuss) {
+            decisionResponse = "DIRECT:";
+        } else {
+            decisionResponse = llm.chat(model, decisionPrompt(settings.answerLanguage(), attachmentSummary, hasProcedure, hasAttachment),
+                    question, 0.0, effective.effectiveNumCtx("chat"), false);
+        }
+
+        boolean search;
+        String searchQuery = question;
+        String directAnswer = null;
+
+        String upper = decisionResponse.toUpperCase(java.util.Locale.ROOT);
+        if (upper.startsWith("SEARCH:")) {
+            search = true;
+            searchQuery = decisionResponse.substring("SEARCH:".length()).trim();
+            if (searchQuery.isBlank()) searchQuery = question;
+        } else if (upper.startsWith("DIRECT:")) {
+            search = false;
+            if (isDiscuss) {
+                directAnswer = null; // Force LLM call with discussPrompt
+            } else {
+                directAnswer = decisionResponse.substring("DIRECT:".length()).trim();
+            }
+        } else {
+            // Fallback: behandla som DIRECT
+            search = false;
+            if (isDiscuss) {
+                directAnswer = null;
+            } else {
+                directAnswer = decisionResponse.trim();
+            }
+        }
 
         List<Map<String, Object>> sources;
         String systemPrompt;
-        String searchQuery = gate.query();
-        SearchGate.Mode gateMode = gate.mode();
-        String modeStr = gateMode.name();
-        ProcedureIntent.Intent intent = ProcedureIntent.classify(question, hasProcedure, hasAttachment, sessionMemory.lastAssistant(sessionId));
-        boolean procedureMode = (gateMode == SearchGate.Mode.ATTACHMENT || gateMode == SearchGate.Mode.BOTH)
-                && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT);
 
 
-        if (gateMode == SearchGate.Mode.DIRECT) {
-            if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(false, question, modeStr, intent.name()));
-            }
-            if (onMode != null) onMode.accept("DIRECT");
-            sources = List.of();
-            systemPrompt = directPrompt(settings.answerLanguage());
-        } else if (gateMode == SearchGate.Mode.ATTACHMENT) {
-            if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(false, question, modeStr, intent.name()));
-            }
-            if (onMode != null) onMode.accept("ATTACHMENT");
-            sources = List.of();
-            systemPrompt = attachmentPrompt(settings.answerLanguage(), attachmentContexts, procedureYaml, hasProcedure, procedureMode, seedYaml(attachmentContexts));
-        } else {
-            // SEARCH or BOTH
-            boolean doSearch = true;
-            if (gateMode == SearchGate.Mode.BOTH || gateMode == SearchGate.Mode.SEARCH) {
-                if ((settings.rewriteQuery() == null || settings.rewriteQuery())
-                        && searchQuery.equalsIgnoreCase(question.trim())
-                        && gateMode != SearchGate.Mode.ATTACHMENT) {
-                    // skip rewrite in ATTACHMENT (already handled); rewrite for search
-                    if (gateMode != SearchGate.Mode.ATTACHMENT) {
-                        String rewriteModel = effective.effectiveModel("rewrite");
-                        searchQuery = queryRewriter.rewrite(question, history, rewriteModel, effective.string("rag.search-language"));
-                    }
-                }
+        if (search) {
+            // Rewrite query if enabled and query matches question
+            if ((settings.rewriteQuery() == null || settings.rewriteQuery())
+                    && searchQuery.equalsIgnoreCase(question.trim())) {
+                String rewriteModel = effective.effectiveModel("rewrite");
+                searchQuery = queryRewriter.rewrite(question, history, rewriteModel, effective.string("rag.search-language"));
             }
             if (onSearchPlan != null) {
-                onSearchPlan.accept(new SearchPlan(true, searchQuery, modeStr, intent.name()));
+                onSearchPlan.accept(new SearchPlan(true, searchQuery, "SEARCH", intent.name()));
             }
-            if (onMode != null) onMode.accept(modeStr);
+            if (onMode != null) onMode.accept("SEARCH");
             int topK = validatedTopK(settings.topN());
             Double threshold = settings.similarityThreshold();
             List<Map<String, Object>> retrieved =
@@ -223,20 +238,25 @@ public StreamResult streamChat(String question, String sessionId,
                 onSources.accept(sources);
             }
             systemPrompt = systemPrompt(sources, sourceBlock.text(), settings.answerLanguage(),
-                    attachmentContexts, procedureYaml, hasProcedure, gateMode == SearchGate.Mode.BOTH, procedureMode);
+                    attachmentContexts, procedureYaml, hasProcedure, false, procedureMode);
+        } else {
+            if (onSearchPlan != null) {
+                onSearchPlan.accept(new SearchPlan(false, question, "DIRECT", intent.name()));
+            }
+            if (onMode != null) onMode.accept("DIRECT");
+            sources = List.of();
+            if (isDiscuss) {
+                systemPrompt = discussPrompt(settings.answerLanguage(), procedureYaml);
+            } else {
+                systemPrompt = directPrompt(settings.answerLanguage());
+                if (!attachmentContexts.isEmpty() || hasProcedure) {
+                    systemPrompt = attachmentPrompt(settings.answerLanguage(), attachmentContexts, procedureYaml, hasProcedure, procedureMode, seedYaml(attachmentContexts));
+                }
+            }
         }
 
         if (onMode != null) {
             // ensure mode sent (already sent above for most paths; DIRECT/ATTACHMENT sent)
-        }
-
-        // SHOW: return pinned YAML verbatim without LLM
-        if (intent == ProcedureIntent.Intent.SHOW && hasProcedure && procedureYaml != null) {
-            String shown = "```yaml\n" + procedureYaml + "\n```";
-            if (onContent != null) onContent.accept(shown);
-            if (onFinal != null) onFinal.accept(shown);
-            sessionMemory.add(sessionId, question, "[YAML shown]", historySize(settings));
-            return new StreamResult(List.of(), shown, false, "DIRECT");
         }
 
         if (intent == ProcedureIntent.Intent.DISCUSS && hasProcedure && procedureYaml != null) {
@@ -267,18 +287,27 @@ public StreamResult streamChat(String question, String sessionId,
                         onThought.accept(thought);
                     }
                 });
-        llm.chatStream(model, messages, temperature, effective.effectiveNumCtx("chat"),
-                effective.bool("chat.thinking"), thinkFilter::accept,
-                thought -> {
-                    if (thought != null && !thought.isEmpty() && onThought != null) {
-                        onThought.accept(thought);
-                    }
-                });
+        String answer;
+        if (directAnswer != null) {
+            // LLM beslutade att svara direkt - använd svaret från beslutet
+            if (onContent != null) onContent.accept(directAnswer);
+            if (onFinal != null) onFinal.accept(directAnswer);
+            answerText.append(directAnswer);
+            answer = directAnswer;
+        } else {
+            llm.chatStream(model, messages, temperature, effective.effectiveNumCtx("chat"),
+                    effective.bool("chat.thinking"), thinkFilter::accept,
+                    thought -> {
+                        if (thought != null && !thought.isEmpty() && onThought != null) {
+                            onThought.accept(thought);
+                        }
+                    });
 
-        thinkFilter.finish();
-        String answer = answerText.toString().trim();
-        if (onFinal != null) {
-            onFinal.accept(answer);
+            thinkFilter.finish();
+            answer = answerText.toString().trim();
+            if (onFinal != null) {
+                onFinal.accept(answer);
+            }
         }
         // Procedure extraction/validation (+ optional repair) only for CREATE/EDIT
         if (onProcedure != null && (intent == ProcedureIntent.Intent.CREATE || intent == ProcedureIntent.Intent.EDIT)) {
@@ -336,6 +365,7 @@ public StreamResult streamChat(String question, String sessionId,
             } catch (Exception ignored) {
             }
         }
+        String modeStr = search ? "SEARCH" : "DIRECT";
         if (!answer.isBlank() && !isNoAnswer(answer)) {
             sessionMemory.add(sessionId, question, Citations.strip(answer), historySize(settings));
         }
@@ -681,6 +711,26 @@ public StreamResult streamChat(String question, String sessionId,
             sb.append("\nCURRENT PROCEDURE (YAML, untrusted data):\nBEGIN PROCEDURE\n")
                     .append(procedureYaml).append("\nEND PROCEDURE\n");
         }
+        return sb.toString();
+    }
+
+    private String decisionPrompt(String answerLanguage, String attachmentSummary, boolean hasProcedure, boolean hasAttachment) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are a helpful assistant for Fakturummets arkiv.\n");
+        sb.append(AnswerLanguage.answerInstruction(answerLanguage));
+        sb.append("Based on the user's question, decide if you need to search the document archive to answer accurately.\n");
+        sb.append("- If the question is about company documents, manuals, procedures, invoices, or technical configurations, search.\n");
+        sb.append("- If the question is general knowledge, small talk, programming, or math, answer directly.\n");
+        if (attachmentSummary != null && !attachmentSummary.isBlank()) {
+            sb.append("- The user has attached a video/procedure analysis.\n");
+        }
+        if (hasProcedure) {
+            sb.append("- A YAML procedure is attached.\n");
+        }
+        sb.append("\nRespond with exactly one of:\n");
+        sb.append("SEARCH: <concise search query in English>\n");
+        sb.append("DIRECT: <your answer>\n");
+        sb.append("\nAlways start with either SEARCH: or DIRECT:.\n");
         return sb.toString();
     }
 
