@@ -337,7 +337,7 @@ public StreamResult streamChat(String question, String sessionId,
             Map<String, String> copy = new java.util.LinkedHashMap<>(m);
             String content = copy.get("content");
             if (content != null) {
-                content = content.replaceAll("(?s)```(?:yaml|yml)?\\s*\\n.*?```", "[YAML procedure omitted, see CURRENT PROCEDURE]");
+                content = content.replaceAll("(?m)^```(?:yaml|yml)\\s*\\n[\\s\\S]*?^```\\s*$", "[YAML procedure omitted, see CURRENT PROCEDURE]");
                 copy.put("content", content);
             }
             out.add(copy);
