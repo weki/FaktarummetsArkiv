@@ -1,7 +1,5 @@
 package se.rightech.fakturummetsarkiv.video.internal;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,6 +12,8 @@ import se.rightech.fakturummetsarkiv.video.VideoAnalysisCompat;
 import se.rightech.fakturummetsarkiv.video.VideoAnalysisException;
 import se.rightech.fakturummetsarkiv.video.VideoDescriber;
 import se.rightech.fakturummetsarkiv.video.VideoOptions;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.annotation.Value;
 
@@ -28,9 +28,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-@Service
-@ConditionalOnProperty(name = "video.enabled", havingValue = "true")
-public class ProcedureDraftService implements VideoDescriber {
+/**
+ * @deprecated Använd {@link VideoAnalysisService} istället. Denna klass finns endast för bakåtkompatibilitet.
+ */
+@Deprecated
+public class ProcedureDraftService {
 
     private static final Logger log = LoggerFactory.getLogger(ProcedureDraftService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -50,7 +52,7 @@ public class ProcedureDraftService implements VideoDescriber {
         this.resultStore = resultStore;
     }
 
-    @Override
+    @Deprecated
     public ProcedureDraft draft(Path videoFile, String originalFilename, VideoOptions options,
                                 Consumer<String> progress) {
         String filename = (originalFilename == null || originalFilename.isBlank())
@@ -456,13 +458,12 @@ public class ProcedureDraftService implements VideoDescriber {
         }
     }
 
-    @Override
+    @Deprecated
     public VideoAnalysis describe(Path videoFile, String originalFilename, VideoOptions options,
                                   Consumer<String> progress) {
-        // För tillfället: använd draft() och konvertera till VideoAnalysis
-        // I Fas V2 kommer detta att implementeras med nya prompts
-        ProcedureDraft draft = draft(videoFile, originalFilename, options, progress);
-        return VideoAnalysisCompat.fromDraft(draft);
+        // Delegera till VideoAnalysisService
+        // ProcedureDraftService finns endast för bakåtkompatibilitet
+        throw new UnsupportedOperationException("Använd VideoAnalysisService istället");
     }
 
 }
