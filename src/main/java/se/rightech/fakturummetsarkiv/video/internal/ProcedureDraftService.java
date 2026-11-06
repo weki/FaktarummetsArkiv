@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import se.rightech.fakturummetsarkiv.video.ProcedureDraft;
 import se.rightech.fakturummetsarkiv.video.ProcedureStep;
 import se.rightech.fakturummetsarkiv.video.StepKind;
+import se.rightech.fakturummetsarkiv.video.VideoAnalysis;
+import se.rightech.fakturummetsarkiv.video.VideoAnalysisCompat;
 import se.rightech.fakturummetsarkiv.video.VideoAnalysisException;
 import se.rightech.fakturummetsarkiv.video.VideoDescriber;
 import se.rightech.fakturummetsarkiv.video.VideoOptions;
@@ -452,6 +454,15 @@ public class ProcedureDraftService implements VideoDescriber {
         } catch (Exception e) {
             log.warn("Kunde inte spara procedure-draft.md: {}", e.getMessage());
         }
+    }
+
+    @Override
+    public VideoAnalysis describe(Path videoFile, String originalFilename, VideoOptions options,
+                                  Consumer<String> progress) {
+        // För tillfället: använd draft() och konvertera till VideoAnalysis
+        // I Fas V2 kommer detta att implementeras med nya prompts
+        ProcedureDraft draft = draft(videoFile, originalFilename, options, progress);
+        return VideoAnalysisCompat.fromDraft(draft);
     }
 
 }
