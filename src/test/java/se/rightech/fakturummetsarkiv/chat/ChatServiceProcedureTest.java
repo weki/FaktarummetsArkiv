@@ -292,4 +292,44 @@ class ChatServiceProcedureTest {
         // EDIT ska trigga procedur-extraktion
         assertThat(procedureCalls.get()).isGreaterThan(0);
     }
+
+    @Test
+    void videoAnalysisQuestionsDoNotTriggerSearch() {
+        // När en videoanalys är bifogad ska frågor om den inte trigga sökning
+        when(searchGate.decide(anyString(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(new SearchGate.Decision(false, "Vad händer vid 1:20?", SearchGate.Mode.ATTACHMENT));
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("DIRECT: Vid 1:20 öppnas fönstret Services.");
+
+        respondWith("Vid 1:20 öppnas fönstret Services.");
+
+        service.streamChat(
+                "Vad händer vid 1:20?", "s1", List.of(), List.of(), List.of(), VALID_YAML,
+                token -> {}, thought -> {}, sources -> {}, token -> {}, plan -> {},
+                proc -> {}
+        );
+
+        // Verifiera att retrievalService.retrieve inte anropades (ingen sökning)
+        verify(retrievalService, never()).retrieve(anyString(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void videoAnalysisFollowUpDoesNotTriggerSearch() {
+        // Uppföljningsfrågor om videoanalysen ska inte trigga sökning
+        when(searchGate.decide(anyString(), any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(new SearchGate.Decision(false, "beskriv mer i detalj", SearchGate.Mode.ATTACHMENT));
+        when(llm.chat(anyString(), anyString(), anyString(), anyDouble(), anyInt(), anyBoolean()))
+                .thenReturn("DIRECT: Användaren klickar på Start, skriver 'services.msc' och trycker Enter.");
+
+        respondWith("Användaren klickar på Start, skriver 'services.msc' och trycker Enter.");
+
+        service.streamChat(
+                "beskriv mer i detalj", "s1", List.of(), List.of(), List.of(), VALID_YAML,
+                token -> {}, thought -> {}, sources -> {}, token -> {}, plan -> {},
+                proc -> {}
+        );
+
+        // Verifiera att retrievalService.retrieve inte anropades (ingen sökning)
+        verify(retrievalService, never()).retrieve(anyString(), any(), anyInt(), any(), any());
+    }
 }

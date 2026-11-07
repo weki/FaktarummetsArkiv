@@ -745,10 +745,11 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("- Personal opinions or feelings\n");
         sb.append("- Questions you can answer from your own knowledge or conversation history\n");
         if (attachmentSummary != null && !attachmentSummary.isBlank()) {
-            sb.append("- The user has attached a video/procedure analysis.\n");
+            sb.append("- Questions about the attached video/procedure analysis (the analysis IS the source, do NOT search)\n");
+            sb.append("- Follow-up questions about the video analysis timeline, events, or details\n");
         }
         if (hasProcedure) {
-            sb.append("- A YAML procedure is attached.\n");
+            sb.append("- Questions about the attached YAML procedure\n");
         }
         if (history != null && !history.isEmpty()) {
             sb.append("\nRECENT CONVERSATION:\n");
@@ -770,6 +771,12 @@ public StreamResult streamChat(String question, String sessionId,
         sb.append("Message: tack -> DIRECT: Varsågod!\n");
         sb.append("Message: det är dags att gå och lägga sig -> DIRECT: God natt!\n");
         sb.append("Message: vad är 2+2? -> DIRECT: 4\n");
+        if (attachmentSummary != null && !attachmentSummary.isBlank()) {
+            sb.append("Message: vad händer vid 1:20? -> DIRECT: Vid 1:20 öppnas fönstret Services.\n");
+            sb.append("Message: beskriv mer i detalj -> DIRECT: [Detailed description from the video analysis timeline]\n");
+            sb.append("Message: vilka program används? -> DIRECT: Enligt videon används Notepad och Services.\n");
+            sb.append("Message: skapa en procedur av videon -> DIRECT: [Creates YAML procedure from video analysis]\n");
+        }
         sb.append("Message: vad är OPC UA? -> SEARCH: OPC UA definition overview\n");
         sb.append("Message: vilka taggar har dokumenten? -> SEARCH: document tags metadata\n");
         sb.append("\nRespond with exactly one of:\n");
