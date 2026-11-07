@@ -48,6 +48,10 @@ public class DocuForgeExporter {
         public ExportException(String message) { super(message); }
     }
 
+    /**
+     * @deprecated Använd ProcedureExportController istället som tar YAML-sträng och frames direkt.
+     */
+    @Deprecated
     public String toYaml(ProcedureDraft draft) {
         Map<String, Object> root = buildModel(draft);
         String yaml;
@@ -64,6 +68,10 @@ public class DocuForgeExporter {
         return yaml;
     }
 
+    /**
+     * @deprecated Använd ProcedureExportController istället som tar YAML-sträng och frames direkt.
+     */
+    @Deprecated
     public String toReviewMarkdown(ProcedureDraft draft) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Review report – ").append(draft.title()).append("\n\n");
@@ -85,6 +93,10 @@ public class DocuForgeExporter {
         return sb.toString();
     }
 
+    /**
+     * @deprecated Använd ProcedureExportController istället som tar YAML-sträng och frames direkt.
+     */
+    @Deprecated
     public byte[] toZip(ProcedureDraft draft) {
         String yaml = toYaml(draft);
         String review = toReviewMarkdown(draft);
