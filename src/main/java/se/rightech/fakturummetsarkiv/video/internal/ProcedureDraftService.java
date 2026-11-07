@@ -339,10 +339,6 @@ public class ProcedureDraftService {
                 .append("\"stepTitles\" (array of improved short titles, same length and order as steps; ")
                 .append("do NOT change any inputText). Return only JSON.");
 
-        List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", "You are a technical writer. Respond with JSON only."));
-        messages.add(Map.of("role", "user", "content", sb.toString()));
-
         String raw = videoOllamaClient.summarizeAnalyses(List.of(sb.toString()), hint == null ? "" : hint, null);
         // summarizeAnalyses wraps text; better: direct chat not exposed. Use it anyway.
         try {
