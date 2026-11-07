@@ -28,9 +28,19 @@ public class VideoRunController {
     @GetMapping("/{runId}")
     public ResponseEntity<?> get(@PathVariable String runId) {
         if (!repo.isValidRunId(runId)) return ResponseEntity.badRequest().build();
-        var draft = repo.find(runId);
-        if (draft == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(draft);
+        var analysis = repo.findAnalysis(runId);
+        if (analysis == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(analysis);
+    }
+
+    /**
+     * @deprecated Använd {@link #get(String)} istället.
+     * Alias för bakåtkompatibilitet.
+     */
+    @Deprecated
+    @GetMapping("/{runId}/draft")
+    public ResponseEntity<?> draft(@PathVariable String runId) {
+        return get(runId);
     }
 
     @GetMapping("/{runId}/frames/{file}")

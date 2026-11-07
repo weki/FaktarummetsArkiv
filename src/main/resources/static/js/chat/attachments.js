@@ -188,25 +188,31 @@ function appendVideoAnalysisMessage(thread, att, data) {
     fetch(VIDEO_API.replace('video-jobs','video-runs') + '/' + runId).then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
-    }).then(draft => {
+    }).then(analysis => {
         const lines = [];
-        lines.push('**' + (draft.title || 'Procedurutkast') + '**');
-        if (draft.purpose) lines.push('', draft.purpose);
-        if (draft.prerequisites && draft.prerequisites.length) {
-            lines.push('', 'Förkrav:', ...draft.prerequisites.map(p => '- ' + p));
+        lines.push('**' + (analysis.title || 'Videobeskrivning') + '**');
+        if (analysis.summary) lines.push('', analysis.summary);
+        if (analysis.applications && analysis.applications.length) {
+            lines.push('', 'Applikationer:', ...analysis.applications.map(a => '- ' + a));
         }
-        if (draft.warnings && draft.warnings.length) {
-            lines.push('', 'Varningar:', ...draft.warnings.map(w => '- ' + w));
+        if (analysis.events && analysis.events.length) {
+            lines.push('', 'Tidslinje:');
+            analysis.events.forEach(e => {
+                const start = Math.floor(e.startSecond / 60) + ':' + String(e.startSecond % 60).padStart(2, '0');
+                const end = Math.floor(e.endSecond / 60) + ':' + String(e.endSecond % 60).padStart(2, '0');
+                lines.push('[' + start + '-' + end + '] ' + e.description);
+                if (e.typedText) lines.push('   Inmatning: `' + e.typedText + '`');
+                if (e.onScreenText && e.onScreenText.length) lines.push('   Synlig text: ' + e.onScreenText.join(', '));
+                if (e.application) lines.push('   Applikation: ' + e.application);
+                if (e.uncertain) lines.push('   ⚠ Osäker');
+            });
         }
-        lines.push('', 'Steg:');
-        (draft.steps || []).forEach(s => {
-            const t = Math.floor(s.startSecond / 60) + ':' + String(s.startSecond % 60).padStart(2, '0');
-            lines.push(s.number + '. **' + (s.title || '') + '** (' + t + ')');
-            if (s.instruction) lines.push('   ' + s.instruction);
-            if (s.inputText) lines.push('   Inmatning: `' + s.inputText + '`');
-            if (s.expectedResult) lines.push('   Förväntat: ' + s.expectedResult);
-            if (s.uncertain) lines.push('   ⚠ Osäkert steg');
-        });
+        if (analysis.notable && analysis.notable.length) {
+            lines.push('', 'Noterbart:', ...analysis.notable.map(n => '- ' + n));
+        }
+        if (analysis.uncertainties && analysis.uncertainties.length) {
+            lines.push('', 'Osäkerheter:', ...analysis.uncertainties.map(u => '- ' + u));
+        }
         const text = lines.join('\n');
         const msg = {role: 'assistant', text: text, sources: [], searched: false, searchMode: 'ATTACHMENT'};
         thread.messages.push(msg);

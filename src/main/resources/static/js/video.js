@@ -145,35 +145,36 @@ async function loadDraft(jobId) {
     }
 }
 
-function renderDraft(draft, jobId) {
+function renderDraft(analysis, jobId) {
     draftView.hidden = false;
-    document.getElementById('draftTitle').textContent = draft.title || 'Procedurutkast';
-    document.getElementById('draftPurpose').textContent = draft.purpose || '';
+    document.getElementById('draftTitle').textContent = analysis.title || 'Videobeskrivning';
+    document.getElementById('draftPurpose').textContent = analysis.summary || '';
     const warnBox = document.getElementById('draftWarnings');
     warnBox.innerHTML = '';
-    (draft.warnings || []).forEach(w => {
+    (analysis.uncertainties || []).forEach(u => {
         const div = document.createElement('div');
         div.className = 'status err';
-        div.textContent = w;
+        div.textContent = u;
         warnBox.appendChild(div);
     });
     const prereqList = document.getElementById('draftPrereqs');
     prereqList.innerHTML = '';
-    (draft.prerequisites || []).forEach(p => {
-        const li = document.createElement('li'); li.textContent = p; prereqList.appendChild(li);
+    (analysis.applications || []).forEach(a => {
+        const li = document.createElement('li'); li.textContent = a; prereqList.appendChild(li);
     });
     const stepsList = document.getElementById('draftSteps');
     stepsList.innerHTML = '';
-    (draft.steps || []).forEach(s => {
+    (analysis.events || []).forEach(e => {
         const li = document.createElement('li');
-        const time = formatTime(s.startSecond);
-        const frameUrl = s.frameImage ? VIDEO_API + '/' + jobId + '/frames/' + encodeURIComponent(s.frameImage.split('/').pop()) : null;
-        li.innerHTML = '<strong>' + escapeHtml(s.title || '') + '</strong> '
+        const time = formatTime(e.startSecond) + '-' + formatTime(e.endSecond);
+        const frameUrl = e.frameImage ? VIDEO_API + '/' + jobId + '/frames/' + encodeURIComponent(e.frameImage.split('/').pop()) : null;
+        li.innerHTML = '<strong>' + escapeHtml(e.description || '') + '</strong> '
             + '<span class="meta">(' + time + ')</span>'
-            + (s.uncertain ? ' <span class="status err">osäker</span>' : '')
-            + '<div>' + escapeHtml(s.instruction || '') + '</div>'
-            + (s.inputText ? '<pre class="code">' + escapeHtml(s.inputText) + '</pre>' : '')
-            + (s.expectedResult ? '<div class="meta">Förväntat: ' + escapeHtml(s.expectedResult) + '</div>' : '')
+            + (e.uncertain ? ' <span class="status err">osäker</span>' : '')
+            + (e.action ? '<div>Action: ' + escapeHtml(e.action) + '</div>' : '')
+            + (e.typedText ? '<pre class="code">' + escapeHtml(e.typedText) + '</pre>' : '')
+            + (e.onScreenText && e.onScreenText.length ? '<div class="meta">Synlig text: ' + escapeHtml(e.onScreenText.join(', ')) + '</div>' : '')
+            + (e.application ? '<div class="meta">Applikation: ' + escapeHtml(e.application) + '</div>' : '')
             + (frameUrl ? '<img src="' + frameUrl + '" alt="bildruta" style="max-width:320px;border-radius:8px;margin-top:6px;">' : '');
         stepsList.appendChild(li);
     });
@@ -206,22 +207,27 @@ function renderDraft(draft, jobId) {
     };
 }
 
-function buildMarkdown(draft) {
-    let md = '# ' + (draft.title || '') + '\n\n' + (draft.purpose || '') + '\n\n';
-    if (draft.prerequisites && draft.prerequisites.length) {
-        md += '## Förkrav\n' + draft.prerequisites.map(p => '- ' + p).join('\n') + '\n\n';
+function buildMarkdown(analysis) {
+    let md = '# ' + (analysis.title || '') + '\n\n' + (analysis.summary || '') + '\n\n';
+    if (analysis.applications && analysis.applications.length) {
+        md += '## Applikationer\n' + analysis.applications.map(a => '- ' + a).join('\n') + '\n\n';
     }
-    if (draft.warnings && draft.warnings.length) {
-        md += '## Varningar\n' + draft.warnings.map(w => '- ' + w).join('\n') + '\n\n';
-    }
-    md += '## Steg\n';
-    (draft.steps || []).forEach(s => {
-        md += s.number + '. **' + s.title + '** (' + formatTime(s.startSecond) + ')\n';
-        md += '   ' + s.instruction + '\n';
-        if (s.inputText) md += '   Inmatning: `' + s.inputText + '`\n';
-        if (s.expectedResult) md += '   Förväntat: ' + s.expectedResult + '\n';
-        if (s.uncertain) md += '   ⚠ Osäkert steg\n';
+    md += '## Tidslinje\n';
+    (analysis.events || []).forEach(e => {
+        const time = formatTime(e.startSecond) + '-' + formatTime(e.endSecond);
+        md += '[' + time + '] ' + e.description + '\n';
+        if (e.action) md += '   Action: ' + e.action + '\n';
+        if (e.typedText) md += '   Inmatning: `' + e.typedText + '`\n';
+        if (e.onScreenText && e.onScreenText.length) md += '   Synlig text: ' + e.onScreenText.join(', ') + '\n';
+        if (e.application) md += '   Applikation: ' + e.application + '\n';
+        if (e.uncertain) md += '   ⚠ Osäker\n';
     });
+    if (analysis.notable && analysis.notable.length) {
+        md += '\n## Noterbart\n' + analysis.notable.map(n => '- ' + n).join('\n') + '\n';
+    }
+    if (analysis.uncertainties && analysis.uncertainties.length) {
+        md += '\n## Osäkerheter\n' + analysis.uncertainties.map(u => '- ' + u).join('\n') + '\n';
+    }
     return md;
 }
 

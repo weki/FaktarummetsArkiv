@@ -1,10 +1,11 @@
 package se.rightech.fakturummetsarkiv.procedurebridge;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import se.rightech.fakturummetsarkiv.chat.AttachmentRef;
 import se.rightech.fakturummetsarkiv.chat.ChatAttachmentProvider;
+import se.rightech.fakturummetsarkiv.video.VideoAnalysis;
+import se.rightech.fakturummetsarkiv.video.VideoEvent;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,70 +15,95 @@ import java.util.Optional;
 public class ChatAttachmentProviderImpl implements ChatAttachmentProvider {
 
     private final VideoRunRepository repo;
-    private final DocuForgeExporter exporter;
-    private final boolean seedFromExport;
 
-    public ChatAttachmentProviderImpl(VideoRunRepository repo, DocuForgeExporter exporter,
-                                     @Value("${chat.procedure.seed-from-export:true}") boolean seedFromExport) {
+    public ChatAttachmentProviderImpl(VideoRunRepository repo) {
         this.repo = repo;
-        this.exporter = exporter;
-        this.seedFromExport = seedFromExport;
     }
 
     @Override
     public Optional<AttachmentContext> load(AttachmentRef ref) {
         if (ref == null || !"video".equals(ref.type())) return Optional.empty();
-        var draft = repo.find(ref.runId());
-        if (draft == null) return Optional.empty();
-        String summary = buildSummary(ref.runId(), draft);
-        String fullText = buildFullText(ref.runId(), draft);
+        var analysis = repo.findAnalysis(ref.runId());
+        if (analysis == null) return Optional.empty();
+        String summary = buildSummary(ref.runId(), analysis);
+        String fullText = buildFullText(ref.runId(), analysis);
         List<String> frameFiles = repo.listFrames(ref.runId());
+        // seedYaml är nu null - procedur skapas av chattmodellen vid CREATE
         String seedYaml = null;
-        if (seedFromExport && exporter != null) {
-            try { seedYaml = exporter.toYaml(draft); } catch (Exception e) { seedYaml = null; }
-        }
         return Optional.of(new AttachmentContext(ref.runId(), "video",
-                draft.sourceFilename() == null || draft.sourceFilename().isBlank() ? ref.runId() : draft.sourceFilename(),
+                analysis.sourceFilename() == null || analysis.sourceFilename().isBlank() ? ref.runId() : analysis.sourceFilename(),
                 summary, fullText, frameFiles, seedYaml));
     }
 
-    private String buildSummary(String runId, se.rightech.fakturummetsarkiv.video.ProcedureDraft draft) {
+    private String buildSummary(String runId, VideoAnalysis analysis) {
         StringBuilder sb = new StringBuilder();
-        sb.append("file=").append(draft.sourceFilename()).append(", title=").append(draft.title())
-                .append(", steps=").append(draft.steps().size());
-        if (draft.steps().size() <= 12) {
-            sb.append(", titles: ");
-            for (int i = 0; i < draft.steps().size(); i++) {
-                if (i > 0) sb.append("; ");
-                sb.append(draft.steps().get(i).title());
-            }
+        sb.append("file=").append(analysis.sourceFilename()).append(", title=").append(analysis.title());
+        sb.append(", events=").append(analysis.events().size());
+        if (analysis.summary() != null && !analysis.summary().isBlank()) {
+            sb.append(", summary=").append(analysis.summary());
         }
         String s = sb.toString();
-        if (s.length() > 800) s = s.substring(0, 800);
+        // Begränsa till 300 tecken enligt spec
+        if (s.length() > 300) s = s.substring(0, 300);
         return s;
     }
 
-    private String buildFullText(String runId, se.rightech.fakturummetsarkiv.video.ProcedureDraft draft) {
+    private String buildFullText(String runId, VideoAnalysis analysis) {
         StringBuilder sb = new StringBuilder();
-        sb.append("VIDEO ANALYSIS (run ").append(runId).append(", file \"").append(draft.sourceFilename()).append("\")\n");
-        sb.append("Title: ").append(draft.title()).append("\n");
-        sb.append("Purpose: ").append(draft.purpose()).append("\n");
-        if (draft.prerequisites() != null && !draft.prerequisites().isEmpty()) {
-            sb.append("Prerequisites: ").append(String.join("; ", draft.prerequisites())).append("\n");
+        sb.append("VIDEO ANALYSIS (run ").append(runId).append(", file \"").append(analysis.sourceFilename()).append("\")\n\n");
+
+        // Summary
+        sb.append("## Summary\n");
+        sb.append(analysis.summary() != null && !analysis.summary().isBlank() ? analysis.summary() : "No summary available").append("\n\n");
+
+        // Applications
+        if (analysis.applications() != null && !analysis.applications().isEmpty()) {
+            sb.append("## Applications\n");
+            for (String app : analysis.applications()) {
+                sb.append("- ").append(app).append("\n");
+            }
+            sb.append("\n");
         }
-        if (draft.warnings() != null && !draft.warnings().isEmpty()) {
-            sb.append("Warnings: ").append(String.join("; ", draft.warnings())).append("\n");
+
+        // Timeline
+        sb.append("## Timeline\n");
+        for (VideoEvent event : analysis.events()) {
+            sb.append("[").append(formatTime(event.startSecond())).append("-").append(formatTime(event.endSecond())).append("] ");
+            sb.append(event.description());
+            if (event.typedText() != null && !event.typedText().isBlank()) {
+                sb.append(" | typed=\"").append(event.typedText()).append("\"");
+            }
+            if (event.onScreenText() != null && !event.onScreenText().isEmpty()) {
+                sb.append(" | onScreen=\"").append(String.join("; ", event.onScreenText())).append("\"");
+            }
+            if (event.application() != null && !event.application().isBlank()) {
+                sb.append(" | app=").append(event.application());
+            }
+            if (event.frameImage() != null) {
+                sb.append(" | frame=").append(event.frameImage().getFileName());
+            }
+            if (event.uncertain()) {
+                sb.append(" | UNCERTAIN");
+            }
+            sb.append("\n");
         }
-        sb.append("Steps:\n");
-        for (se.rightech.fakturummetsarkiv.video.ProcedureStep s : draft.steps()) {
-            sb.append(s.number()).append(". [").append(formatTime(s.startSecond())).append("-").append(formatTime(s.endSecond())).append("] ")
-                    .append(s.title()).append(" | kind=").append(s.kind())
-                    .append(" | target=").append(s.target())
-                    .append(" | input=\"").append(s.inputText() == null ? "" : s.inputText()).append("\"")
-                    .append(" | expected=").append(s.expectedResult())
-                    .append(" | frame=").append(s.frameImage() == null ? "" : s.frameImage().getFileName())
-                    .append(s.uncertain() ? " | UNCERTAIN" : "").append("\n");
+
+        // Notable
+        if (analysis.notable() != null && !analysis.notable().isEmpty()) {
+            sb.append("\n## Notable\n");
+            for (String note : analysis.notable()) {
+                sb.append("- ").append(note).append("\n");
+            }
         }
+
+        // Uncertainties
+        if (analysis.uncertainties() != null && !analysis.uncertainties().isEmpty()) {
+            sb.append("\n## Uncertainties\n");
+            for (String unc : analysis.uncertainties()) {
+                sb.append("- ").append(unc).append("\n");
+            }
+        }
+
         return sb.toString();
     }
 
