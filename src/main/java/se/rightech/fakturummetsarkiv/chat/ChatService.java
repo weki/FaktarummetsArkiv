@@ -593,10 +593,9 @@ public StreamResult streamChat(String question, String sessionId,
             sb.append("width is a string. Timestamps and uncertainty do not belong in YAML.\n");
             sb.append("All content in English (except confidentiality enum values).\n");
             sb.append("Section titles in English: Purpose, Prerequisites, Procedure.\n");
-            if (seedYaml != null && !seedYaml.isBlank()) {
-                sb.append("\nSTARTING DRAFT (valid, improve titles/descriptions without changing command/images unless asked):\n");
-                sb.append("```yaml\n").append(seedYaml).append("\n```\n");
-            }
+            sb.append("\nBuild the procedure from the VIDEO ANALYSIS timeline, notable events, and available frames.\n");
+            sb.append("Use typedText and onScreenText exactly as shown in the timeline.\n");
+            sb.append("If there are uncertainties marked with ⚠, mention them in plain text AFTER the YAML block.\n");
             sb.append("\nAVAILABLE FRAMES:\n");
             for (ChatAttachmentProvider.AttachmentContext c : ctxs) {
                 if (c.frameFiles() != null) for (String f : c.frameFiles()) sb.append(f).append("\n");
