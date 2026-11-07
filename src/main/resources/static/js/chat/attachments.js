@@ -138,7 +138,7 @@ async function uploadVideoAttachment(file) {
                                 appendVideoAnalysisMessage(thread, att, Object.assign({}, d, {runId: j.runId}));
                             }
                         }).catch(err => {
-        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta utkast: ' + err.message, sources: [], searched: false};
+        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta beskrivning: ' + err.message, sources: [], searched: false};
         thread.messages.push(msg);
         touchThread(thread);
         saveThreads();
@@ -214,7 +214,11 @@ function appendVideoAnalysisMessage(thread, att, data) {
             lines.push('', 'Osäkerheter:', ...analysis.uncertainties.map(u => '- ' + u));
         }
         const text = lines.join('\n');
-        const msg = {role: 'assistant', text: text, sources: [], searched: false, searchMode: 'ATTACHMENT'};
+        const msg = {role: 'assistant', text: text, sources: [], searched: false, searchMode: 'ATTACHMENT', followUps: [
+            'Beskriv mer i detalj',
+            'Vad händer vid 1:20?',
+            'Skapa en procedur av videon'
+        ]};
         thread.messages.push(msg);
         touchThread(thread);
         saveThreads();
@@ -234,7 +238,7 @@ function appendVideoAnalysisMessage(thread, att, data) {
             scrollToBottom(true);
         }
     }).catch(err => {
-        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta utkast: ' + err.message, sources: [], searched: false};
+        const msg = {role: 'assistant', text: 'Videoanalys klar (run ' + runId + '). Kunde inte hämta beskrivning: ' + err.message, sources: [], searched: false};
         thread.messages.push(msg);
         touchThread(thread);
         saveThreads();
